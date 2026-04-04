@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agentic Ops Advisor — Self-Driving Operations with AI Agents</title>
+  <meta name="description" content="Governed, production-style AI agent for root-cause reasoning over infrastructure telemetry and operator intent. Powered by Azure AI Foundry." />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Agentic Ops Advisor" />
+  <meta property="og:description" content="Self-driving operations with AI agents. Powered by Azure AI Foundry." />
+  <meta property="og:type" content="website" />
+
+  <!-- Favicon (emoji fallback) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       DISCLAIMER BANNER
+  ═══════════════════════════════════════════ -->
+  <div class="disclaimer-banner" role="banner" aria-label="Important disclaimer">
+    <p>
+      <strong>⚠️ Demo Notice:</strong>
+      Synthetic data only — no real infrastructure or customer data is used. &nbsp;|&nbsp;
+      Work IQ outputs are simulated. Work IQ is in public preview and requires Microsoft 365 Copilot licensing + admin consent.
+    </p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       NAVIGATION
+  ═══════════════════════════════════════════ -->
+  <nav class="site-nav" aria-label="Main navigation">
+    <div class="container">
+      <a href="#" class="nav-brand">
+        <span class="brand-icon" aria-hidden="true">🤖</span>
+        Agentic Ops Advisor
+      </a>
+      <ul class="nav-links" role="list">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#techstack">Tech Stack</a></li>
+        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub ↗</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════
+       HERO
+  ═══════════════════════════════════════════ -->
+  <header class="hero" id="top">
+    <div class="container">
+      <div class="hero-eyebrow">
+        <span aria-hidden="true">🚀</span>
+        Azure AI Foundry Agent Service
+      </div>
+
+      <h1 class="hero-title">
+        <span class="highlight">Agentic Ops</span> Advisor
+      </h1>
+
+      <p class="hero-tagline">
+        Self-driving operations with AI agents — root-cause reasoning, change correlation,
+        and governed remediation over your infrastructure telemetry and operator intent.
+      </p>
+
+      <div class="hero-ctas">
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
+           class="btn btn-primary"
+           target="_blank" rel="noopener">
+          <span aria-hidden="true">⭐</span> View on GitHub
+        </a>
+        <a href="#architecture" class="btn btn-secondary">
+          <span aria-hidden="true">🔍</span> Explore Architecture
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════
+       STATS STRIP
+  ═══════════════════════════════════════════ -->
+  <section class="stats-strip" aria-label="Project highlights">
+    <div class="container">
+      <div class="stat-item fade-in">
+        <span class="stat-number">3</span>
+        <span class="stat-label">Tool Surfaces</span>
+      </div>
+      <div class="stat-item fade-in">
+        <span class="stat-number">4</span>
+        <span class="stat-label">Custom Evaluators</span>
+      </div>
+      <div class="stat-item fade-in">
+        <span class="stat-number">30+</span>
+        <span class="stat-label">Days Synthetic Data</span>
+      </div>
+      <div class="stat-item fade-in">
+        <span class="stat-number">GPT-4.1</span>
+        <span class="stat-label">Powered by</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       FEATURES
+  ═══════════════════════════════════════════ -->
+  <section class="features" id="features">
+    <div class="container">
+      <span class="section-label">Capabilities</span>
+      <h2 class="section-title">Everything you need for agentic ops</h2>
+      <p class="section-subtitle">
+        A governed, production-style AI agent that combines telemetry data, change context,
+        and operator intent to deliver fast, evidence-backed incident response.
+      </p>
+
+      <div class="features-grid">
+
+        <article class="feature-card fade-in" style="--card-accent: #58a6ff;">
+          <span class="feature-icon" aria-hidden="true">📊</span>
+          <h3 class="feature-title">Telemetry Analysis</h3>
+          <p class="feature-desc">
+            Queries synthetic GPU utilization, network latency, cost, and incident data via SQL.
+            Surfaces anomalies, trends, and root-cause signals in seconds.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #bc8cff;">
+          <span class="feature-icon" aria-hidden="true">🔗</span>
+          <h3 class="feature-title">Change Correlation</h3>
+          <p class="feature-desc">
+            Connects infrastructure events to change context — approvals, policy updates,
+            rollout windows, and AI Factory planning decisions — using the Work IQ pattern.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #3fb950;">
+          <span class="feature-icon" aria-hidden="true">🛡️</span>
+          <h3 class="feature-title">Safe Remediation</h3>
+          <p class="feature-desc">
+            Proposes change plans with risk levels and tradeoffs. Human-in-the-loop approval
+            gates ensure no action is taken without explicit authorization.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #f0883e;">
+          <span class="feature-icon" aria-hidden="true">🧪</span>
+          <h3 class="feature-title">Continuous Evaluation</h3>
+          <p class="feature-desc">
+            Four custom evaluators — diagnosis accuracy, evidence grounding, action safety,
+            and hallucination detection — run offline and in CI for regression detection.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #39d353;">
+          <span class="feature-icon" aria-hidden="true">📡</span>
+          <h3 class="feature-title">Observability & Monitoring</h3>
+          <p class="feature-desc">
+            OpenTelemetry traces for every agent invocation, tool call, and LLM request.
+            Exports to Application Insights with Azure Monitor Workbook dashboards.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #79b8ff;">
+          <span class="feature-icon" aria-hidden="true">⚙️</span>
+          <h3 class="feature-title">Production Deployment</h3>
+          <p class="feature-desc">
+            Deploys to Azure AI Foundry Agent Service via Bicep IaC templates.
+            GitHub Actions CI/CD pipeline with automated evaluation gates on every PR.
+          </p>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       ARCHITECTURE
+  ═══════════════════════════════════════════ -->
+  <section class="architecture" id="architecture">
+    <div class="container">
+      <span class="section-label">Architecture</span>
+      <h2 class="section-title">How it works</h2>
+      <p class="section-subtitle">
+        Three tool surfaces connected to the agent through Azure AI Foundry,
+        with OpenTelemetry observability flowing to Azure Monitor.
+      </p>
+
+      <div class="arch-diagram fade-in">
+        <!-- Inline architecture SVG diagram -->
+        <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg"
+             role="img" aria-label="Agentic Ops Advisor architecture diagram"
+             style="width:100%; max-width:900px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7"
+                    refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#30363d" />
+            </marker>
+            <marker id="arrowhead-blue" markerWidth="10" markerHeight="7"
+                    refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#58a6ff" />
+            </marker>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+              <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- Background -->
+          <rect width="900" height="500" fill="#161b22" rx="12"/>
+
+          <!-- ── OPERATOR (left) ── -->
+          <rect x="30" y="190" width="130" height="80" rx="10" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
+          <text x="95" y="220" text-anchor="middle" fill="#8b949e" font-size="20">👤</text>
+          <text x="95" y="243" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">Ops Engineer</text>
+          <text x="95" y="259" text-anchor="middle" fill="#6e7681" font-size="10">Natural language query</text>
+
+          <!-- Arrow: operator → agent -->
+          <line x1="160" y1="230" x2="235" y2="230" stroke="#30363d" stroke-width="1.5"
+                marker-end="url(#arrowhead)" stroke-dasharray="6 3"/>
+
+          <!-- ── AGENT CORE (center) ── -->
+          <rect x="240" y="150" width="200" height="160" rx="12" fill="#1c2330"
+                stroke="#58a6ff" stroke-width="2" filter="url(#glow)"/>
+          <text x="340" y="188" text-anchor="middle" fill="#58a6ff" font-size="22">🤖</text>
+          <text x="340" y="213" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="700">Agentic Ops Advisor</text>
+          <text x="340" y="231" text-anchor="middle" fill="#8b949e" font-size="10">Azure AI Foundry Agent Service</text>
+          <rect x="265" y="242" width="150" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="rgba(88,166,255,0.3)" stroke-width="1"/>
+          <text x="340" y="257" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="600">GPT-4.1 · System Prompt · Tools</text>
+          <rect x="265" y="270" width="150" height="22" rx="5" fill="rgba(63,185,80,0.08)" stroke="rgba(63,185,80,0.25)" stroke-width="1"/>
+          <text x="340" y="285" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="600">OpenTelemetry Traces</text>
+
+          <!-- ── TOOL SURFACES (right column) ── -->
+          <!-- SQL Telemetry Tool -->
+          <rect x="520" y="60" width="180" height="95" rx="10" fill="#1c2330" stroke="#f0883e" stroke-width="1.5"/>
+          <text x="610" y="93" text-anchor="middle" fill="#f0883e" font-size="18">📊</text>
+          <text x="610" y="113" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">SQL Telemetry Tool</text>
+          <text x="610" y="128" text-anchor="middle" fill="#8b949e" font-size="9.5">GPU · Network · Cost · Incidents</text>
+          <text x="610" y="143" text-anchor="middle" fill="#6e7681" font-size="9">SQLite (local) / Azure SQL (prod)</text>
+
+          <!-- Work IQ Context Tool -->
+          <rect x="520" y="195" width="180" height="95" rx="10" fill="#1c2330" stroke="#bc8cff" stroke-width="1.5"/>
+          <text x="610" y="228" text-anchor="middle" fill="#bc8cff" font-size="18">🔗</text>
+          <text x="610" y="248" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">Work IQ Context Tool</text>
+          <text x="610" y="263" text-anchor="middle" fill="#8b949e" font-size="9.5">Change Events · Decisions · Runbooks</text>
+          <text x="610" y="278" text-anchor="middle" fill="#bc8cff" font-size="9" font-style="italic">⚠️ Simulated — not live Work IQ</text>
+
+          <!-- Action Stub Tool -->
+          <rect x="520" y="330" width="180" height="95" rx="10" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+          <text x="610" y="363" text-anchor="middle" fill="#3fb950" font-size="18">🛡️</text>
+          <text x="610" y="383" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">Action Stub Tool</text>
+          <text x="610" y="398" text-anchor="middle" fill="#8b949e" font-size="9.5">Propose · Approval Gate · Safe</text>
+          <text x="610" y="413" text-anchor="middle" fill="#6e7681" font-size="9">No real external system changes</text>
+
+          <!-- Arrows: agent → tools -->
+          <line x1="440" y1="205" x2="515" y2="120" stroke="#f0883e" stroke-width="1.5"
+                marker-end="url(#arrowhead)" opacity="0.6"/>
+          <line x1="440" y1="230" x2="515" y2="242" stroke="#bc8cff" stroke-width="1.5"
+                marker-end="url(#arrowhead)" opacity="0.6"/>
+          <line x1="440" y1="270" x2="515" y2="358" stroke="#3fb950" stroke-width="1.5"
+                marker-end="url(#arrowhead)" opacity="0.6"/>
+
+          <!-- ── AZURE SERVICES (bottom) ── -->
+          <rect x="240" y="365" width="90" height="70" rx="8" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
+          <text x="285" y="393" text-anchor="middle" fill="#58a6ff" font-size="16">🏢</text>
+          <text x="285" y="411" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="600">Azure AI</text>
+          <text x="285" y="424" text-anchor="middle" fill="#6e7681" font-size="9">Foundry</text>
+
+          <rect x="345" y="365" width="90" height="70" rx="8" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
+          <text x="390" y="393" text-anchor="middle" fill="#3fb950" font-size="16">📡</text>
+          <text x="390" y="411" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="600">App Insights</text>
+          <text x="390" y="424" text-anchor="middle" fill="#6e7681" font-size="9">/ Az Monitor</text>
+
+          <!-- Arrows: agent → azure services -->
+          <line x1="300" y1="310" x2="300" y2="362" stroke="#58a6ff" stroke-width="1.5"
+                marker-end="url(#arrowhead)" opacity="0.5" stroke-dasharray="5 3"/>
+          <line x1="360" y1="310" x2="375" y2="362" stroke="#3fb950" stroke-width="1.5"
+                marker-end="url(#arrowhead)" opacity="0.5" stroke-dasharray="5 3"/>
+
+          <!-- ── CI/CD LABEL ── -->
+          <rect x="700" y="430" width="160" height="40" rx="8" fill="rgba(188,140,255,0.08)" stroke="rgba(188,140,255,0.3)" stroke-width="1"/>
+          <text x="780" y="447" text-anchor="middle" fill="#bc8cff" font-size="10" font-weight="600">⚙️  GitHub Actions CI/CD</text>
+          <text x="780" y="462" text-anchor="middle" fill="#6e7681" font-size="9">Eval gates · Bicep deploy · Regression</text>
+
+          <!-- Title label -->
+          <text x="450" y="490" text-anchor="middle" fill="#30363d" font-size="10">
+            Agentic Ops Advisor — Architecture Overview (Synthetic Demo)
+          </text>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       DEMO WALKTHROUGH
+  ═══════════════════════════════════════════ -->
+  <section class="demo" id="demo">
+    <div class="container">
+      <span class="section-label">Demo Walkthrough</span>
+      <h2 class="section-title">From question to governed action</h2>
+      <p class="section-subtitle">
+        See how the agent takes an ops engineer from an ambiguous alert to an evidence-backed,
+        approved remediation plan in four steps.
+      </p>
+
+      <div class="demo-steps">
+
+        <div class="demo-step fade-in">
+          <div class="step-num" aria-hidden="true">1</div>
+          <div class="step-content">
+            <h3>Ask a natural language question</h3>
+            <p>
+              The ops engineer poses a question directly — no dashboards, no manual
+              log queries. The agent selects the right tools autonomously.
+            </p>
+            <div class="code-snippet" role="code">
+              <span class="prompt-char">User &gt; </span>
+              Why did GPU utilization drop in the last 24h on cluster prod-east-01?
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-step fade-in">
+          <div class="step-num" aria-hidden="true">2</div>
+          <div class="step-content">
+            <h3>Agent queries telemetry + change context</h3>
+            <p>
+              The agent calls the SQL Telemetry Tool to pull GPU metrics and the
+              Work IQ Context Tool to surface recent change events near the anomaly window.
+            </p>
+            <div class="code-snippet" role="code">
+              <span class="prompt-char">Tool &gt; </span>
+              sql_telemetry: SELECT avg(utilization_pct) … WHERE ts &gt; NOW() - INTERVAL 24h
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-step fade-in">
+          <div class="step-num" aria-hidden="true">3</div>
+          <div class="step-content">
+            <h3>Root-cause diagnosis with evidence</h3>
+            <p>
+              The agent returns a concise diagnosis citing telemetry data and correlated
+              change events, with a confidence level and "next best question" when needed.
+            </p>
+            <div class="code-snippet" role="code">
+              <span class="prompt-char">Agent &gt; </span>
+              Confidence: High · Cause: model-serving rollout at 14:32 UTC reduced batch size
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-step fade-in">
+          <div class="step-num" aria-hidden="true">4</div>
+          <div class="step-content">
+            <h3>Safe remediation with human approval gate</h3>
+            <p>
+              The Action Stub Tool proposes a change plan with risk level and tradeoffs.
+              No action executes until the operator explicitly approves — governance built-in.
+            </p>
+            <div class="code-snippet" role="code">
+              <span class="prompt-char">Action &gt; </span>
+              propose_change(plan) → risk:LOW · approval:PENDING · simulate_only:true
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       TECH STACK
+  ═══════════════════════════════════════════ -->
+  <section class="techstack" id="techstack">
+    <div class="container">
+      <span class="section-label">Tech Stack</span>
+      <h2 class="section-title">Built on Azure-native, open standards</h2>
+      <p class="section-subtitle">
+        Every component chosen for production readiness, observability, and
+        compatibility with enterprise hybrid deployments.
+      </p>
+
+      <div class="badges" role="list" aria-label="Technology badges">
+        <span class="badge badge-python" role="listitem">🐍 Python 3.11+</span>
+        <span class="badge badge-gpt" role="listitem">🧠 GPT-4.1</span>
+        <span class="badge badge-azure" role="listitem">☁️ Azure AI Foundry</span>
+        <span class="badge badge-azure" role="listitem">🔵 Azure OpenAI</span>
+        <span class="badge badge-otel" role="listitem">📡 OpenTelemetry</span>
+        <span class="badge badge-azure" role="listitem">📊 Application Insights</span>
+        <span class="badge badge-sqlite" role="listitem">🗄️ SQLite / Azure SQL</span>
+        <span class="badge badge-actions" role="listitem">⚙️ GitHub Actions</span>
+        <span class="badge badge-azure" role="listitem">🏗️ Bicep IaC</span>
+        <span class="badge badge-python" role="listitem">🧪 Pytest + azure-ai-evaluation</span>
+      </div>
+
+      <table class="tech-table" aria-label="Technology stack details">
+        <thead>
+          <tr>
+            <th scope="col">Layer</th>
+            <th scope="col">Technology</th>
+            <th scope="col">Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Agent Framework</td>
+            <td>azure-ai-projects (Foundry SDK)</td>
+            <td>Agent lifecycle, tool dispatch, thread management</td>
+          </tr>
+          <tr>
+            <td>LLM</td>
+            <td>GPT-4.1 via Azure OpenAI</td>
+            <td>Reasoning, diagnosis, natural language generation</td>
+          </tr>
+          <tr>
+            <td>Telemetry DB</td>
+            <td>SQLite (local) / Azure SQL (prod)</td>
+            <td>Synthetic GPU, network, cost, incident tables</td>
+          </tr>
+          <tr>
+            <td>Observability</td>
+            <td>OpenTelemetry → Application Insights</td>
+            <td>Trace every agent, tool, and LLM call</td>
+          </tr>
+          <tr>
+            <td>Evaluation</td>
+            <td>azure-ai-evaluation + custom evaluators</td>
+            <td>Diagnosis accuracy, grounding, safety, hallucination</td>
+          </tr>
+          <tr>
+            <td>CI/CD</td>
+            <td>GitHub Actions</td>
+            <td>Lint, test, eval gates, Bicep deploy</td>
+          </tr>
+          <tr>
+            <td>IaC</td>
+            <td>Bicep</td>
+            <td>Foundry project, Azure SQL, App Insights provisioning</td>
+          </tr>
+          <tr>
+            <td>Context (simulated)</td>
+            <td>Work IQ pattern stub / MCP wrapper</td>
+            <td>Change events, decisions, runbooks (synthetic)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       DISCLAIMERS
+  ═══════════════════════════════════════════ -->
+  <section class="disclaimers" id="disclaimers" aria-label="Important disclaimers">
+    <div class="container">
+      <span class="section-label">Important Notices</span>
+      <h2 class="section-title" style="margin-bottom: 1.5rem;">Disclaimers</h2>
+
+      <div class="disclaimer-cards">
+
+        <div class="disclaimer-card">
+          <span class="disc-icon" aria-hidden="true">🔬</span>
+          <div>
+            <h4>Synthetic Data Only</h4>
+            <p>
+              All telemetry, incidents, change events, decisions, and ownership data in this
+              demo are entirely synthetic. No real infrastructure, customer data, or internal
+              Microsoft data is used at any point.
+            </p>
+          </div>
+        </div>
+
+        <div class="disclaimer-card">
+          <span class="disc-icon" aria-hidden="true">🔗</span>
+          <div>
+            <h4>Work IQ Simulation</h4>
+            <p>
+              Work IQ outputs shown here are simulated patterns, not a live integration.
+              Work IQ is in <strong>public preview</strong> and requires Microsoft 365 Copilot
+              licensing plus explicit admin consent for tenant access.
+            </p>
+          </div>
+        </div>
+
+        <div class="disclaimer-card">
+          <span class="disc-icon" aria-hidden="true">🛡️</span>
+          <div>
+            <h4>No Real Actions Taken</h4>
+            <p>
+              The Action Stub Tool never modifies external systems. All
+              <code>propose_change</code> and <code>request_approval</code> calls are
+              simulated and return synthetic payloads only.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div>
+        <div class="footer-brand">🤖 Agentic Ops Advisor</div>
+        <div class="footer-note">Built with GitHub Copilot · Deployed on Azure AI Foundry</div>
+      </div>
+
+      <nav class="footer-links" aria-label="Footer links">
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://learn.microsoft.com/azure/ai-studio/" target="_blank" rel="noopener">Azure AI Foundry Docs</a>
+      </nav>
+
+      <div class="footer-note">
+        © 2025 · Synthetic demo · No real data
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════
+       SCROLL ANIMATION
+  ═══════════════════════════════════════════ -->
+  <script>
+    (function () {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, { threshold: 0.12 });
+
+      document.querySelectorAll('.fade-in').forEach(function (el) {
+        observer.observe(el);
+      });
+    })();
+  </script>
+
+</body>
+</html>
