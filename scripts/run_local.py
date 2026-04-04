@@ -89,7 +89,7 @@ _SYSTEM_PROMPT = textwrap.dedent("""\
 
 def _ensure_db() -> None:
     """Seed the SQLite database if it doesn't already exist."""
-    from data.seed_telemetry import DEFAULT_DB_PATH, create_schema, seed  # noqa: PLC0415
+    from data.seed_telemetry import DEFAULT_DB_PATH, create_schema, seed_connection  # noqa: PLC0415
 
     if os.path.exists(DEFAULT_DB_PATH):
         return
@@ -101,7 +101,7 @@ def _ensure_db() -> None:
     conn = sqlite3.connect(DEFAULT_DB_PATH)
     try:
         create_schema(conn)
-        counts = seed(conn)
+        counts = seed_connection(conn)
         for table, n in counts.items():
             print(f"  [setup]   {table}: {n:,} rows")
     finally:

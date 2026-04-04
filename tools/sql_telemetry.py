@@ -26,20 +26,20 @@ logger = logging.getLogger(__name__)
 
 TELEMETRY_TABLES = {
     "telemetry_gpu": {
-        "description": "GPU utilization, memory, temperature and power per host/GPU index.",
-        "columns": ["id", "ts", "host", "gpu_index", "util_pct", "mem_used_gb", "mem_total_gb", "temp_c", "power_w"],
+        "description": "GPU utilization and memory per cluster/node.",
+        "columns": ["ts", "cluster", "node", "utilization_pct", "mem_pct"],
     },
     "telemetry_net": {
-        "description": "Network throughput, packet-drop rate and latency per host/interface.",
-        "columns": ["id", "ts", "host", "iface", "rx_mbps", "tx_mbps", "drop_pct", "latency_ms"],
+        "description": "Network latency, packet loss and throughput per site.",
+        "columns": ["ts", "site", "latency_ms", "loss_pct", "throughput_gbps"],
     },
     "telemetry_cost": {
-        "description": "Hourly cost samples per service and region.",
-        "columns": ["id", "ts", "service", "region", "usd_per_hr", "units", "total_usd"],
+        "description": "Hourly cost samples per cluster.",
+        "columns": ["ts", "cluster", "cost_usd", "token_cost_usd"],
     },
     "incidents": {
-        "description": "Infrastructure incident log with severity, status and linked host/service.",
-        "columns": ["id", "created_at", "resolved_at", "severity", "title", "host", "service", "status"],
+        "description": "Infrastructure incident log with severity, status and linked service.",
+        "columns": ["ts", "service", "symptom", "severity", "status"],
     },
 }
 
@@ -48,43 +48,43 @@ TELEMETRY_TABLES = {
 
 _AGG_QUERIES: dict[str, str] = {
     "gpu_avg_util_1h": (
-        "SELECT host, AVG(util_pct) AS avg_util_pct, MAX(util_pct) AS max_util_pct, "
-        "MIN(util_pct) AS min_util_pct "
+        "SELECT cluster, node, AVG(utilization_pct) AS avg_util_pct, MAX(utilization_pct) AS max_util_pct, "
+        "MIN(utilization_pct) AS min_util_pct "
         "FROM telemetry_gpu "
         "WHERE ts >= datetime('now', '-1 hour') "
-        "GROUP BY host ORDER BY avg_util_pct DESC"
+        "GROUP BY cluster, node ORDER BY avg_util_pct DESC"
     ),
     "gpu_avg_util_24h": (
-        "SELECT host, AVG(util_pct) AS avg_util_pct, MAX(util_pct) AS max_util_pct, "
-        "MIN(util_pct) AS min_util_pct "
+        "SELECT cluster, node, AVG(utilization_pct) AS avg_util_pct, MAX(utilization_pct) AS max_util_pct, "
+        "MIN(utilization_pct) AS min_util_pct "
         "FROM telemetry_gpu "
         "WHERE ts >= datetime('now', '-24 hours') "
-        "GROUP BY host ORDER BY avg_util_pct DESC"
+        "GROUP BY cluster, node ORDER BY avg_util_pct DESC"
     ),
     "net_avg_latency_1h": (
-        "SELECT host, iface, AVG(latency_ms) AS avg_latency_ms, MAX(latency_ms) AS max_latency_ms, "
-        "AVG(drop_pct) AS avg_drop_pct "
+        "SELECT site, AVG(latency_ms) AS avg_latency_ms, MAX(latency_ms) AS max_latency_ms, "
+        "AVG(loss_pct) AS avg_loss_pct "
         "FROM telemetry_net "
         "WHERE ts >= datetime('now', '-1 hour') "
-        "GROUP BY host, iface ORDER BY avg_latency_ms DESC"
+        "GROUP BY site ORDER BY avg_latency_ms DESC"
     ),
     "cost_by_service_24h": (
-        "SELECT service, region, SUM(total_usd) AS total_usd, AVG(usd_per_hr) AS avg_usd_per_hr "
+        "SELECT cluster, SUM(cost_usd) AS total_cost_usd, SUM(token_cost_usd) AS total_token_usd "
         "FROM telemetry_cost "
         "WHERE ts >= datetime('now', '-24 hours') "
-        "GROUP BY service, region ORDER BY total_usd DESC"
+        "GROUP BY cluster ORDER BY total_cost_usd DESC"
     ),
     "open_incidents": (
-        "SELECT id, created_at, severity, title, host, service, status "
+        "SELECT ts, service, symptom, severity, status "
         "FROM incidents "
         "WHERE status != 'resolved' "
-        "ORDER BY CASE severity WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 4 END, created_at DESC"
+        "ORDER BY CASE severity WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 4 END, ts DESC"
     ),
     "recent_incidents_24h": (
-        "SELECT id, created_at, resolved_at, severity, title, host, service, status "
+        "SELECT ts, service, symptom, severity, status "
         "FROM incidents "
-        "WHERE created_at >= datetime('now', '-24 hours') "
-        "ORDER BY created_at DESC"
+        "WHERE ts >= datetime('now', '-24 hours') "
+        "ORDER BY ts DESC"
     ),
 }
 
@@ -258,7 +258,7 @@ async def _dispatch(
             where_clauses.append(f"{col} = ?")
             param_values.append(val)
 
-        ts_col = "created_at" if table == "incidents" else "ts"
+        ts_col = "ts"
         order_dir = "DESC"
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         final_sql = f"SELECT * FROM {table} {where_sql} ORDER BY {ts_col} {order_dir} LIMIT ?"
@@ -356,3 +356,55 @@ def get_tool_definition() -> dict[str, Any]:
 def list_aggregates() -> dict[str, str]:
     """Return a mapping of aggregate query keys to their SQL for inspection."""
     return dict(_AGG_QUERIES)
+
+
+# ---------------------------------------------------------------------------
+# Sync convenience wrappers for run_local.py demo and agent modes
+# ---------------------------------------------------------------------------
+
+import asyncio as _asyncio  # noqa: E402
+
+
+def _sync_query(*, aggregate: str | None = None, **kwargs: Any) -> dict[str, Any]:
+    """Run query_telemetry synchronously and return a parsed dict."""
+    result_str = _asyncio.run(query_telemetry(aggregate=aggregate, **kwargs))
+    return json.loads(result_str)
+
+
+def query_gpu_utilization(hours_back: int = 24) -> dict[str, Any]:
+    """Sync wrapper: GPU utilization summary."""
+    agg = "gpu_avg_util_1h" if hours_back < 24 else "gpu_avg_util_24h"
+    return _sync_query(aggregate=agg)
+
+
+def query_network_telemetry(hours_back: int = 24) -> dict[str, Any]:
+    """Sync wrapper: network latency summary."""
+    return _sync_query(aggregate="net_avg_latency_1h")
+
+
+def query_cost_trends(days_back: int = 7) -> dict[str, Any]:
+    """Sync wrapper: cost trends by cluster."""
+    return _sync_query(aggregate="cost_by_service_24h")
+
+
+def query_incidents(status: str = "open") -> dict[str, Any]:
+    """Sync wrapper: incident list."""
+    agg = "open_incidents" if status == "open" else "recent_incidents_24h"
+    return _sync_query(aggregate=agg)
+
+
+def _sync_query_telemetry(**kwargs: Any) -> dict[str, Any]:
+    """Sync wrapper for the main query_telemetry function (used by agent mode)."""
+    result_str = _asyncio.run(query_telemetry(**kwargs))
+    return json.loads(result_str)
+
+
+TOOL_CALLABLES: dict[str, Any] = {
+    "query_telemetry": _sync_query_telemetry,
+    "query_gpu_utilization": query_gpu_utilization,
+    "query_network_telemetry": query_network_telemetry,
+    "query_cost_trends": query_cost_trends,
+    "query_incidents": query_incidents,
+}
+
+TOOL_DEFINITIONS: list[dict[str, Any]] = [TOOL_SCHEMA]

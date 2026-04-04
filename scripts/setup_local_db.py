@@ -27,7 +27,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from data.seed_telemetry import DEFAULT_DB_PATH, create_schema, seed  # noqa: E402
+from data.seed_telemetry import DEFAULT_DB_PATH, create_schema, seed_connection  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Minimum expected row counts (used for verification)
@@ -88,7 +88,7 @@ def step_create_schema(conn: sqlite3.Connection) -> None:
 
 def step_seed(conn: sqlite3.Connection, days: int) -> dict[str, int]:
     """Insert synthetic rows into all tables and return counts."""
-    counts = seed(conn, days=days)
+    counts = seed_connection(conn, days=days)
     for table, n in counts.items():
         _print_ok(f"{table}: {n:,} rows inserted")
     return counts

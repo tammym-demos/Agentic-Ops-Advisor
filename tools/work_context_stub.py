@@ -217,3 +217,10 @@ def get_full_context(service: str) -> dict[str, Any]:
         "ownership": get_ownership(service),
         "runbooks": get_runbooks(service),
     }
+
+
+# Alias used by agent/agent.py — the Azure AI Agent Service registers
+# functions by __name__, so the tool appears as "get_work_context" to the LLM.
+get_work_context = get_full_context
+get_work_context.__name__ = "get_work_context"
+get_work_context.__qualname__ = "get_work_context"

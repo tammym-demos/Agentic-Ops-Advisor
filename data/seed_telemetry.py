@@ -40,6 +40,9 @@ DATA_DIR = Path(__file__).parent
 DB_PATH = DATA_DIR / "telemetry.db"
 SQL_PATH = DATA_DIR / "seed_data.sql"
 
+# Compat alias used by scripts/setup_local_db.py and scripts/run_local.py
+DEFAULT_DB_PATH = str(DB_PATH)
+
 # ---------------------------------------------------------------------------
 # DDL
 # ---------------------------------------------------------------------------
@@ -75,6 +78,12 @@ CREATE TABLE IF NOT EXISTS incidents (
     severity TEXT NOT NULL,
     status   TEXT NOT NULL
 );"""
+
+
+def create_schema(conn: sqlite3.Connection) -> None:
+    """Create all telemetry tables (idempotent). Used by setup scripts."""
+    conn.executescript(DDL)
+    conn.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +307,43 @@ def write_sql(
 
 
 # ---------------------------------------------------------------------------
-# Public entry point (importable)
+# Connection-based seeding (used by setup scripts)
+# ---------------------------------------------------------------------------
+
+
+def seed_connection(
+    conn: sqlite3.Connection,
+    days: int = DAYS,
+    random_seed: int = RANDOM_SEED,
+) -> dict[str, int]:
+    """Seed synthetic data into an open connection. Returns {table_name: row_count}.
+
+    Used by scripts/setup_local_db.py and scripts/run_local.py which manage
+    their own connection lifecycle.
+    """
+    rng = random.Random(random_seed)
+    gpu_rows = generate_gpu_rows(rng)
+    net_rows = generate_net_rows(rng)
+    cost_rows = generate_cost_rows(rng)
+    incident_rows = generate_incident_rows()
+
+    cur = conn.cursor()
+    cur.executemany("INSERT INTO telemetry_gpu VALUES (?,?,?,?,?)", gpu_rows)
+    cur.executemany("INSERT INTO telemetry_net VALUES (?,?,?,?,?)", net_rows)
+    cur.executemany("INSERT INTO telemetry_cost VALUES (?,?,?,?)", cost_rows)
+    cur.executemany("INSERT INTO incidents VALUES (?,?,?,?,?)", incident_rows)
+    conn.commit()
+
+    return {
+        "telemetry_gpu": len(gpu_rows),
+        "telemetry_net": len(net_rows),
+        "telemetry_cost": len(cost_rows),
+        "incidents": len(incident_rows),
+    }
+
+
+# ---------------------------------------------------------------------------
+# File-based seeding (standalone CLI usage)
 # ---------------------------------------------------------------------------
 
 
