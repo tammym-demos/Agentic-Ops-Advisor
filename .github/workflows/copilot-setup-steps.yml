@@ -1,0 +1,51 @@
+name: "Copilot Setup Steps"
+
+on:
+    workflow_dispatch:
+    push:
+        paths:
+            - .github/workflows/copilot-setup-steps.yml
+    pull_request:
+        paths:
+            - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+    copilot-setup-steps:
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: read
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - name: Set up Python 3.11
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            - name: Install ODBC Driver for SQL Server
+              run: |
+                  curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+                  curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+                  sudo apt-get update
+                  sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
+            - name: Install Python dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -r requirements.txt
+
+            - name: Install dev dependencies
+              run: |
+                  pip install pytest pytest-asyncio ruff
+
+            - name: Verify installation
+              run: |
+                  python -c "import azure.ai.projects; print('azure-ai-projects OK')"
+                  python -c "import azure.ai.evaluation; print('azure-ai-evaluation OK')"
+                  python -c "import opentelemetry; print('opentelemetry OK')"
+                  python -c "import dotenv; print('python-dotenv OK')"
+                  python -c "import aiosqlite; print('aiosqlite OK')"
