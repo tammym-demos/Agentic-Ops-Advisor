@@ -1,0 +1,39 @@
+[project]
+name = "agentic-ops-advisor"
+version = "0.1.0"
+description = "A governed, production-style AI agent for root-cause + change-context reasoning over infrastructure telemetry"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+dependencies = [
+    "azure-ai-projects>=1.0.0b7",
+    "azure-ai-evaluation>=1.5.0",
+    "azure-identity>=1.19.0",
+    "azure-monitor-opentelemetry>=1.6.4",
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-instrumentation>=0.50b0",
+    "python-dotenv>=1.0.1",
+    "pyodbc>=5.2.0",
+    "aiosqlite>=0.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+eval = [
+    "azure-ai-evaluation>=1.5.0",
+    "promptflow-core>=1.16.0",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
