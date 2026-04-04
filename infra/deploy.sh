@@ -8,7 +8,9 @@
 # Environment variables (override defaults):
 #   AZURE_SUBSCRIPTION_ID   — Azure subscription (default: e0b48569-...)
 #   AZURE_LOCATION          — Deployment location    (default: eastus2)
-#   SQL_ADMIN_PASSWORD      — SQL admin password (required unless using KV ref)
+#   SQL_ADMIN_PASSWORD      — SQL admin password; stored in Key Vault if secret is missing
+#   KEY_VAULT_NAME          — Key Vault name  (default: kv-agentic-ops-secrets)
+#   KEY_VAULT_RG            — Key Vault resource group (default: rg-secrets)
 #
 # The script performs pre-flight checks, deploys via `az deployment sub create`,
 # and writes a ready-to-use .env snippet to stdout.
@@ -22,9 +24,15 @@ SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-e0b48569-71a2-40fe-9b7a-2fb859f31288}"
 LOCATION="${AZURE_LOCATION:-eastus2}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="${SCRIPT_DIR}/main.bicep"
+KV_PREREQS_FILE="${SCRIPT_DIR}/keyvault-prereqs.bicep"
 PARAMS_FILE="${SCRIPT_DIR}/parameters.json"
 DEPLOYMENT_NAME="agentic-ops-advisor-$(date +%Y%m%d%H%M%S)"
 WHAT_IF=false
+
+# Key Vault pre-flight defaults (match parameters.json reference)
+KV_NAME="${KEY_VAULT_NAME:-kv-agentic-ops-secrets}"
+KV_RG="${KEY_VAULT_RG:-rg-secrets}"
+KV_SECRET_NAME="sql-admin-password"
 
 # ---- Argument parsing -------------------------------------------------
 
@@ -56,29 +64,29 @@ error()   { echo -e "\033[0;31m[ERROR]\033[0m $*" >&2; exit 1; }
 
 info "Running pre-flight checks…"
 
-# 1. Azure CLI installed
+# 0. Azure CLI installed (checked first so subsequent steps can use az)
 if ! command -v az &>/dev/null; then
   error "Azure CLI (az) is not installed. Install from https://aka.ms/install-azure-cli"
 fi
 success "Azure CLI found: $(az version --query '"azure-cli"' -o tsv)"
 
-# 2. Logged in
+# 1. Logged in
 if ! az account show &>/dev/null; then
   error "Not logged in to Azure. Run: az login"
 fi
 success "Logged in as: $(az account show --query user.name -o tsv)"
 
-# 3. Set subscription
+# 2. Set subscription
 info "Setting subscription to: ${SUBSCRIPTION_ID}"
 az account set --subscription "${SUBSCRIPTION_ID}"
 success "Active subscription: $(az account show --query name -o tsv) (${SUBSCRIPTION_ID})"
 
-# 4. Verify template and params files exist
+# 3. Verify template and params files exist
 [[ -f "${TEMPLATE_FILE}" ]] || error "Template not found: ${TEMPLATE_FILE}"
 [[ -f "${PARAMS_FILE}" ]]   || error "Parameters file not found: ${PARAMS_FILE}"
 success "Template and parameters files found."
 
-# 5. Register required resource providers
+# 4. Register required resource providers
 PROVIDERS=(
   "Microsoft.Resources"
   "Microsoft.Sql"
@@ -103,6 +111,84 @@ for provider in "${PROVIDERS[@]}"; do
     success "Already registered: ${provider}"
   fi
 done
+
+# 5. Key Vault pre-flight: ensure kv-agentic-ops-secrets exists with sql-admin-password
+#    ARM Key Vault parameter references require the vault to exist BEFORE the main
+#    deployment starts, so we create it here if it is missing.
+info "Checking Key Vault pre-flight: ${KV_NAME} (${KV_RG})…"
+
+# Query by vault name across the subscription to avoid requiring the RG to exist first.
+KV_EXISTS=$(az keyvault list --subscription "${SUBSCRIPTION_ID}" \
+  --query "[?name=='${KV_NAME}'].name" -o tsv 2>/dev/null || echo "")
+
+if [[ -z "${KV_EXISTS}" ]]; then
+  info "Key Vault not found — deploying keyvault-prereqs.bicep…"
+  [[ -f "${KV_PREREQS_FILE}" ]] || error "keyvault-prereqs.bicep not found: ${KV_PREREQS_FILE}"
+
+  # Detect principal type: service principal vs. interactive user.
+  ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
+  if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
+    SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+    if [[ -n "${SP_NAME}" ]]; then
+      DEPLOYER_OBJECT_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
+    else
+      DEPLOYER_OBJECT_ID=""
+    fi
+    PRINCIPAL_TYPE="ServicePrincipal"
+  else
+    DEPLOYER_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+    PRINCIPAL_TYPE="User"
+  fi
+
+  if [[ -z "${DEPLOYER_OBJECT_ID}" ]]; then
+    warn "Could not determine deployer object ID — skipping Secrets Officer role assignment."
+    DEPLOYER_OBJECT_ID=""
+  fi
+
+  az deployment sub create \
+    --name "keyvault-prereqs-$(date +%Y%m%d%H%M%S)" \
+    --location "${LOCATION}" \
+    --template-file "${KV_PREREQS_FILE}" \
+    --parameters \
+        location="${LOCATION}" \
+        secretsRgName="${KV_RG}" \
+        keyVaultName="${KV_NAME}" \
+        secretsOfficerObjectId="${DEPLOYER_OBJECT_ID}" \
+        secretsOfficerPrincipalType="${PRINCIPAL_TYPE}" \
+    --subscription "${SUBSCRIPTION_ID}" \
+    --output none
+  success "Key Vault created: ${KV_NAME}"
+else
+  success "Key Vault already exists: ${KV_NAME}"
+fi
+
+# Ensure the sql-admin-password secret is set in the vault.
+# Use SQL_ADMIN_PASSWORD env var if provided; in non-interactive environments
+# (no TTY) this variable is required — the script will fail with a clear error.
+SECRET_EXISTS=$(az keyvault secret show --vault-name "${KV_NAME}" \
+  --name "${KV_SECRET_NAME}" --query name -o tsv 2>/dev/null || echo "")
+
+if [[ -z "${SECRET_EXISTS}" ]]; then
+  if [[ -n "${SQL_ADMIN_PASSWORD:-}" ]]; then
+    SQL_PWD="${SQL_ADMIN_PASSWORD}"
+  elif [[ -t 0 ]] && [[ -t 2 ]]; then
+    # Interactive session (stdin and stderr are both TTYs) — prompt safely
+    info "Secret '${KV_SECRET_NAME}' not found in vault."
+    read -r -s -p "  Enter SQL admin password to store in Key Vault: " SQL_PWD
+    echo ""
+    [[ -n "${SQL_PWD}" ]] || error "Password cannot be empty."
+  else
+    error "Secret '${KV_SECRET_NAME}' is missing from ${KV_NAME} and SQL_ADMIN_PASSWORD env var is not set. Set SQL_ADMIN_PASSWORD before running this script in non-interactive mode."
+  fi
+  az keyvault secret set \
+    --vault-name "${KV_NAME}" \
+    --name "${KV_SECRET_NAME}" \
+    --value "${SQL_PWD}" \
+    --output none
+  success "Secret '${KV_SECRET_NAME}' stored in ${KV_NAME}."
+else
+  success "Secret '${KV_SECRET_NAME}' already present in ${KV_NAME}."
+fi
 
 # 6. Validate Bicep template (--what-if exits after this step)
 info "Validating Bicep template…"
