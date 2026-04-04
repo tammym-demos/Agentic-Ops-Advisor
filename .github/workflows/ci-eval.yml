@@ -1,0 +1,85 @@
+name: CI Eval
+
+on:
+    pull_request:
+        branches:
+            - main
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    pull-requests: write
+
+jobs:
+    eval:
+        runs-on: ubuntu-latest
+        env:
+            DB_MODE: sqlite
+            AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+            AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - name: Set up Python 3.11
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            # pyodbc (in requirements.txt) requires unixodbc-dev/msodbcsql18 to build,
+            # even when DB_MODE=sqlite is used at runtime.
+            - name: Install ODBC Driver for SQL Server
+              run: |
+                  curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+                  curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+                  sudo apt-get update
+                  sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
+            - name: Install dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -r requirements.txt
+
+            - name: Set up local SQLite DB
+              run: python scripts/setup_local_db.py
+
+            - name: Run evaluations
+              id: run_eval
+              continue-on-error: true
+              run: |
+                  python eval/run_eval.py --compare-baseline 2>&1 | tee eval_output.txt
+                  EVAL_EXIT=${PIPESTATUS[0]}
+                  echo "eval_exit_code=${EVAL_EXIT}" >> "$GITHUB_OUTPUT"
+                  exit $EVAL_EXIT
+
+            - name: Post eval summary as PR comment
+              if: github.event_name == 'pull_request'
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  if [ "${{ steps.run_eval.outcome }}" = "failure" ]; then
+                    STATUS="❌ Regressions detected"
+                  elif [ "${{ steps.run_eval.outcome }}" = "success" ]; then
+                    STATUS="✅ No regressions detected"
+                  else
+                    STATUS="⚠️ Eval step was ${{ steps.run_eval.outcome }}"
+                  fi
+                  if [ -s eval_output.txt ]; then
+                    SUMMARY=$(cat eval_output.txt)
+                  else
+                    SUMMARY="Evaluation output unavailable — check the workflow run logs for details."
+                  fi
+                  gh pr comment "${{ github.event.pull_request.number }}" \
+                    --body "## 🤖 Eval Results — ${STATUS}
+
+                  \`\`\`
+                  ${SUMMARY}
+                  \`\`\`"
+
+            - name: Fail on regression
+              if: steps.run_eval.outcome == 'failure'
+              run: |
+                  echo "Regressions detected in eval run. Failing the check."
+                  exit 1

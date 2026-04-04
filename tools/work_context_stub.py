@@ -1,116 +1,219 @@
-"""Agentic Ops Advisor — Work IQ Context Stub.
+"""
+Agentic Ops Advisor — Work IQ Context Stub (synthetic data).
 
-Returns synthetic "work context" data: change events, decisions, ownership, and
-runbooks.
+Returns synthetic "work context" data: change events, decisions, ownership,
+and runbooks.  This is a demo stub — **all data is synthetic**.
 
-**Important:** We're simulating Work IQ outputs in this demo.  Work IQ is in
-public preview and requires Microsoft 365 Copilot licensing + admin consent.
+Feature flag: ENABLE_WORK_IQ (default: true)
 
-Feature flag: ``ENABLE_WORK_IQ`` (default ``true``).
-
-Each public function wraps its work in an ``execute_tool`` OpenTelemetry span so
-tool calls appear as child spans of the top-level ``invoke_agent`` span.
+Disclaimer: Work IQ is in public preview and requires Microsoft 365 Copilot
+licensing + admin consent.  This module simulates Work IQ outputs for demo
+purposes only.
 """
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any
 
-from agent.tracing import execute_tool_span
+# ---------------------------------------------------------------------------
+# Feature flag
+# ---------------------------------------------------------------------------
 
-logger = logging.getLogger(__name__)
+ENABLE_WORK_IQ: bool = os.getenv("ENABLE_WORK_IQ", "true").lower() not in ("false", "0", "no")
 
-_WORK_IQ_DISCLAIMER = (
-    "We're simulating Work IQ outputs in this demo. "
-    "Work IQ is in public preview and requires Microsoft 365 Copilot licensing + admin consent."
-)
+# ---------------------------------------------------------------------------
+# Synthetic data
+# ---------------------------------------------------------------------------
 
+_CHANGE_EVENTS: dict[str, list[dict[str, Any]]] = {
+    "gpu-cluster": [
+        {
+            "id": "CHG-1042",
+            "type": "config_change",
+            "author": "sre-bot",
+            "timestamp": "2025-01-15T14:22:00Z",
+            "description": "Increased CUDA memory fraction to 0.95 on gpu-node-07",
+            "risk": "medium",
+            "approved_by": "alice@contoso.com",
+        },
+        {
+            "id": "CHG-1039",
+            "type": "deployment",
+            "author": "ci-pipeline",
+            "timestamp": "2025-01-15T09:05:00Z",
+            "description": "Rolled out training-worker v2.3.1 to gpu-cluster",
+            "risk": "low",
+            "approved_by": "bob@contoso.com",
+        },
+    ],
+    "network": [
+        {
+            "id": "CHG-1044",
+            "type": "infra_change",
+            "author": "netops",
+            "timestamp": "2025-01-15T16:00:00Z",
+            "description": "BGP route table update — added 10.20.0.0/16 peering",
+            "risk": "high",
+            "approved_by": "carol@contoso.com",
+        }
+    ],
+    "cost": [
+        {
+            "id": "CHG-1041",
+            "type": "policy_change",
+            "author": "finops-bot",
+            "timestamp": "2025-01-14T10:00:00Z",
+            "description": "Updated Reserved Instance coverage target from 60% to 75%",
+            "risk": "low",
+            "approved_by": "dave@contoso.com",
+        }
+    ],
+}
+
+_DECISIONS: dict[str, list[dict[str, Any]]] = {
+    "gpu-cluster": [
+        {
+            "id": "DEC-201",
+            "summary": "Defer GPU node replacement until Q2 — cost optimisation",
+            "owner": "alice@contoso.com",
+            "date": "2025-01-10",
+            "status": "active",
+        }
+    ],
+    "network": [
+        {
+            "id": "DEC-198",
+            "summary": "Accept elevated p99 latency (<5 ms) during peering migration window",
+            "owner": "carol@contoso.com",
+            "date": "2025-01-14",
+            "status": "active",
+        }
+    ],
+    "cost": [
+        {
+            "id": "DEC-195",
+            "summary": "Increase spot-instance ratio to 40% for batch workloads",
+            "owner": "dave@contoso.com",
+            "date": "2025-01-12",
+            "status": "active",
+        }
+    ],
+}
+
+_OWNERSHIP: dict[str, dict[str, Any]] = {
+    "gpu-cluster": {
+        "team": "ML Platform",
+        "primary": "alice@contoso.com",
+        "secondary": "bob@contoso.com",
+        "slack": "#ml-platform-ops",
+        "oncall_rotation": "PagerDuty: ml-platform",
+    },
+    "network": {
+        "team": "Network Operations",
+        "primary": "carol@contoso.com",
+        "secondary": "netops-team@contoso.com",
+        "slack": "#netops",
+        "oncall_rotation": "PagerDuty: netops",
+    },
+    "cost": {
+        "team": "FinOps",
+        "primary": "dave@contoso.com",
+        "secondary": "finops@contoso.com",
+        "slack": "#finops",
+        "oncall_rotation": "PagerDuty: finops",
+    },
+    "default": {
+        "team": "SRE",
+        "primary": "sre-oncall@contoso.com",
+        "secondary": "sre-team@contoso.com",
+        "slack": "#sre",
+        "oncall_rotation": "PagerDuty: sre-primary",
+    },
+}
+
+_RUNBOOKS: dict[str, list[dict[str, str]]] = {
+    "gpu-cluster": [
+        {
+            "title": "GPU Node OOM Remediation",
+            "url": "https://wiki.contoso.com/runbooks/gpu-oom",
+            "last_updated": "2025-01-08",
+        },
+        {
+            "title": "CUDA Driver Upgrade Procedure",
+            "url": "https://wiki.contoso.com/runbooks/cuda-upgrade",
+            "last_updated": "2024-12-15",
+        },
+    ],
+    "network": [
+        {
+            "title": "BGP Peering Failover",
+            "url": "https://wiki.contoso.com/runbooks/bgp-failover",
+            "last_updated": "2025-01-13",
+        }
+    ],
+    "cost": [
+        {
+            "title": "RI Coverage Optimisation",
+            "url": "https://wiki.contoso.com/runbooks/ri-coverage",
+            "last_updated": "2024-11-20",
+        }
+    ],
+}
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def get_work_context(query: str) -> dict[str, Any]:
-    """Return synthetic work-context data relevant to *query*.
 
-    Args:
-        query: Natural-language query used to select the most relevant stub records.
-
-    Returns:
-        A dict with keys ``context_type``, ``records``, ``record_count``,
-        ``summary``, and ``disclaimer``.
-    """
-    if os.getenv("ENABLE_WORK_IQ", "true").lower() != "true":
-        return {"summary": "Work IQ disabled via ENABLE_WORK_IQ=false", "record_count": 0, "disclaimer": _WORK_IQ_DISCLAIMER}
-
-    context_type = _infer_context_type(query)
-    with execute_tool_span("work_iq", query_type=context_type) as span:
-        records = _stub_records(context_type)
-        span.set_attribute("tool.record_count", len(records))
-        return {
-            "context_type": context_type,
-            "records": records,
-            "record_count": len(records),
-            "summary": f"{len(records)} {context_type} record(s) found (synthetic demo data).",
-            "disclaimer": _WORK_IQ_DISCLAIMER,
-        }
+def _service_key(service: str) -> str:
+    """Normalise a service name to a known key or 'default'."""
+    s = service.lower().strip()
+    for key in _CHANGE_EVENTS:
+        if key in s or s in key:
+            return key
+    return "default"
 
 
-# ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
-
-def _infer_context_type(query: str) -> str:
-    lower = query.lower()
-    if any(kw in lower for kw in ("change", "deploy", "release", "rollout")):
-        return "change_events"
-    if any(kw in lower for kw in ("decision", "approval", "sign-off")):
-        return "decisions"
-    if any(kw in lower for kw in ("owner", "team", "responsible", "contact")):
-        return "ownership"
-    if any(kw in lower for kw in ("runbook", "playbook", "procedure", "steps")):
-        return "runbooks"
-    return "change_events"
+def get_change_events(service: str) -> list[dict[str, Any]]:
+    """Return recent change events for *service* (synthetic data)."""
+    if not ENABLE_WORK_IQ:
+        return []
+    return _CHANGE_EVENTS.get(_service_key(service), [])
 
 
-def _stub_records(context_type: str) -> list[dict[str, Any]]:
-    stubs: dict[str, list[dict[str, Any]]] = {
-        "change_events": [
-            {
-                "id": "CHG-1042",
-                "title": "GPU driver upgrade to 550.x on cluster A",
-                "author": "ops-team@contoso.com",
-                "timestamp": "2025-01-01T22:00:00Z",
-                "status": "completed",
-            },
-            {
-                "id": "CHG-1043",
-                "title": "Network MTU change on core switches",
-                "author": "netops@contoso.com",
-                "timestamp": "2025-01-02T01:00:00Z",
-                "status": "in_progress",
-            },
-        ],
-        "decisions": [
-            {
-                "id": "DEC-201",
-                "title": "Approved: increase GPU cluster budget by 15%",
-                "approver": "director-of-infra@contoso.com",
-                "timestamp": "2024-12-20T10:00:00Z",
-            }
-        ],
-        "ownership": [
-            {"resource": "gpu-cluster-a", "team": "ML Platform", "contact": "mlplatform@contoso.com"},
-            {"resource": "core-network", "team": "NetOps", "contact": "netops@contoso.com"},
-        ],
-        "runbooks": [
-            {
-                "id": "RB-07",
-                "title": "GPU node OOM recovery procedure",
-                "url": "https://wiki.contoso.com/runbooks/gpu-oom",
-            }
-        ],
+def get_decisions(service: str) -> list[dict[str, Any]]:
+    """Return active architectural/operational decisions for *service*."""
+    if not ENABLE_WORK_IQ:
+        return []
+    return _DECISIONS.get(_service_key(service), [])
+
+
+def get_ownership(service: str) -> dict[str, Any]:
+    """Return team ownership info for *service*."""
+    if not ENABLE_WORK_IQ:
+        return {}
+    key = _service_key(service)
+    return _OWNERSHIP.get(key, _OWNERSHIP["default"])
+
+
+def get_runbooks(service: str) -> list[dict[str, str]]:
+    """Return relevant runbook links for *service*."""
+    if not ENABLE_WORK_IQ:
+        return []
+    return _RUNBOOKS.get(_service_key(service), [])
+
+
+def get_full_context(service: str) -> dict[str, Any]:
+    """Return all work context for *service* in a single call."""
+    return {
+        "service": service,
+        "disclaimer": (
+            "Simulating Work IQ outputs. Work IQ is in public preview and requires "
+            "Microsoft 365 Copilot licensing + admin consent."
+        ),
+        "change_events": get_change_events(service),
+        "decisions": get_decisions(service),
+        "ownership": get_ownership(service),
+        "runbooks": get_runbooks(service),
     }
-    return stubs.get(context_type, stubs["change_events"])
