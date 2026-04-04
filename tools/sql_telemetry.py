@@ -1,263 +1,358 @@
-"""SQL Telemetry Tool — queries synthetic infrastructure telemetry from SQLite (local) or Azure SQL."""
+"""SQL Telemetry Query Tool — queries synthetic infrastructure telemetry.
+
+Dual-backend support:
+  - DB_MODE=sqlite  → aiosqlite against data/telemetry.db  (default / local dev)
+  - DB_MODE=azure_sql → pyodbc against Azure SQL (connection string from env)
+
+Exposes:
+  - ``TOOL_SCHEMA``      — Azure AI Agent Service function definition dict
+  - ``query_telemetry``  — async function the agent calls directly
+  - ``get_tool_definition`` — helper that returns the schema dict
+"""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
-import sqlite3
-from datetime import datetime, timedelta, timezone
+import re
+from typing import Any
 
-import aiosqlite
-
-# ---------------------------------------------------------------------------
-# Schema + seed data helpers
-# ---------------------------------------------------------------------------
-
-_DDL = """
-CREATE TABLE IF NOT EXISTS telemetry_gpu (
-    ts             TEXT NOT NULL,
-    cluster        TEXT NOT NULL,
-    node           TEXT NOT NULL,
-    utilization_pct REAL NOT NULL,
-    mem_pct        REAL NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS telemetry_net (
-    ts              TEXT NOT NULL,
-    site            TEXT NOT NULL,
-    latency_ms      REAL NOT NULL,
-    loss_pct        REAL NOT NULL,
-    throughput_gbps REAL NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS telemetry_cost (
-    ts             TEXT NOT NULL,
-    cluster        TEXT NOT NULL,
-    cost_usd       REAL NOT NULL,
-    token_cost_usd REAL NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS incidents (
-    ts       TEXT NOT NULL,
-    service  TEXT NOT NULL,
-    symptom  TEXT NOT NULL,
-    severity TEXT NOT NULL,
-    status   TEXT NOT NULL
-);
-"""
-
-
-def _seed_db(conn: sqlite3.Connection, days: int = 30) -> None:
-    """Populate tables with synthetic data including planted anomalies."""
-    import random
-
-    random.seed(42)
-    now = datetime.now(tz=timezone.utc)
-    clusters = ["gpu-cluster-a", "gpu-cluster-b"]
-    nodes = ["node-01", "node-02", "node-03"]
-    sites = ["eastus2", "westus3"]
-
-    gpu_rows = []
-    net_rows = []
-    cost_rows = []
-
-    for h in range(days * 24):
-        ts = (now - timedelta(hours=h)).isoformat()
-        for cluster in clusters:
-            for node in nodes:
-                util = random.uniform(60, 85)
-                mem = random.uniform(50, 75)
-                # Plant a GPU utilization drop anomaly around 25h ago
-                if 24 <= h <= 26 and cluster == "gpu-cluster-a":
-                    util = random.uniform(10, 20)
-                gpu_rows.append((ts, cluster, node, round(util, 2), round(mem, 2)))
-
-        for site in sites:
-            lat = random.uniform(5, 15)
-            loss = random.uniform(0, 0.5)
-            tput = random.uniform(8, 12)
-            # Plant a latency spike anomaly around 48h ago
-            if 47 <= h <= 49 and site == "eastus2":
-                lat = random.uniform(200, 350)
-                loss = random.uniform(5, 10)
-            net_rows.append((ts, site, round(lat, 2), round(loss, 3), round(tput, 2)))
-
-        for cluster in clusters:
-            cost = random.uniform(80, 120)
-            token_cost = random.uniform(10, 30)
-            cost_rows.append((ts, cluster, round(cost, 2), round(token_cost, 2)))
-
-    conn.executemany(
-        "INSERT INTO telemetry_gpu VALUES (?,?,?,?,?)",
-        gpu_rows,
-    )
-    conn.executemany(
-        "INSERT INTO telemetry_net VALUES (?,?,?,?,?)",
-        net_rows,
-    )
-    conn.executemany(
-        "INSERT INTO telemetry_cost VALUES (?,?,?,?)",
-        cost_rows,
-    )
-
-    # Seed incidents table
-    incident_rows = [
-        (
-            (now - timedelta(hours=25)).isoformat(),
-            "gpu-cluster-a",
-            "GPU utilization dropped below 20%",
-            "high",
-            "open",
-        ),
-        (
-            (now - timedelta(hours=48)).isoformat(),
-            "network",
-            "Latency spike >200ms in eastus2",
-            "medium",
-            "resolved",
-        ),
-        (
-            (now - timedelta(hours=72)).isoformat(),
-            "cost-tracker",
-            "Token cost exceeded budget threshold",
-            "low",
-            "resolved",
-        ),
-    ]
-    conn.executemany(
-        "INSERT INTO incidents VALUES (?,?,?,?,?)",
-        incident_rows,
-    )
-    conn.commit()
-
-
-def init_db_sync(db_path: str = ":memory:") -> sqlite3.Connection:
-    """Create and seed a SQLite database synchronously. Returns open connection."""
-    conn = sqlite3.connect(db_path)
-    conn.executescript(_DDL)
-    _seed_db(conn)
-    return conn
-
-
-async def init_db(db_path: str = ":memory:") -> None:
-    """Create and seed a SQLite database asynchronously (file-based path)."""
-    async with aiosqlite.connect(db_path) as db:
-        await db.executescript(_DDL)
-        await db.commit()
-
-    # Use sync seeding for simplicity (seed is one-time setup)
-    conn = sqlite3.connect(db_path)
-    _seed_db(conn)
-    conn.close()
-
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Query helpers
+# Telemetry table metadata (used for schema validation and help text)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_DB = os.environ.get("SQLITE_DB_PATH", "agentops.db")
-
-_QUERIES: dict[str, str] = {
-    "gpu": """
-        SELECT cluster, node,
-               AVG(utilization_pct) AS avg_util,
-               MIN(utilization_pct) AS min_util,
-               MAX(utilization_pct) AS max_util,
-               COUNT(*) AS samples
-        FROM telemetry_gpu
-        WHERE ts >= datetime('now', '-{hours} hours')
-        GROUP BY cluster, node
-        ORDER BY avg_util ASC
-    """,
-    "network": """
-        SELECT site,
-               AVG(latency_ms) AS avg_latency,
-               MAX(latency_ms) AS max_latency,
-               AVG(loss_pct)   AS avg_loss,
-               AVG(throughput_gbps) AS avg_tput,
-               COUNT(*) AS samples
-        FROM telemetry_net
-        WHERE ts >= datetime('now', '-{hours} hours')
-        GROUP BY site
-        ORDER BY avg_latency DESC
-    """,
-    "cost": """
-        SELECT cluster,
-               SUM(cost_usd)       AS total_cost,
-               SUM(token_cost_usd) AS total_token_cost,
-               COUNT(*) AS samples
-        FROM telemetry_cost
-        WHERE ts >= datetime('now', '-{hours} hours')
-        GROUP BY cluster
-        ORDER BY total_cost DESC
-    """,
-    "incidents": """
-        SELECT ts, service, symptom, severity, status
-        FROM incidents
-        WHERE ts >= datetime('now', '-{hours} hours')
-        ORDER BY ts DESC
-    """,
-    "summary": """
-        SELECT 'gpu' AS metric_type,
-               COUNT(*) AS total_samples,
-               AVG(utilization_pct) AS avg_value
-        FROM telemetry_gpu
-        WHERE ts >= datetime('now', '-{hours} hours')
-        UNION ALL
-        SELECT 'network', COUNT(*), AVG(latency_ms)
-        FROM telemetry_net
-        WHERE ts >= datetime('now', '-{hours} hours')
-        UNION ALL
-        SELECT 'cost', COUNT(*), AVG(cost_usd)
-        FROM telemetry_cost
-        WHERE ts >= datetime('now', '-{hours} hours')
-    """,
+TELEMETRY_TABLES = {
+    "telemetry_gpu": {
+        "description": "GPU utilization, memory, temperature and power per host/GPU index.",
+        "columns": ["id", "ts", "host", "gpu_index", "util_pct", "mem_used_gb", "mem_total_gb", "temp_c", "power_w"],
+    },
+    "telemetry_net": {
+        "description": "Network throughput, packet-drop rate and latency per host/interface.",
+        "columns": ["id", "ts", "host", "iface", "rx_mbps", "tx_mbps", "drop_pct", "latency_ms"],
+    },
+    "telemetry_cost": {
+        "description": "Hourly cost samples per service and region.",
+        "columns": ["id", "ts", "service", "region", "usd_per_hr", "units", "total_usd"],
+    },
+    "incidents": {
+        "description": "Infrastructure incident log with severity, status and linked host/service.",
+        "columns": ["id", "created_at", "resolved_at", "severity", "title", "host", "service", "status"],
+    },
 }
+
+# Pre-built aggregate query templates ----------------------------------------
+# Each template uses named :param style so they are safe against injection.
+
+_AGG_QUERIES: dict[str, str] = {
+    "gpu_avg_util_1h": (
+        "SELECT host, AVG(util_pct) AS avg_util_pct, MAX(util_pct) AS max_util_pct, "
+        "MIN(util_pct) AS min_util_pct "
+        "FROM telemetry_gpu "
+        "WHERE ts >= datetime('now', '-1 hour') "
+        "GROUP BY host ORDER BY avg_util_pct DESC"
+    ),
+    "gpu_avg_util_24h": (
+        "SELECT host, AVG(util_pct) AS avg_util_pct, MAX(util_pct) AS max_util_pct, "
+        "MIN(util_pct) AS min_util_pct "
+        "FROM telemetry_gpu "
+        "WHERE ts >= datetime('now', '-24 hours') "
+        "GROUP BY host ORDER BY avg_util_pct DESC"
+    ),
+    "net_avg_latency_1h": (
+        "SELECT host, iface, AVG(latency_ms) AS avg_latency_ms, MAX(latency_ms) AS max_latency_ms, "
+        "AVG(drop_pct) AS avg_drop_pct "
+        "FROM telemetry_net "
+        "WHERE ts >= datetime('now', '-1 hour') "
+        "GROUP BY host, iface ORDER BY avg_latency_ms DESC"
+    ),
+    "cost_by_service_24h": (
+        "SELECT service, region, SUM(total_usd) AS total_usd, AVG(usd_per_hr) AS avg_usd_per_hr "
+        "FROM telemetry_cost "
+        "WHERE ts >= datetime('now', '-24 hours') "
+        "GROUP BY service, region ORDER BY total_usd DESC"
+    ),
+    "open_incidents": (
+        "SELECT id, created_at, severity, title, host, service, status "
+        "FROM incidents "
+        "WHERE status != 'resolved' "
+        "ORDER BY CASE severity WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 WHEN 'P3' THEN 3 ELSE 4 END, created_at DESC"
+    ),
+    "recent_incidents_24h": (
+        "SELECT id, created_at, resolved_at, severity, title, host, service, status "
+        "FROM incidents "
+        "WHERE created_at >= datetime('now', '-24 hours') "
+        "ORDER BY created_at DESC"
+    ),
+}
+
+# ---------------------------------------------------------------------------
+# Safety: only allow SELECT statements
+# ---------------------------------------------------------------------------
+
+_SAFE_PATTERN = re.compile(r"^\s*SELECT\b", re.IGNORECASE)
+_ALLOWED_TABLES = set(TELEMETRY_TABLES.keys())
+
+
+def _validate_sql(sql: str) -> None:
+    """Raise ValueError if *sql* is not a safe SELECT-only query."""
+    if not _SAFE_PATTERN.match(sql):
+        raise ValueError("Only SELECT statements are permitted.")
+    # Rough check: ensure the query references only known tables
+    lowered = sql.lower()
+    found_table = any(tbl in lowered for tbl in _ALLOWED_TABLES)
+    if not found_table:
+        raise ValueError(
+            f"Query must reference at least one of the known tables: {sorted(_ALLOWED_TABLES)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Backend execution
+# ---------------------------------------------------------------------------
+
+_DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "telemetry.db")
+
+
+async def _run_sqlite(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any]:
+    """Execute *sql* against the local SQLite database and return structured results."""
+    try:
+        import aiosqlite  # noqa: PLC0415 — optional dep check inside function
+    except ImportError as exc:
+        raise RuntimeError("aiosqlite is required for SQLite mode. Install it with: pip install aiosqlite") from exc
+
+    db_path = os.environ.get("SQLITE_DB_PATH", _DEFAULT_DB_PATH)
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description] if cursor.description else []
+            return {
+                "columns": columns,
+                "rows": [dict(row) for row in rows],
+                "row_count": len(rows),
+            }
+
+
+def _run_azure_sql(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any]:
+    """Execute *sql* against Azure SQL and return structured results."""
+    try:
+        import pyodbc  # noqa: PLC0415
+    except ImportError as exc:
+        raise RuntimeError("pyodbc is required for Azure SQL mode. Install it with: pip install pyodbc") from exc
+
+    conn_str = os.environ.get("DB_CONNECTION_STRING", "")
+    if not conn_str:
+        raise RuntimeError("DB_CONNECTION_STRING environment variable is not set for Azure SQL mode.")
+
+    with pyodbc.connect(conn_str, timeout=30) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        columns = [col[0] for col in cursor.description] if cursor.description else []
+        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        return {
+            "columns": columns,
+            "rows": rows,
+            "row_count": len(rows),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Public tool function
+# ---------------------------------------------------------------------------
 
 
 async def query_telemetry(
-    query_type: str,
-    hours_back: int = 24,
-    db_path: str | None = None,
+    *,
+    table: str | None = None,
+    aggregate: str | None = None,
+    sql: str | None = None,
+    limit: int = 100,
+    filters: dict[str, Any] | None = None,
 ) -> str:
-    """Query telemetry data from SQLite and return JSON string.
+    """Query infrastructure telemetry and return results as a JSON string.
+
+    The Azure AI Agent Service will call this function with keyword arguments
+    extracted from the user's request.
 
     Args:
-        query_type: One of "gpu", "network", "cost", "incidents", "summary".
-        hours_back: How many hours of history to include. Defaults to 24.
-        db_path: Path to SQLite database. Defaults to SQLITE_DB_PATH env var or "agentops.db".
+        table:     One of ``telemetry_gpu``, ``telemetry_net``, ``telemetry_cost``,
+                   ``incidents``.  Returns the *limit* most-recent rows.
+        aggregate: Named aggregate query key (see ``list_aggregates`` output).
+        sql:       Raw SELECT statement (restricted to known tables, SELECT only).
+        limit:     Maximum rows returned for plain table queries (default 100, max 500).
+        filters:   Optional key/value filters applied as WHERE clauses for plain
+                   table queries (e.g. ``{"host": "gpu-node-01"}``).
 
     Returns:
-        JSON-encoded list of result rows.
+        JSON string with keys ``columns``, ``rows``, ``row_count``, and ``meta``.
     """
-    if query_type not in _QUERIES:
-        return json.dumps(
-            {"error": f"Unknown query_type '{query_type}'. Choose from: {list(_QUERIES)}"}
+    db_mode = os.environ.get("DB_MODE", "sqlite").lower()
+
+    try:
+        result = await _dispatch(
+            db_mode=db_mode,
+            table=table,
+            aggregate=aggregate,
+            sql=sql,
+            limit=min(int(limit), 500),
+            filters=filters or {},
         )
-
-    effective_path = db_path or _DEFAULT_DB
-    sql = _QUERIES[query_type].format(hours=hours_back)
-
-    try:
-        async with aiosqlite.connect(effective_path) as db:
-            db.row_factory = aiosqlite.Row
-            async with db.execute(sql) as cursor:
-                rows = await cursor.fetchall()
-                return json.dumps([dict(row) for row in rows])
+        result["meta"] = {
+            "db_mode": db_mode,
+            "disclaimer": "All data is synthetic — for demo purposes only.",
+        }
+        return json.dumps(result, default=str)
     except Exception as exc:  # noqa: BLE001
-        return json.dumps({"error": str(exc)})
+        logger.exception("query_telemetry failed")
+        error_payload = {
+            "error": str(exc),
+            "meta": {
+                "db_mode": db_mode,
+                "disclaimer": "All data is synthetic — for demo purposes only.",
+            },
+        }
+        return json.dumps(error_payload)
+
+
+async def _dispatch(
+    *,
+    db_mode: str,
+    table: str | None,
+    aggregate: str | None,
+    sql: str | None,
+    limit: int,
+    filters: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the SQL string and dispatch to the correct backend."""
+
+    # --- 1. Named aggregate ---
+    if aggregate is not None:
+        agg_key = aggregate.strip().lower()
+        if agg_key not in _AGG_QUERIES:
+            available = sorted(_AGG_QUERIES.keys())
+            raise ValueError(f"Unknown aggregate '{agg_key}'. Available: {available}")
+        final_sql = _AGG_QUERIES[agg_key]
+        params: tuple[Any, ...] = ()
+
+    # --- 2. Raw SQL ---
+    elif sql is not None:
+        _validate_sql(sql)
+        final_sql = sql.strip()
+        params = ()
+
+    # --- 3. Plain table scan with optional filters ---
+    elif table is not None:
+        if table not in TELEMETRY_TABLES:
+            raise ValueError(
+                f"Unknown table '{table}'. Must be one of: {sorted(TELEMETRY_TABLES.keys())}"
+            )
+        where_clauses: list[str] = []
+        param_values: list[Any] = []
+        for col, val in filters.items():
+            # Only allow column names that look safe (alphanumeric + underscore)
+            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", col):
+                raise ValueError(f"Invalid filter column name: '{col}'")
+            where_clauses.append(f"{col} = ?")
+            param_values.append(val)
+
+        ts_col = "created_at" if table == "incidents" else "ts"
+        order_dir = "DESC"
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        final_sql = f"SELECT * FROM {table} {where_sql} ORDER BY {ts_col} {order_dir} LIMIT ?"
+        param_values.append(limit)
+        params = tuple(param_values)
+
+    else:
+        raise ValueError("Provide at least one of: 'table', 'aggregate', or 'sql'.")
+
+    # --- Dispatch to backend ---
+    if db_mode == "sqlite":
+        return await _run_sqlite(final_sql, params)
+    elif db_mode == "azure_sql":
+        # pyodbc is synchronous; wrap in executor in a real async context
+        import asyncio  # noqa: PLC0415
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _run_azure_sql, final_sql, params)
+    else:
+        raise ValueError(f"Unsupported DB_MODE '{db_mode}'. Use 'sqlite' or 'azure_sql'.")
 
 
 # ---------------------------------------------------------------------------
-# Sync wrapper for FunctionTool (Azure AI Agent Service dispatches sync)
+# Azure AI Agent Service tool schema
 # ---------------------------------------------------------------------------
 
-def query_telemetry_sync(query_type: str, hours_back: int = 24) -> str:
-    """Synchronous wrapper around query_telemetry for FunctionTool registration."""
-    import asyncio
+TOOL_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "query_telemetry",
+        "description": (
+            "Query synthetic infrastructure telemetry data stored in SQL. "
+            "Covers GPU utilization, network throughput/latency, cost, and incidents. "
+            "All data is synthetic and for demo purposes only."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "description": (
+                        "Return raw rows from one of the telemetry tables: "
+                        "'telemetry_gpu', 'telemetry_net', 'telemetry_cost', 'incidents'."
+                    ),
+                    "enum": list(TELEMETRY_TABLES.keys()),
+                },
+                "aggregate": {
+                    "type": "string",
+                    "description": (
+                        "Run a pre-built aggregate query. Available keys: "
+                        + ", ".join(sorted(_AGG_QUERIES.keys()))
+                        + ". Use 'list_aggregates' pseudo-value to see descriptions."
+                    ),
+                },
+                "sql": {
+                    "type": "string",
+                    "description": (
+                        "A raw SELECT statement scoped to the known telemetry tables. "
+                        "Only SELECT is permitted; no DDL or DML."
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of rows to return for plain table queries (default 100, max 500).",
+                    "default": 100,
+                    "minimum": 1,
+                    "maximum": 500,
+                },
+                "filters": {
+                    "type": "object",
+                    "description": (
+                        "Optional key/value pairs applied as equality WHERE filters for plain table queries. "
+                        "Example: {\"host\": \"gpu-node-01\", \"severity\": \"P1\"}"
+                    ),
+                    "additionalProperties": {"type": "string"},
+                },
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+}
 
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(query_telemetry(query_type, hours_back))
-    finally:
-        loop.close()
+
+def get_tool_definition() -> dict[str, Any]:
+    """Return the Azure AI Agent Service-compatible tool definition for this tool."""
+    return TOOL_SCHEMA
+
+
+# ---------------------------------------------------------------------------
+# Utility: list available aggregate queries
+# ---------------------------------------------------------------------------
+
+
+def list_aggregates() -> dict[str, str]:
+    """Return a mapping of aggregate query keys to their SQL for inspection."""
+    return dict(_AGG_QUERIES)
