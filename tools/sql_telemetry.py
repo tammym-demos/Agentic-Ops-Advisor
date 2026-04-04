@@ -119,7 +119,7 @@ _DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dat
 async def _run_sqlite(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any]:
     """Execute *sql* against the local SQLite database and return structured results."""
     try:
-        import aiosqlite  # noqa: PLC0415 - optional dep check inside function
+        import aiosqlite  # noqa: PLC0415 — optional dep check inside function
     except ImportError as exc:
         raise RuntimeError("aiosqlite is required for SQLite mode. Install it with: pip install aiosqlite") from exc
 
@@ -139,7 +139,7 @@ async def _run_sqlite(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any]:
 def _run_azure_sql(sql: str, params: tuple[Any, ...] = ()) -> dict[str, Any]:
     """Execute *sql* against Azure SQL and return structured results."""
     try:
-        import pyodbc  # noqa: PLC0415 - optional dep check inside function
+        import pyodbc  # noqa: PLC0415
     except ImportError as exc:
         raise RuntimeError("pyodbc is required for Azure SQL mode. Install it with: pip install pyodbc") from exc
 
@@ -273,7 +273,7 @@ async def _dispatch(
         return await _run_sqlite(final_sql, params)
     elif db_mode == "azure_sql":
         # pyodbc is synchronous; wrap in executor in a real async context
-        import asyncio  # noqa: PLC0415 - import deferred to avoid circular dependency
+        import asyncio  # noqa: PLC0415
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _run_azure_sql, final_sql, params)
