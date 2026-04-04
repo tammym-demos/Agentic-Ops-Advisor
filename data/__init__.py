@@ -1,1 +1,1 @@
-"""Agentic Ops Advisor — Synthetic data generators and seed files."""
+"""Agentic Ops Advisor — Synthetic data generation and seed utilities."""

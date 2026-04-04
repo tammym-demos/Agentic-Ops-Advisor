@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "eastus2"
+    },
+    "resourceGroupName": {
+      "value": "rg-agentic-ops-advisor"
+    },
+    "environmentName": {
+      "value": "prod"
+    },
+    "projectName": {
+      "value": "agentops"
+    },
+    "sqlAdminLogin": {
+      "value": "sqladmin"
+    },
+    "sqlAdminPassword": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-secrets/providers/Microsoft.KeyVault/vaults/kv-agentic-ops-secrets"
+        },
+        "secretName": "sql-admin-password"
+      }
+    },
+    "sqlDatabaseName": {
+      "value": "agentops-telemetry"
+    },
+    "sqlDatabaseSku": {
+      "value": "Basic"
+    },
+    "openAiCapacity": {
+      "value": 10
+    },
+    "tags": {
+      "value": {
+        "project": "agentic-ops-advisor",
+        "environment": "prod",
+        "managedBy": "bicep"
+      }
+    }
+  }
+}
