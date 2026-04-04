@@ -69,6 +69,19 @@ def _stub_agent(query: str) -> str:
     """
     q = query.lower()
 
+    # Ownership / service queries — check before generic GPU queries to avoid
+    # false-routing when the query contains both "gpu" and "drop".
+    if "owns" in q or "ownership" in q or ("service" in q and ("owns" in q or "node" in q)):
+        return (
+            "Work IQ context: node gpu-03 is owned by team-infra (service: ml-serving). "
+            "GPU anomaly record cross-referenced with ownership data. "
+            "Change context: contact infra-oncall@contoso.com. Confidence: Med."
+        )
+    if "owner" in q or ("team" in q and "gpu" in q):
+        return (
+            "Work IQ context: GPU cluster is owned by team-infra. "
+            "Change context shows last deployment by alice@contoso.com. Confidence: High."
+        )
     if "gpu" in q and ("drop" in q or "utilization" in q):
         return (
             "Telemetry query shows GPU utilization dropped ~40% starting day 18. "
@@ -121,27 +134,27 @@ def _stub_agent(query: str) -> str:
             "Change context shows a batch-job deployment on day 20. "
             "Confidence: Med. Correlating all signals."
         )
-    if "week" in q or "last week" in q:
-        return (
-            "Telemetry query for the requested window: GPU utilization averaged 68% "
-            "last week. No anomalies detected. Metric baselines are within normal range."
-        )
     if "2 weeks" in q or "two weeks" in q:
         return (
             "Telemetry data for two weeks ago shows normal operations. "
             "GPU at 70%, latency p99 < 200 ms, cost on-budget. "
             "Baseline: all green. Confidence: High."
         )
-    if "owner" in q or ("team" in q and "gpu" in q):
+    if "week" in q or "last week" in q:
         return (
-            "Work IQ context: GPU cluster is owned by team-infra. "
-            "Change context shows last deployment by alice@contoso.com. Confidence: High."
+            "Telemetry query for the requested window: GPU utilization averaged 68% "
+            "last week. No anomalies detected. Metric baselines are within normal range."
         )
     if "runbook" in q and "network" in q:
         return (
             "Work IQ context returned 3 runbooks for network issues: "
             "RB-4421 (load balancer), RB-4422 (BGP flap), RB-4423 (packet loss). "
             "Change context confirms applicability. Confidence: High."
+        )
+    if "cost" in q and ("trend" in q or "trending" in q):
+        return (
+            "Telemetry query for cost this month shows an upward trend: "
+            "+12% week-over-week. Anomaly threshold not yet breached. Confidence: High."
         )
 
     # Fallback
@@ -182,19 +195,35 @@ def load_testset(path: Path) -> list[dict]:
 
 
 def run_case(agent_fn: Any, evaluators: dict, case: dict) -> dict:
-    """Run *case* through *agent_fn*, score with all *evaluators*, return result dict."""
+    """Run *case* through *agent_fn*, score with all *evaluators*, return result dict.
+
+    Evaluator calling convention (matches main's eval/evaluators.py):
+      - CorrectnessEvaluator  → expected_cause (str, joined from expected_signals)
+      - EvidenceQualityEvaluator → tool_outputs (optional)
+      - SafetyEvaluator       → response only
+      - GroundednessEvaluator → tool_outputs (optional)
+
+    ``EVALUATORS`` maps evaluator ids to *classes*; we instantiate each call.
+    """
     query: str = case["query"]
     expected_signals: list[str] = case.get("expected_signals", [])
+    # Join expected_signals into a human-readable cause label for the
+    # CorrectnessEvaluator which takes a single ``expected_cause`` string.
+    expected_cause: str = "; ".join(expected_signals) if expected_signals else query
 
     response: str = agent_fn(query)
 
     scores: dict[str, dict] = {}
-    for name, evaluator in evaluators.items():
-        scores[name] = evaluator(
-            response=response,
-            expected_signals=expected_signals,
-            query=query,
-        )
+    for name, evaluator_cls in evaluators.items():
+        # Instantiate the evaluator class for each call (stateless, cheap).
+        evaluator = evaluator_cls()
+        if name == "correctness":
+            result = evaluator(response=response, expected_cause=expected_cause)
+        elif name in ("evidence_quality", "groundedness"):
+            result = evaluator(response=response, tool_outputs=None)
+        else:
+            result = evaluator(response=response)
+        scores[name] = result
 
     passed = all(scores[ev]["score"] >= THRESHOLDS.get(ev, 0.5) for ev in scores)
     return {
