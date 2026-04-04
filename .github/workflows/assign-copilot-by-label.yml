@@ -1,4 +1,4 @@
-name: Assign Copilot by Label
+name: Assign Copilot Cloud Agent by Label
 
 on:
   issues:
@@ -11,7 +11,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Assign Copilot to issue
+      - name: Assign Copilot cloud agent to issue
         uses: actions/github-script@v7
         with:
           script: |
