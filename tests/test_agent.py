@@ -130,7 +130,7 @@ class TestQueryTelemetrySyncWrapper:
 
         fake_result = json.dumps({"columns": [], "rows": [], "row_count": 0, "meta": {}})
 
-        async def mock_async_query(**kwargs):  # noqa: RUF029
+        async def mock_async_query(**kwargs):  # noqa: RUF029 - async mock intentionally has no await
             return fake_result
 
         with patch("tools.sql_telemetry.query_telemetry", side_effect=mock_async_query):
@@ -144,7 +144,7 @@ class TestQueryTelemetrySyncWrapper:
 
         captured: dict = {}
 
-        async def mock_async_query(**kwargs):  # noqa: RUF029
+        async def mock_async_query(**kwargs):  # noqa: RUF029 - async mock intentionally has no await
             captured.update(kwargs)
             return json.dumps({})
 
@@ -267,12 +267,6 @@ class TestAgentOpsAdvisorClient:
 # ---------------------------------------------------------------------------
 
 
-AZURE_MODULES = {
-    "azure.ai.projects": MagicMock(),
-    "azure.identity": MagicMock(),
-}
-
-
 class TestAgentOpsAdvisorAgentLifecycle:
     def _make_advisor_with_mock_client(self, mock_client: MagicMock, **settings_kwargs) -> "AgentOpsAdvisor":
         from agent.agent import AgentOpsAdvisor
@@ -287,10 +281,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
         mock_ft = MagicMock()
         mock_ts = MagicMock()
 
-        with (
-            patch("azure.ai.projects.models.FunctionTool", return_value=mock_ft),
-            patch("azure.ai.projects.models.ToolSet", return_value=mock_ts),
-        ):
+        with patch("agent.agent._import_agent_sdk", return_value=(mock_ft, mock_ts)):
             from agent.agent import AgentOpsAdvisor
 
             advisor = AgentOpsAdvisor(_make_settings())
@@ -308,8 +299,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
         mock_client = _make_mock_client()
 
         with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
+            patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())),
             patch("agent.agent._load_system_prompt", return_value="# Prompt"),
         ):
             from agent.agent import AgentOpsAdvisor
@@ -327,8 +317,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
         expected_prompt = "# My System Prompt\nBe helpful."
 
         with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
+            patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())),
             patch("agent.agent._load_system_prompt", return_value=expected_prompt),
         ):
             from agent.agent import AgentOpsAdvisor
@@ -345,8 +334,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
         mock_client = _make_mock_client()
 
         with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
+            patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())),
             patch("agent.agent._load_system_prompt", return_value="# Prompt"),
         ):
             from agent.agent import AgentOpsAdvisor
@@ -415,10 +403,7 @@ class TestAgentOpsAdvisorAsk:
         """ask() returns the assistant's text response."""
         mock_client = _make_mock_client(assistant_reply="GPU utilization dropped due to scheduler issue.")
 
-        with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
-        ):
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             advisor = self._make_advisor(mock_client)
             result = advisor.ask("thread-456", "Why did GPU utilization drop in the last 24h?")
 
@@ -428,10 +413,7 @@ class TestAgentOpsAdvisorAsk:
         """ask() calls create_message with the user's text."""
         mock_client = _make_mock_client()
 
-        with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
-        ):
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             advisor = self._make_advisor(mock_client)
             advisor.ask("thread-456", "What changed before the latency spike?")
 
@@ -445,10 +427,7 @@ class TestAgentOpsAdvisorAsk:
         mock_client = _make_mock_client(run_status="failed")
         mock_client.agents.create_and_process_run.return_value.last_error = "Model overloaded"
 
-        with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
-        ):
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             advisor = self._make_advisor(mock_client)
             with pytest.raises(RuntimeError, match="failed state"):
                 advisor.ask("thread-456", "Is this a known issue?")
@@ -461,10 +440,7 @@ class TestAgentOpsAdvisorAsk:
         mock_messages.get_last_message_by_role.return_value = None
         mock_client.agents.list_messages.return_value = mock_messages
 
-        with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
-        ):
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             advisor = self._make_advisor(mock_client)
             result = advisor.ask("thread-456", "Hello")
 
@@ -524,8 +500,7 @@ class TestRunQuery:
         settings = _make_settings()
 
         with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
+            patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())),
             patch("agent.agent._load_system_prompt", return_value="# Prompt"),
         ):
             from agent.agent import run_query, AgentOpsAdvisor
@@ -557,10 +532,7 @@ class TestCoreQueryTypes:
         """Each core query can be passed to ask() without error (mocked run)."""
         mock_client = _make_mock_client(assistant_reply=f"Response to: {query}")
 
-        with (
-            patch("azure.ai.projects.models.FunctionTool"),
-            patch("azure.ai.projects.models.ToolSet"),
-        ):
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             from agent.agent import AgentOpsAdvisor
 
             advisor = AgentOpsAdvisor(_make_settings())

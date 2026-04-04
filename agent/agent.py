@@ -44,6 +44,31 @@ def _load_system_prompt() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Agent SDK helpers
+# ---------------------------------------------------------------------------
+
+
+def _import_agent_sdk() -> tuple[Any, Any]:
+    """Import and return (FunctionTool, ToolSet) from the azure-ai-projects SDK.
+
+    Centralises the import so both create_agent() and ask() share the same
+    error message and import path.
+
+    Raises:
+        RuntimeError: If azure-ai-projects is not installed.
+    """
+    try:
+        from azure.ai.projects.models import FunctionTool, ToolSet
+
+        return FunctionTool, ToolSet
+    except ImportError as exc:
+        raise RuntimeError(
+            "azure-ai-projects is required. "
+            "Install it with: pip install 'azure-ai-projects>=1.0.0b7,<2.0.0'"
+        ) from exc
+
+
+# ---------------------------------------------------------------------------
 # Sync wrapper for the async query_telemetry tool
 #
 # The Azure AI Agent Service FunctionTool dispatches tool calls synchronously,
@@ -241,13 +266,7 @@ class AgentOpsAdvisor:
         Raises:
             RuntimeError: If the system prompt file is missing or the API call fails.
         """
-        try:
-            from azure.ai.projects.models import FunctionTool, ToolSet
-        except ImportError as exc:
-            raise RuntimeError(
-                "azure-ai-projects is required. "
-                "Install it with: pip install azure-ai-projects"
-            ) from exc
+        FunctionTool, ToolSet = _import_agent_sdk()
 
         client = self._get_client()
         system_prompt = _load_system_prompt()
@@ -341,13 +360,7 @@ class AgentOpsAdvisor:
                 "Agent has not been created. Call create_agent() before ask()."
             )
 
-        try:
-            from azure.ai.projects.models import FunctionTool, ToolSet
-        except ImportError as exc:
-            raise RuntimeError(
-                "azure-ai-projects is required. "
-                "Install it with: pip install azure-ai-projects"
-            ) from exc
+        FunctionTool, ToolSet = _import_agent_sdk()
 
         client = self._get_client()
 
