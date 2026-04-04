@@ -3,19 +3,25 @@
 Architecture:
   1. SQL Telemetry Tool  — queries synthetic infra telemetry (GPU, network, cost, incidents)
   2. Work IQ Context     — returns synthetic change context (feature flag: ENABLE_WORK_IQ)
-  3. Action Stub         — proposes changes + simulates approval (feature flag: safe stubs)
+  3. Action Stub         — proposes changes + simulates approval (safe stubs only)
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from agent.config import AgentConfig
+from agent.config import Settings
 
 # Tool surface imports (always available — no Azure dependency)
 from tools.action_stub import propose_change, request_approval
 from tools.sql_telemetry import query_telemetry_sync
-from tools.work_context_stub import get_runbook, get_work_context
+from tools.work_context_stub import (
+    get_change_events,
+    get_decisions,
+    get_full_context,
+    get_ownership,
+    get_runbooks,
+)
 
 
 class AgentOpsAdvisor:
@@ -38,8 +44,10 @@ Work IQ disclaimer (include when using work context):
 Microsoft 365 Copilot licensing + admin consent."
 """
 
-    def __init__(self, config: AgentConfig | None = None) -> None:
-        self.config = config or AgentConfig.from_env()
+    def __init__(self, config: Settings | None = None) -> None:
+        if config is None:
+            config = Settings.from_env()
+        self.config = config
         self._agent: Any = None  # Azure AI Agent handle (set after connect())
         self._client: Any = None  # AIProjectClient handle
 
@@ -50,7 +58,7 @@ Microsoft 365 Copilot licensing + admin consent."
     def get_tool_functions(self) -> dict[str, Any]:
         """Return the dict of callable tool functions to register with the agent.
 
-        Work IQ tools are conditionally included based on ENABLE_WORK_IQ config.
+        Work IQ tools are conditionally included based on enable_work_iq setting.
         """
         tools: dict[str, Any] = {
             "query_telemetry": query_telemetry_sync,
@@ -59,8 +67,11 @@ Microsoft 365 Copilot licensing + admin consent."
         }
 
         if self.config.enable_work_iq:
-            tools["get_work_context"] = get_work_context
-            tools["get_runbook"] = get_runbook
+            tools["get_change_events"] = get_change_events
+            tools["get_decisions"] = get_decisions
+            tools["get_ownership"] = get_ownership
+            tools["get_runbooks"] = get_runbooks
+            tools["get_full_context"] = get_full_context
 
         return tools
 
@@ -74,7 +85,7 @@ Microsoft 365 Copilot licensing + admin consent."
         Raises:
             RuntimeError: If Azure credentials are not configured.
         """
-        if not self.config.has_azure_credentials:
+        if not self.config.azure_ai_project_connection_string or not self.config.azure_openai_endpoint:
             raise RuntimeError(
                 "Azure credentials are not configured. "
                 "Set AZURE_AI_PROJECT_CONNECTION_STRING and AZURE_OPENAI_ENDPOINT."
@@ -91,7 +102,7 @@ Microsoft 365 Copilot licensing + admin consent."
 
         self._client = AIProjectClient.from_connection_string(
             credential=DefaultAzureCredential(),
-            conn_str=self.config.project_connection_string,
+            conn_str=self.config.azure_ai_project_connection_string,
         )
 
         functions = FunctionTool(functions=set(self.get_tool_functions().values()))
@@ -99,7 +110,7 @@ Microsoft 365 Copilot licensing + admin consent."
         toolset.add(functions)
 
         self._agent = self._client.agents.create_agent(
-            model=self.config.openai_deployment,
+            model=self.config.azure_openai_deployment,
             name="agentic-ops-advisor",
             instructions=self.SYSTEM_PROMPT,
             toolset=toolset,

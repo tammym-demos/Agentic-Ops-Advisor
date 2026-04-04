@@ -1,0 +1,407 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# 🤖 Agentic Ops Advisor — Agent Monitoring\n\nReal-time telemetry for agent invocations, latency distribution, tool failure rates, and quality score trends.\n\n> **Note:** All data shown is sourced from Application Insights traces, requests, dependencies, and customMetrics. Select your App Insights resource and time range using the parameters below."
+      },
+      "name": "header"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "f4b8d5b1-1234-4567-89ab-000000000001",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "label": "Time Range",
+            "type": 4,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                { "durationMs": 1800000 },
+                { "durationMs": 3600000 },
+                { "durationMs": 14400000 },
+                { "durationMs": 43200000 },
+                { "durationMs": 86400000 },
+                { "durationMs": 259200000 },
+                { "durationMs": 604800000 },
+                { "durationMs": 2592000000 }
+              ],
+              "allowCustom": true
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            }
+          },
+          {
+            "id": "f4b8d5b1-1234-4567-89ab-000000000002",
+            "version": "KqlParameterItem/1.0",
+            "name": "AppInsightsResource",
+            "label": "App Insights Resource",
+            "type": 5,
+            "isRequired": true,
+            "query": "Resources\n| where type == 'microsoft.insights/components'\n| project value = id, label = name, group = resourceGroup",
+            "crossComponentResources": [
+              "{Subscription}"
+            ],
+            "value": null,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.insights/components": true
+              },
+              "additionalResourceOptions": [],
+              "showDefault": false
+            }
+          }
+        ],
+        "style": "above",
+        "queryType": 1,
+        "resourceType": "microsoft.insights/components"
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 📊 Section 1 — Throughput"
+      },
+      "name": "section-throughput"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| where name has 'agent' or name has 'invoke' or name has 'chat' or cloud_RoleName has 'agentic'\n| summarize Invocations = count() by bin(timestamp, 5m)\n| order by timestamp asc",
+        "size": 0,
+        "title": "Agent Invocations per 5 min",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "timechart",
+        "chartSettings": {
+          "yAxis": [
+            "Invocations"
+          ],
+          "color": "blue",
+          "showLegend": true
+        }
+      },
+      "customWidth": "50",
+      "name": "panel-throughput-chart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| where name has 'agent' or name has 'invoke' or name has 'chat' or cloud_RoleName has 'agentic'\n| summarize\n    TotalRequests = count(),\n    SuccessRate = round(100.0 * countif(success == true) / count(), 1),\n    AvgDurationMs = round(avg(duration), 0)\n  by bin(timestamp, 1h)\n| order by timestamp asc",
+        "size": 0,
+        "title": "Hourly Request Summary",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "SuccessRate",
+              "formatter": 5,
+              "numberFormat": {
+                "unit": 1,
+                "options": {
+                  "style": "decimal",
+                  "maximumFractionDigits": 1
+                }
+              }
+            },
+            {
+              "columnMatch": "AvgDurationMs",
+              "formatter": 5,
+              "numberFormat": {
+                "unit": 23,
+                "options": {
+                  "style": "decimal",
+                  "maximumFractionDigits": 0
+                }
+              }
+            }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "panel-throughput-table"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## ⏱️ Section 2 — Latency Distribution"
+      },
+      "name": "section-latency"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| where name has 'agent' or name has 'invoke' or name has 'chat' or cloud_RoleName has 'agentic'\n| summarize\n    P50 = percentile(duration, 50),\n    P95 = percentile(duration, 95),\n    P99 = percentile(duration, 99)\n  by bin(timestamp, 15m)\n| order by timestamp asc",
+        "size": 0,
+        "title": "Latency Percentiles (ms) — P50 / P95 / P99",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "timechart",
+        "chartSettings": {
+          "yAxis": [
+            "P50",
+            "P95",
+            "P99"
+          ],
+          "showLegend": true,
+          "seriesLabelSettings": [
+            { "seriesName": "P50", "color": "green" },
+            { "seriesName": "P95", "color": "yellow" },
+            { "seriesName": "P99", "color": "red" }
+          ]
+        }
+      },
+      "customWidth": "60",
+      "name": "panel-latency-chart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "requests\n| where timestamp {TimeRange}\n| where name has 'agent' or name has 'invoke' or name has 'chat' or cloud_RoleName has 'agentic'\n| summarize\n    P50_ms  = round(percentile(duration, 50), 0),\n    P95_ms  = round(percentile(duration, 95), 0),\n    P99_ms  = round(percentile(duration, 99), 0),\n    Max_ms  = round(max(duration), 0)\n| project\n    ['P50 (ms)'] = P50_ms,\n    ['P95 (ms)'] = P95_ms,\n    ['P99 (ms)'] = P99_ms,\n    ['Max (ms)'] = Max_ms",
+        "size": 4,
+        "title": "Latency Summary (entire window)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": {
+            "columnMatch": "Column",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "Value",
+            "formatter": 12,
+            "numberFormat": {
+              "unit": 23,
+              "options": {
+                "style": "decimal"
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "40",
+      "name": "panel-latency-tiles"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 🔧 Section 3 — Tool Failure Rate"
+      },
+      "name": "section-tools"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "dependencies\n| where timestamp {TimeRange}\n| where type in ('Function', 'SQL', 'HTTP') or name has 'tool' or name has 'query_telemetry' or name has 'propose_action' or name has 'get_work_context'\n| summarize\n    TotalCalls = count(),\n    FailedCalls = countif(success == false),\n    FailureRate = round(100.0 * countif(success == false) / count(), 1)\n  by ToolName = name\n| order by FailureRate desc",
+        "size": 0,
+        "title": "Tool Call Failure Rate by Tool",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "FailureRate",
+              "formatter": 18,
+              "numberFormat": {
+                "unit": 1,
+                "options": {
+                  "style": "decimal",
+                  "maximumFractionDigits": 1
+                }
+              },
+              "thresholdsOptions": "colors",
+              "thresholdsStyle": {
+                "mode": "background"
+              },
+              "thresholdsGrid": [
+                { "operator": "Default", "thresholdValue": null, "representation": "green", "text": "" },
+                { "operator": ">=", "thresholdValue": "5",  "representation": "yellow", "text": "" },
+                { "operator": ">=", "thresholdValue": "20", "representation": "red",    "text": "" }
+              ]
+            }
+          ],
+          "sortBy": [
+            { "itemKey": "FailureRate", "sortOrder": 2 }
+          ]
+        }
+      },
+      "customWidth": "50",
+      "name": "panel-tool-failure-table"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "dependencies\n| where timestamp {TimeRange}\n| where type in ('Function', 'SQL', 'HTTP') or name has 'tool' or name has 'query_telemetry' or name has 'propose_action' or name has 'get_work_context'\n| summarize\n    FailureRate = round(100.0 * countif(success == false) / count(), 1)\n  by bin(timestamp, 15m), ToolName = name\n| order by timestamp asc",
+        "size": 0,
+        "title": "Tool Failure Rate Over Time (%)",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "timechart",
+        "chartSettings": {
+          "showLegend": true
+        }
+      },
+      "customWidth": "50",
+      "name": "panel-tool-failure-chart"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## 🎯 Section 4 — Quality Score Trend"
+      },
+      "name": "section-quality"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customMetrics\n| where timestamp {TimeRange}\n| where name in ('eval.groundedness', 'eval.relevance', 'eval.tool_accuracy', 'eval.safety')\n| summarize AvgScore = round(avg(value), 2) by bin(timestamp, 1h), EvaluatorName = name\n| order by timestamp asc",
+        "size": 0,
+        "title": "Quality Score Trend by Evaluator",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "timechart",
+        "chartSettings": {
+          "yAxis": [
+            "AvgScore"
+          ],
+          "showLegend": true,
+          "ySettings": {
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      "customWidth": "60",
+      "name": "panel-quality-chart"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "customMetrics\n| where timestamp {TimeRange}\n| where name in ('eval.groundedness', 'eval.relevance', 'eval.tool_accuracy', 'eval.safety')\n| summarize\n    LatestScore = round(avg(value), 2),\n    SampleCount = count()\n  by EvaluatorName = name\n| order by EvaluatorName asc",
+        "size": 4,
+        "title": "Current Quality Scores",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "tiles",
+        "tileSettings": {
+          "showBorder": true,
+          "titleContent": {
+            "columnMatch": "EvaluatorName",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "LatestScore",
+            "formatter": 12,
+            "numberFormat": {
+              "unit": 0,
+              "options": {
+                "style": "decimal",
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "40",
+      "name": "panel-quality-tiles"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "traces\n| where timestamp {TimeRange}\n| where message has 'eval' or customDimensions has 'eval_score'\n| extend EvalName = tostring(customDimensions['eval_name']),\n         Score    = todouble(customDimensions['eval_score']),\n         Reasoning = tostring(customDimensions['eval_reasoning'])\n| where isnotempty(EvalName)\n| project timestamp, EvalName, Score, Reasoning\n| order by timestamp desc\n| take 100",
+        "size": 1,
+        "title": "Recent Evaluation Trace Log",
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.insights/components",
+        "crossComponentResources": [
+          "{AppInsightsResource}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "Score",
+              "formatter": 18,
+              "numberFormat": {
+                "unit": 0,
+                "options": {
+                  "style": "decimal",
+                  "maximumFractionDigits": 2
+                }
+              },
+              "thresholdsOptions": "colors",
+              "thresholdsStyle": {
+                "mode": "background"
+              },
+              "thresholdsGrid": [
+                { "operator": "Default", "thresholdValue": null, "representation": "red", "text": "" },
+                { "operator": ">=", "thresholdValue": "0.5", "representation": "yellow", "text": "" },
+                { "operator": ">=", "thresholdValue": "0.8", "representation": "green",  "text": "" }
+              ]
+            }
+          ]
+        }
+      },
+      "name": "panel-eval-log"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "fromTemplateId": "community-Workbooks/Azure Monitor - Workbooks/Empty",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}

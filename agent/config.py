@@ -1,84 +1,159 @@
-"""Agent configuration — loads settings from environment variables with sensible defaults."""
+"""Centralized configuration and feature flag management for Agentic Ops Advisor."""
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from typing import Optional
+
+from dotenv import load_dotenv
+
+# Load .env file if present (no-op when the file is absent)
+load_dotenv(override=False)
 
 
-@dataclass
-class AgentConfig:
-    """All configuration needed to instantiate the AgentOpsAdvisor."""
+def _get_bool(var: str, default: bool) -> bool:
+    """Parse a boolean environment variable, accepting true/false/1/0 (case-insensitive)."""
+    raw = os.getenv(var)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes"}
 
-    # Azure AI Foundry / OpenAI
-    project_connection_string: str = field(default="")
-    openai_endpoint: str = field(default="")
-    openai_deployment: str = field(default="gpt-4.1")
-    openai_api_version: str = field(default="2025-01-01-preview")
 
+@dataclass(frozen=True)
+class Settings:
+    """All application settings, loaded once from environment variables.
+
+    Required variables must be set before the singleton is constructed;
+    missing values raise ``ValueError`` with a clear diagnostic message.
+    """
+
+    # ------------------------------------------------------------------
     # Database
-    db_mode: str = field(default="sqlite")  # "sqlite" or Azure SQL connection string
-    sqlite_db_path: str = field(default="agentops.db")
+    # ------------------------------------------------------------------
+    db_mode: str = "sqlite"
+    """'sqlite' for local development, or an Azure SQL connection string."""
 
+    db_connection_string: Optional[str] = None
+    """Full ODBC/JDBC connection string used when db_mode != 'sqlite'."""
+
+    # ------------------------------------------------------------------
+    # Azure AI / OpenAI
+    # ------------------------------------------------------------------
+    azure_ai_project_connection_string: Optional[str] = None
+    """Azure AI Foundry project connection string."""
+
+    azure_openai_endpoint: Optional[str] = None
+    """Azure OpenAI service endpoint URL."""
+
+    azure_openai_deployment: str = "gpt-4.1"
+    """Azure OpenAI model deployment name."""
+
+    azure_openai_api_version: str = "2025-01-01-preview"
+    """Azure OpenAI API version string."""
+
+    # ------------------------------------------------------------------
     # Feature flags
-    enable_work_iq: bool = field(default=True)
-    enable_mcp: bool = field(default=False)
+    # ------------------------------------------------------------------
+    enable_work_iq: bool = True
+    """Enable simulated Work IQ context (default: True)."""
 
+    enable_mcp: bool = False
+    """Enable MCP wrapper for Work IQ (default: False)."""
+
+    # ------------------------------------------------------------------
     # Observability
-    app_insights_connection_string: str = field(default="")
-    content_recording_enabled: bool = field(default=False)
+    # ------------------------------------------------------------------
+    applicationinsights_connection_string: Optional[str] = None
+    """Application Insights / Azure Monitor connection string."""
+
+    azure_tracing_gen_ai_content_recording_enabled: bool = False
+    """Whether to record LLM prompt/response content in traces (default: False)."""
+
+    # ------------------------------------------------------------------
+    # Azure deployment metadata (informational, not required at runtime)
+    # ------------------------------------------------------------------
+    azure_subscription_id: Optional[str] = None
+    azure_resource_group: Optional[str] = None
+    azure_location: Optional[str] = None
 
     @classmethod
-    def from_env(cls) -> "AgentConfig":
-        """Load configuration from environment variables."""
+    def from_env(cls) -> "Settings":
+        """Construct a :class:`Settings` instance by reading environment variables.
+
+        Raises
+        ------
+        ValueError
+            If any *required* variable is missing or empty.
+        """
+        # Collect missing required vars so we can surface them all at once
+        missing: list[str] = []
+
+        def _require(var: str) -> str:
+            value = os.getenv(var, "").strip()
+            if not value:
+                missing.append(var)
+            return value
+
+        def _optional(var: str) -> Optional[str]:
+            value = os.getenv(var, "").strip()
+            return value if value else None
+
+        # Required fields — must be present for the agent to function
+        azure_ai_project_connection_string = _require("AZURE_AI_PROJECT_CONNECTION_STRING")
+        azure_openai_endpoint = _require("AZURE_OPENAI_ENDPOINT")
+
+        if missing:
+            raise ValueError(
+                "Missing required environment variable(s): "
+                + ", ".join(missing)
+                + ". Set them in your environment or in a .env file "
+                "(see .env.example for the full list)."
+            )
+
         return cls(
-            project_connection_string=os.environ.get("AZURE_AI_PROJECT_CONNECTION_STRING", ""),
-            openai_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
-            openai_deployment=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1"),
-            openai_api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
-            db_mode=os.environ.get("DB_MODE", "sqlite"),
-            sqlite_db_path=os.environ.get("SQLITE_DB_PATH", "agentops.db"),
-            enable_work_iq=os.environ.get("ENABLE_WORK_IQ", "true").lower() in ("1", "true", "yes"),
-            enable_mcp=os.environ.get("ENABLE_MCP", "false").lower() in ("1", "true", "yes"),
-            app_insights_connection_string=os.environ.get(
-                "APPLICATIONINSIGHTS_CONNECTION_STRING", ""
+            # Database
+            db_mode=os.getenv("DB_MODE", "sqlite").strip() or "sqlite",
+            db_connection_string=_optional("DB_CONNECTION_STRING"),
+            # Azure AI
+            azure_ai_project_connection_string=azure_ai_project_connection_string,
+            azure_openai_endpoint=azure_openai_endpoint,
+            azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1").strip() or "gpt-4.1",
+            azure_openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview").strip()
+            or "2025-01-01-preview",
+            # Feature flags
+            enable_work_iq=_get_bool("ENABLE_WORK_IQ", default=True),
+            enable_mcp=_get_bool("ENABLE_MCP", default=False),
+            # Observability
+            applicationinsights_connection_string=_optional("APPLICATIONINSIGHTS_CONNECTION_STRING"),
+            azure_tracing_gen_ai_content_recording_enabled=_get_bool(
+                "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED", default=False
             ),
-            content_recording_enabled=os.environ.get(
-                "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED", "false"
-            ).lower()
-            in ("1", "true", "yes"),
+            # Azure deployment metadata
+            azure_subscription_id=_optional("AZURE_SUBSCRIPTION_ID"),
+            azure_resource_group=_optional("AZURE_RESOURCE_GROUP"),
+            azure_location=_optional("AZURE_LOCATION"),
         )
 
-    @classmethod
-    def for_testing(cls, **overrides) -> "AgentConfig":
-        """Return a config instance suitable for unit tests (no Azure credentials needed)."""
-        defaults = {
-            "project_connection_string": "",
-            "openai_endpoint": "",
-            "openai_deployment": "gpt-4.1",
-            "db_mode": "sqlite",
-            "sqlite_db_path": ":memory:",
-            "enable_work_iq": True,
-            "enable_mcp": False,
-            "app_insights_connection_string": "",
-            "content_recording_enabled": False,
-        }
-        defaults.update(overrides)
-        return cls(**defaults)
 
-    @property
-    def has_azure_credentials(self) -> bool:
-        """True if Azure AI project credentials are configured."""
-        return bool(self.project_connection_string and self.openai_endpoint)
+def _build_settings() -> Optional[Settings]:
+    """Build the singleton, returning None if required env vars are absent.
 
-    def validate(self) -> list[str]:
-        """Return a list of validation error messages (empty = valid)."""
-        errors: list[str] = []
-        if not self.openai_deployment:
-            errors.append("openai_deployment must not be empty")
-        if self.db_mode not in ("sqlite",) and not self.db_mode.startswith("Driver="):
-            # db_mode should be "sqlite" or an ODBC connection string
-            errors.append(
-                "db_mode must be 'sqlite' or a valid ODBC connection string"
-            )
-        return errors
+    We defer raising so that modules can be *imported* without env vars being
+    set (e.g., during unit-test collection), and the error surfaces only when
+    ``settings`` is actually *used*.
+    """
+    try:
+        return Settings.from_env()
+    except ValueError:
+        # Return a sentinel; callers that access settings will get None and
+        # should call Settings.from_env() explicitly with their own env vars.
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Singleton — import with:  from agent.config import settings
+# ---------------------------------------------------------------------------
+settings: Optional[Settings] = _build_settings()
+
+__all__ = ["Settings", "settings"]

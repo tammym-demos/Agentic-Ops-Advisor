@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from agent.config import AgentConfig
+from agent.config import Settings
 from tools.sql_telemetry import _DDL, _seed_db
 
 
@@ -37,26 +37,47 @@ def in_memory_db() -> sqlite3.Connection:
 
 
 # ---------------------------------------------------------------------------
-# Config fixtures
+# Settings / config fixtures
 # ---------------------------------------------------------------------------
 
-
-@pytest.fixture
-def test_config(tmp_db_path: str) -> AgentConfig:
-    """Return a test AgentConfig pointing at the temp SQLite DB."""
-    return AgentConfig.for_testing(sqlite_db_path=tmp_db_path)
-
-
-@pytest.fixture
-def test_config_work_iq_off(tmp_db_path: str) -> AgentConfig:
-    """Return a test AgentConfig with Work IQ disabled."""
-    return AgentConfig.for_testing(sqlite_db_path=tmp_db_path, enable_work_iq=False)
+# Minimal env values for Settings.from_env() to succeed without real Azure credentials.
+_TEST_ENV = {
+    "AZURE_AI_PROJECT_CONNECTION_STRING": "https://test.openai.azure.com/;project=test",
+    "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/",
+}
 
 
 @pytest.fixture
-def test_config_mcp_on(tmp_db_path: str) -> AgentConfig:
-    """Return a test AgentConfig with MCP enabled."""
-    return AgentConfig.for_testing(sqlite_db_path=tmp_db_path, enable_mcp=True)
+def test_settings() -> Settings:
+    """Return a Settings instance suitable for unit tests (no real Azure credentials)."""
+    return Settings(
+        azure_ai_project_connection_string=_TEST_ENV["AZURE_AI_PROJECT_CONNECTION_STRING"],
+        azure_openai_endpoint=_TEST_ENV["AZURE_OPENAI_ENDPOINT"],
+        azure_openai_deployment="gpt-4.1",
+        db_mode="sqlite",
+        enable_work_iq=True,
+        enable_mcp=False,
+    )
+
+
+@pytest.fixture
+def test_settings_work_iq_off() -> Settings:
+    """Return a Settings instance with Work IQ disabled."""
+    return Settings(
+        azure_ai_project_connection_string=_TEST_ENV["AZURE_AI_PROJECT_CONNECTION_STRING"],
+        azure_openai_endpoint=_TEST_ENV["AZURE_OPENAI_ENDPOINT"],
+        enable_work_iq=False,
+        enable_mcp=False,
+    )
+
+
+@pytest.fixture
+def minimal_settings() -> Settings:
+    """Return a Settings instance with no Azure credentials (for error-path tests)."""
+    return Settings(
+        azure_ai_project_connection_string=None,
+        azure_openai_endpoint=None,
+    )
 
 
 # ---------------------------------------------------------------------------
