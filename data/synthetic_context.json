@@ -1,0 +1,265 @@
+{
+  "_metadata": {
+    "description": "Synthetic Work IQ context data for the Agentic Ops Advisor demo.",
+    "disclaimer": "All data is entirely synthetic. No real Microsoft internal data is represented here.",
+    "generated_for": "Demo / evaluation purposes only"
+  },
+  "change_events": [
+    {
+      "id": "CHG-1001",
+      "timestamp": "2025-03-28T14:00:00Z",
+      "service": "gpu-scheduler",
+      "team": "platform-infra",
+      "type": "config_change",
+      "description": "Reduced GPU memory reservation from 90% to 70% across cluster gpu-cluster-01 to free headroom for burst workloads.",
+      "approved_by": "alex.morgan@contoso.com",
+      "ticket": "INC-4412",
+      "rollout_window": "2025-03-28T14:00:00Z/2025-03-28T16:00:00Z",
+      "status": "completed"
+    },
+    {
+      "id": "CHG-1002",
+      "timestamp": "2025-03-29T09:30:00Z",
+      "service": "inference-api",
+      "team": "ml-platform",
+      "type": "deployment",
+      "description": "Rolled out inference-api v3.4.1 with updated batching logic. Canary 10% → 100% over 2 hours.",
+      "approved_by": "priya.sharma@contoso.com",
+      "ticket": "FEAT-881",
+      "rollout_window": "2025-03-29T09:30:00Z/2025-03-29T11:30:00Z",
+      "status": "completed"
+    },
+    {
+      "id": "CHG-1003",
+      "timestamp": "2025-03-30T22:00:00Z",
+      "service": "network-fabric",
+      "team": "network-ops",
+      "type": "maintenance",
+      "description": "Scheduled BGP route refresh on spine switches SW-03 and SW-04. Expected 30-second convergence window.",
+      "approved_by": "james.liu@contoso.com",
+      "ticket": "MAINT-0330",
+      "rollout_window": "2025-03-30T22:00:00Z/2025-03-30T23:00:00Z",
+      "status": "completed"
+    },
+    {
+      "id": "CHG-1004",
+      "timestamp": "2025-04-01T06:00:00Z",
+      "service": "cost-attribution",
+      "team": "finops",
+      "type": "config_change",
+      "description": "Updated cost-attribution tagging policy to include project-level breakdown. No expected service impact.",
+      "approved_by": "sara.kim@contoso.com",
+      "ticket": "FINOPS-202",
+      "rollout_window": "2025-04-01T06:00:00Z/2025-04-01T07:00:00Z",
+      "status": "completed"
+    },
+    {
+      "id": "CHG-1005",
+      "timestamp": "2025-04-02T18:45:00Z",
+      "service": "gpu-scheduler",
+      "team": "platform-infra",
+      "type": "rollback",
+      "description": "Rolled back GPU scheduler config (CHG-1001) after observing 15% utilization drop on gpu-node-07. Reverted memory reservation to 90%.",
+      "approved_by": "alex.morgan@contoso.com",
+      "ticket": "INC-4488",
+      "rollout_window": "2025-04-02T18:45:00Z/2025-04-02T19:15:00Z",
+      "status": "completed"
+    },
+    {
+      "id": "CHG-1006",
+      "timestamp": "2025-04-03T10:00:00Z",
+      "service": "inference-api",
+      "team": "ml-platform",
+      "type": "config_change",
+      "description": "Increased request timeout from 30s to 60s on inference-api to accommodate large-batch requests.",
+      "approved_by": "priya.sharma@contoso.com",
+      "ticket": "PERF-117",
+      "rollout_window": "2025-04-03T10:00:00Z/2025-04-03T10:30:00Z",
+      "status": "completed"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "DEC-201",
+      "timestamp": "2025-03-27T15:00:00Z",
+      "topic": "GPU capacity planning",
+      "meeting": "Weekly Infra Sync",
+      "participants": ["alex.morgan@contoso.com", "priya.sharma@contoso.com", "eng-director@contoso.com"],
+      "summary": "Team decided to reduce GPU memory reservation to allow burst headroom. Risk accepted: possible utilization dip during transition. Revisit in 1 week.",
+      "action_items": [
+        "alex.morgan: implement reservation change by 2025-03-28",
+        "priya.sharma: monitor inference-api p99 latency post-change"
+      ],
+      "service": "gpu-scheduler",
+      "tags": ["capacity", "gpu", "cost"]
+    },
+    {
+      "id": "DEC-202",
+      "timestamp": "2025-03-31T11:00:00Z",
+      "topic": "Inference API batching strategy",
+      "meeting": "ML Platform Architecture Review",
+      "participants": ["priya.sharma@contoso.com", "ml-arch@contoso.com", "sre-lead@contoso.com"],
+      "summary": "Agreed to move from fixed-size to dynamic batching in inference-api v3.4.1 to improve GPU utilization and reduce tail latency. Feature flag for gradual rollout.",
+      "action_items": [
+        "ml-arch: finalize dynamic batching config by end of sprint",
+        "sre-lead: add latency SLO alerts before full rollout"
+      ],
+      "service": "inference-api",
+      "tags": ["performance", "batching", "ml-platform"]
+    },
+    {
+      "id": "DEC-203",
+      "timestamp": "2025-04-01T14:00:00Z",
+      "topic": "Network maintenance risk acceptance",
+      "meeting": "Change Advisory Board",
+      "participants": ["james.liu@contoso.com", "network-arch@contoso.com", "sre-lead@contoso.com"],
+      "summary": "CAB approved BGP route refresh during low-traffic window (22:00–23:00 UTC). Accepted 30-second convergence impact. Runbook prepared and on-call notified.",
+      "action_items": [
+        "james.liu: execute maintenance on 2025-03-30",
+        "sre-lead: monitor network latency alerts during window"
+      ],
+      "service": "network-fabric",
+      "tags": ["network", "maintenance", "risk-acceptance"]
+    },
+    {
+      "id": "DEC-204",
+      "timestamp": "2025-04-02T09:00:00Z",
+      "topic": "Cost attribution tagging policy",
+      "meeting": "FinOps Monthly Review",
+      "participants": ["sara.kim@contoso.com", "finops-lead@contoso.com", "platform-pm@contoso.com"],
+      "summary": "Approved new project-level cost tagging policy. All teams must update resource tags by 2025-04-30. Non-compliant resources will be flagged in weekly FinOps report.",
+      "action_items": [
+        "finops-lead: publish tagging guide by 2025-04-05",
+        "platform-pm: communicate deadline to all team leads"
+      ],
+      "service": "cost-attribution",
+      "tags": ["finops", "cost", "tagging"]
+    }
+  ],
+  "ownership": [
+    {
+      "service": "gpu-scheduler",
+      "team": "platform-infra",
+      "primary_owner": "alex.morgan@contoso.com",
+      "secondary_owner": "ops-oncall@contoso.com",
+      "slack_channel": "#platform-infra",
+      "oncall_rotation": "platform-infra-oncall",
+      "repo": "contoso/gpu-scheduler",
+      "pagerduty_service": "PD-GPU-SCHEDULER",
+      "sla": "99.9% uptime, p99 < 200ms"
+    },
+    {
+      "service": "inference-api",
+      "team": "ml-platform",
+      "primary_owner": "priya.sharma@contoso.com",
+      "secondary_owner": "ml-sre@contoso.com",
+      "slack_channel": "#ml-platform",
+      "oncall_rotation": "ml-platform-oncall",
+      "repo": "contoso/inference-api",
+      "pagerduty_service": "PD-INFERENCE-API",
+      "sla": "99.95% uptime, p99 < 500ms"
+    },
+    {
+      "service": "network-fabric",
+      "team": "network-ops",
+      "primary_owner": "james.liu@contoso.com",
+      "secondary_owner": "net-oncall@contoso.com",
+      "slack_channel": "#network-ops",
+      "oncall_rotation": "network-ops-oncall",
+      "repo": "contoso/network-fabric",
+      "pagerduty_service": "PD-NETWORK-FABRIC",
+      "sla": "99.99% uptime, p99 < 10ms"
+    },
+    {
+      "service": "cost-attribution",
+      "team": "finops",
+      "primary_owner": "sara.kim@contoso.com",
+      "secondary_owner": "finops-lead@contoso.com",
+      "slack_channel": "#finops",
+      "oncall_rotation": "finops-oncall",
+      "repo": "contoso/cost-attribution",
+      "pagerduty_service": "PD-COST-ATTRIBUTION",
+      "sla": "Best-effort (non-critical path)"
+    },
+    {
+      "service": "gpu-cluster-01",
+      "team": "platform-infra",
+      "primary_owner": "alex.morgan@contoso.com",
+      "secondary_owner": "ops-oncall@contoso.com",
+      "slack_channel": "#platform-infra",
+      "oncall_rotation": "platform-infra-oncall",
+      "repo": "contoso/cluster-ops",
+      "pagerduty_service": "PD-GPU-CLUSTER",
+      "sla": "99.9% uptime"
+    }
+  ],
+  "runbooks": [
+    {
+      "id": "RB-001",
+      "title": "GPU Utilization Drop Investigation",
+      "service": "gpu-scheduler",
+      "tags": ["gpu", "utilization", "incident"],
+      "steps": [
+        "1. Check recent change events for gpu-scheduler and gpu-cluster-01 (last 48h).",
+        "2. Query telemetry: SELECT ts, node, utilization_pct FROM telemetry_gpu WHERE ts > NOW()-48h ORDER BY ts.",
+        "3. Identify nodes with utilization_pct < 30% for more than 10 minutes.",
+        "4. Check if a config change (e.g., memory reservation) is correlated with the drop timestamp.",
+        "5. If correlated: open rollback change request via CHG process. Owner: alex.morgan@contoso.com.",
+        "6. If not correlated: check for job queue drain (no workloads scheduled) or hardware fault.",
+        "7. Escalate to platform-infra-oncall if unresolved within 30 minutes."
+      ],
+      "severity_threshold": "P2 if > 2 nodes affected; P1 if entire cluster",
+      "last_updated": "2025-03-15T00:00:00Z"
+    },
+    {
+      "id": "RB-002",
+      "title": "Inference API Latency Spike",
+      "service": "inference-api",
+      "tags": ["latency", "inference", "p99"],
+      "steps": [
+        "1. Check p99 latency trend: SELECT ts, p99_ms FROM telemetry_net WHERE service='inference-api' ORDER BY ts DESC LIMIT 60.",
+        "2. Correlate with recent deployments to inference-api (last 24h change events).",
+        "3. Check batch size configuration — large batches increase tail latency.",
+        "4. If a deployment is correlated: assess rollback vs. config fix (timeout increase).",
+        "5. If no recent deployment: check GPU utilization — inference latency tracks GPU saturation.",
+        "6. Notify ml-platform-oncall if p99 > 2x baseline for > 5 minutes.",
+        "7. If SLO breach confirmed: trigger PagerDuty PD-INFERENCE-API."
+      ],
+      "severity_threshold": "P2 if p99 > 1000ms; P1 if p99 > 5000ms",
+      "last_updated": "2025-03-20T00:00:00Z"
+    },
+    {
+      "id": "RB-003",
+      "title": "Network Latency / Packet Loss Incident",
+      "service": "network-fabric",
+      "tags": ["network", "latency", "packet-loss"],
+      "steps": [
+        "1. Identify affected spine/leaf switches from alert metadata.",
+        "2. Check for scheduled maintenance windows (change events, type=maintenance).",
+        "3. If within maintenance window: monitor until window closes; no action unless exceeds window.",
+        "4. If outside maintenance window: SSH to affected switch and run 'show bgp summary'.",
+        "5. Check for BGP session flaps in the last 60 minutes.",
+        "6. If flap detected: collect logs and escalate to network-ops-oncall.",
+        "7. Escalation path: james.liu@contoso.com → network-arch@contoso.com → NOC."
+      ],
+      "severity_threshold": "P2 if packet loss > 0.1%; P1 if packet loss > 1% or full link down",
+      "last_updated": "2025-02-28T00:00:00Z"
+    },
+    {
+      "id": "RB-004",
+      "title": "Cost Attribution Anomaly",
+      "service": "cost-attribution",
+      "tags": ["cost", "finops", "anomaly"],
+      "steps": [
+        "1. Check cost trend: SELECT ts, total_cost_usd, service FROM telemetry_cost ORDER BY ts DESC LIMIT 30.",
+        "2. Identify services with > 20% week-over-week cost increase.",
+        "3. Cross-reference with change events — new deployments often drive cost spikes.",
+        "4. Check tagging compliance — untagged resources may appear as cost spikes in 'unknown' bucket.",
+        "5. Engage finops-lead@contoso.com for budget impact assessment.",
+        "6. If unauthorized spend: file FinOps ticket and notify platform-pm."
+      ],
+      "severity_threshold": "Low (informational); escalate if > $10k unexpected spend in 24h",
+      "last_updated": "2025-03-01T00:00:00Z"
+    }
+  ]
+}
