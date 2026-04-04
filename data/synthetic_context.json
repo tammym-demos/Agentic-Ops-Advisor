@@ -1,265 +1,507 @@
 {
-  "_metadata": {
-    "description": "Synthetic Work IQ context data for the Agentic Ops Advisor demo.",
-    "disclaimer": "All data is entirely synthetic. No real Microsoft internal data is represented here.",
-    "generated_for": "Demo / evaluation purposes only"
-  },
+  "_disclaimer": "ALL DATA IN THIS FILE IS SYNTHETIC AND FICTIONAL. It does not represent any real company, person, system, or event. Generated for demo purposes only.",
   "change_events": [
     {
-      "id": "CHG-1001",
-      "timestamp": "2025-03-28T14:00:00Z",
-      "service": "gpu-scheduler",
-      "team": "platform-infra",
-      "type": "config_change",
-      "description": "Reduced GPU memory reservation from 90% to 70% across cluster gpu-cluster-01 to free headroom for burst workloads.",
-      "approved_by": "alex.morgan@contoso.com",
-      "ticket": "INC-4412",
-      "rollout_window": "2025-03-28T14:00:00Z/2025-03-28T16:00:00Z",
-      "status": "completed"
+      "id": "CE-001",
+      "timestamp": "2025-03-02T09:15:00Z",
+      "type": "infrastructure_approval",
+      "title": "GPU Cluster Scale-Out Approved — Region East-2",
+      "description": "Change request CR-4421 approved to add 32 A100 GPU nodes to the Contoso AI Factory east-2 inference cluster.",
+      "approved_by": "Priya Nanda (Platform Ops Lead)",
+      "affected_services": ["nebula-inference", "nebula-training"],
+      "risk_level": "medium",
+      "rollout_window": "2025-03-04T02:00:00Z/2025-03-04T06:00:00Z",
+      "correlates_with_anomaly": false
     },
     {
-      "id": "CHG-1002",
-      "timestamp": "2025-03-29T09:30:00Z",
-      "service": "inference-api",
-      "team": "ml-platform",
-      "type": "deployment",
-      "description": "Rolled out inference-api v3.4.1 with updated batching logic. Canary 10% → 100% over 2 hours.",
-      "approved_by": "priya.sharma@contoso.com",
-      "ticket": "FEAT-881",
-      "rollout_window": "2025-03-29T09:30:00Z/2025-03-29T11:30:00Z",
-      "status": "completed"
+      "id": "CE-002",
+      "timestamp": "2025-03-05T14:30:00Z",
+      "type": "policy_change",
+      "title": "GPU Quota Policy Updated — Burst Cap Increased",
+      "description": "The per-tenant GPU burst cap was raised from 40% to 60% for priority-tier customers to support AI Factory workloads.",
+      "approved_by": "Oscar Trent (Cloud Governance)",
+      "affected_services": ["nebula-inference", "quota-manager"],
+      "risk_level": "low",
+      "rollout_window": "2025-03-05T18:00:00Z/2025-03-05T18:30:00Z",
+      "correlates_with_anomaly": false
     },
     {
-      "id": "CHG-1003",
-      "timestamp": "2025-03-30T22:00:00Z",
-      "service": "network-fabric",
-      "team": "network-ops",
-      "type": "maintenance",
-      "description": "Scheduled BGP route refresh on spine switches SW-03 and SW-04. Expected 30-second convergence window.",
-      "approved_by": "james.liu@contoso.com",
-      "ticket": "MAINT-0330",
-      "rollout_window": "2025-03-30T22:00:00Z/2025-03-30T23:00:00Z",
-      "status": "completed"
+      "id": "CE-003",
+      "timestamp": "2025-03-08T11:00:00Z",
+      "type": "rollout_window",
+      "title": "Network Fabric Upgrade — Spine Layer",
+      "description": "Scheduled maintenance to upgrade the spine-layer network fabric in DC-West. Expected 0% packet loss; monitoring enabled.",
+      "approved_by": "Marcus Chen (Network Engineering)",
+      "affected_services": ["core-network", "nebula-inference", "nebula-training", "data-pipeline"],
+      "risk_level": "high",
+      "rollout_window": "2025-03-08T22:00:00Z/2025-03-09T04:00:00Z",
+      "correlates_with_anomaly": false
     },
     {
-      "id": "CHG-1004",
-      "timestamp": "2025-04-01T06:00:00Z",
-      "service": "cost-attribution",
-      "team": "finops",
-      "type": "config_change",
-      "description": "Updated cost-attribution tagging policy to include project-level breakdown. No expected service impact.",
-      "approved_by": "sara.kim@contoso.com",
-      "ticket": "FINOPS-202",
-      "rollout_window": "2025-04-01T06:00:00Z/2025-04-01T07:00:00Z",
-      "status": "completed"
+      "id": "CE-004",
+      "timestamp": "2025-03-11T09:45:00Z",
+      "type": "infrastructure_approval",
+      "title": "Cost Optimization: Reserved Instance Purchase Approved",
+      "description": "3-year reserved instance purchase for 48 GPU nodes approved by FinOps. Expected to reduce GPU compute spend by 34%.",
+      "approved_by": "Sandra Voss (FinOps Director)",
+      "affected_services": ["nebula-training", "nebula-inference"],
+      "risk_level": "low",
+      "rollout_window": "2025-03-12T00:00:00Z/2025-03-12T01:00:00Z",
+      "correlates_with_anomaly": false
     },
     {
-      "id": "CHG-1005",
-      "timestamp": "2025-04-02T18:45:00Z",
-      "service": "gpu-scheduler",
-      "team": "platform-infra",
-      "type": "rollback",
-      "description": "Rolled back GPU scheduler config (CHG-1001) after observing 15% utilization drop on gpu-node-07. Reverted memory reservation to 90%.",
-      "approved_by": "alex.morgan@contoso.com",
-      "ticket": "INC-4488",
-      "rollout_window": "2025-04-02T18:45:00Z/2025-04-02T19:15:00Z",
-      "status": "completed"
+      "id": "CE-005",
+      "timestamp": "2025-03-14T16:20:00Z",
+      "type": "policy_change",
+      "title": "Autoscaler Cooldown Policy Revised",
+      "description": "Autoscaler cooldown period reduced from 8 min to 3 min for inference workloads. Intended to reduce throttling during traffic spikes.",
+      "approved_by": "Priya Nanda (Platform Ops Lead)",
+      "affected_services": ["nebula-inference", "autoscaler-service"],
+      "risk_level": "medium",
+      "rollout_window": "2025-03-14T20:00:00Z/2025-03-14T20:15:00Z",
+      "correlates_with_anomaly": false
     },
     {
-      "id": "CHG-1006",
-      "timestamp": "2025-04-03T10:00:00Z",
-      "service": "inference-api",
-      "team": "ml-platform",
-      "type": "config_change",
-      "description": "Increased request timeout from 30s to 60s on inference-api to accommodate large-batch requests.",
-      "approved_by": "priya.sharma@contoso.com",
-      "ticket": "PERF-117",
-      "rollout_window": "2025-04-03T10:00:00Z/2025-04-03T10:30:00Z",
-      "status": "completed"
+      "id": "CE-006",
+      "timestamp": "2025-03-17T08:00:00Z",
+      "type": "rollout_window",
+      "title": "Driver Update Rollout — GPU Nodes (Batch A)",
+      "description": "CUDA driver update 535.129 rolled out to Batch A (16 nodes). Update not fully validated at scale; monitoring required.",
+      "approved_by": "Leon Park (Infrastructure Engineering)",
+      "affected_services": ["nebula-inference", "nebula-training"],
+      "risk_level": "high",
+      "rollout_window": "2025-03-17T01:00:00Z/2025-03-17T05:00:00Z",
+      "correlates_with_anomaly": true,
+      "anomaly_notes": "Driver update precedes GPU utilization spike and throttling events observed on day 18 (~2025-03-18). Possible driver regression under sustained load."
+    },
+    {
+      "id": "CE-007",
+      "timestamp": "2025-03-18T13:30:00Z",
+      "type": "infrastructure_approval",
+      "title": "Emergency Thermal Throttle Investigation — GPU Cluster",
+      "description": "Incident INC-0892 raised: sustained GPU utilization above 94% on 12 nodes causing thermal throttling. Emergency investigation approved.",
+      "approved_by": "Priya Nanda (Platform Ops Lead)",
+      "affected_services": ["nebula-inference"],
+      "risk_level": "critical",
+      "rollout_window": null,
+      "correlates_with_anomaly": true,
+      "anomaly_notes": "Direct correlation with day-18 GPU throttling anomaly. Thermal limits reached after driver update changed power management defaults."
+    },
+    {
+      "id": "CE-008",
+      "timestamp": "2025-03-20T10:00:00Z",
+      "type": "policy_change",
+      "title": "GPU Workload Throttle Policy Patched",
+      "description": "Power management policy patched on all affected nodes to restore CUDA defaults. Sustained utilization cap set to 88% as guard-rail.",
+      "approved_by": "Leon Park (Infrastructure Engineering)",
+      "affected_services": ["nebula-inference", "nebula-training"],
+      "risk_level": "medium",
+      "rollout_window": "2025-03-20T12:00:00Z/2025-03-20T14:00:00Z",
+      "correlates_with_anomaly": false
+    },
+    {
+      "id": "CE-009",
+      "timestamp": "2025-03-21T15:45:00Z",
+      "type": "rollout_window",
+      "title": "BGP Route Refresh — DC-West Peering Links",
+      "description": "Scheduled BGP route refresh for redundancy improvements. Short-lived BGP reconvergence expected; failover paths validated.",
+      "approved_by": "Marcus Chen (Network Engineering)",
+      "affected_services": ["core-network", "data-pipeline"],
+      "risk_level": "medium",
+      "rollout_window": "2025-03-22T01:00:00Z/2025-03-22T02:30:00Z",
+      "correlates_with_anomaly": true,
+      "anomaly_notes": "BGP reconvergence during maintenance window overlaps with day-22 network latency spike and packet-loss anomaly detected in telemetry."
+    },
+    {
+      "id": "CE-010",
+      "timestamp": "2025-03-22T03:15:00Z",
+      "type": "infrastructure_approval",
+      "title": "Network Incident INC-0901 — Latency Spike Investigation",
+      "description": "Elevated p99 latency (+340ms) and 2.1% packet loss observed post-BGP refresh. Network team mobilized for root-cause analysis.",
+      "approved_by": "Oscar Trent (Cloud Governance)",
+      "affected_services": ["core-network", "nebula-inference", "data-pipeline"],
+      "risk_level": "critical",
+      "rollout_window": null,
+      "correlates_with_anomaly": true,
+      "anomaly_notes": "Core network degradation event on day 22. Correlates with BGP change CE-009 and customer-visible latency alerts."
+    },
+    {
+      "id": "CE-011",
+      "timestamp": "2025-03-23T09:00:00Z",
+      "type": "policy_change",
+      "title": "Traffic Engineering: Temporary Re-Route to Backup Paths",
+      "description": "Traffic engineering policy updated to route inference workloads via backup paths while primary peering is investigated.",
+      "approved_by": "Marcus Chen (Network Engineering)",
+      "affected_services": ["core-network", "nebula-inference"],
+      "risk_level": "medium",
+      "rollout_window": "2025-03-23T09:30:00Z/2025-03-23T10:00:00Z",
+      "correlates_with_anomaly": false
+    },
+    {
+      "id": "CE-012",
+      "timestamp": "2025-03-24T11:30:00Z",
+      "type": "infrastructure_approval",
+      "title": "Cost Alert: GPU Reserved Capacity Under-Utilization",
+      "description": "FinOps flagged 38% under-utilization of newly purchased reserved GPU instances for 4 consecutive days. Cost remediation plan required.",
+      "approved_by": "Sandra Voss (FinOps Director)",
+      "affected_services": ["nebula-training", "nebula-inference", "quota-manager"],
+      "risk_level": "medium",
+      "rollout_window": null,
+      "correlates_with_anomaly": true,
+      "anomaly_notes": "Under-utilization is a downstream effect of the day-22 network degradation reducing job throughput and causing training job failures."
+    },
+    {
+      "id": "CE-013",
+      "timestamp": "2025-03-25T07:00:00Z",
+      "type": "rollout_window",
+      "title": "Training Job Scheduler: Backfill Policy Enabled",
+      "description": "Scheduler updated to enable backfill mode, allowing lower-priority jobs to consume idle reserved GPU capacity and reduce cost overruns.",
+      "approved_by": "Priya Nanda (Platform Ops Lead)",
+      "affected_services": ["nebula-training", "job-scheduler"],
+      "risk_level": "low",
+      "rollout_window": "2025-03-25T08:00:00Z/2025-03-25T08:30:00Z",
+      "correlates_with_anomaly": true,
+      "anomaly_notes": "Backfill policy activation on day 25 correlates with the cost-overrun anomaly spike as reserved nodes were idle during the network recovery window."
+    },
+    {
+      "id": "CE-014",
+      "timestamp": "2025-03-27T14:00:00Z",
+      "type": "policy_change",
+      "title": "Incident Post-Mortem: GPU + Network Policies Hardened",
+      "description": "Post-mortem actions: CUDA driver pre-flight validation gate added to CI, BGP reconvergence alerting threshold lowered, cost anomaly webhook added.",
+      "approved_by": "Oscar Trent (Cloud Governance)",
+      "affected_services": ["nebula-inference", "nebula-training", "core-network", "quota-manager"],
+      "risk_level": "low",
+      "rollout_window": "2025-03-27T16:00:00Z/2025-03-27T17:00:00Z",
+      "correlates_with_anomaly": false
+    },
+    {
+      "id": "CE-015",
+      "timestamp": "2025-03-30T10:30:00Z",
+      "type": "infrastructure_approval",
+      "title": "Quarter-End Capacity Review: East-2 Cluster Expansion Approved",
+      "description": "Q2 capacity plan approved: 64 additional GPU nodes and 2 PB additional NVMe storage for AI Factory East-2. Deployment scheduled for April.",
+      "approved_by": "Sandra Voss (FinOps Director)",
+      "affected_services": ["nebula-inference", "nebula-training", "data-pipeline"],
+      "risk_level": "low",
+      "rollout_window": "2025-04-07T02:00:00Z/2025-04-07T08:00:00Z",
+      "correlates_with_anomaly": false
     }
   ],
   "decisions": [
     {
-      "id": "DEC-201",
-      "timestamp": "2025-03-27T15:00:00Z",
-      "topic": "GPU capacity planning",
-      "meeting": "Weekly Infra Sync",
-      "participants": ["alex.morgan@contoso.com", "priya.sharma@contoso.com", "eng-director@contoso.com"],
-      "summary": "Team decided to reduce GPU memory reservation to allow burst headroom. Risk accepted: possible utilization dip during transition. Revisit in 1 week.",
+      "id": "DEC-001",
+      "meeting": "AI Factory Planning — Weekly Sync",
+      "date": "2025-03-03T15:00:00Z",
+      "participants": ["Priya Nanda", "Leon Park", "Sandra Voss", "Marcus Chen"],
+      "outcome": "Approved Q1 scale-out plan for AI Factory East-2. GPU nodes to be provisioned in two batches to reduce blast radius.",
       "action_items": [
-        "alex.morgan: implement reservation change by 2025-03-28",
-        "priya.sharma: monitor inference-api p99 latency post-change"
+        "Leon Park to coordinate driver validation on Batch A nodes before Batch B",
+        "Priya Nanda to update autoscaler policy to reflect new node count"
       ],
-      "service": "gpu-scheduler",
-      "tags": ["capacity", "gpu", "cost"]
+      "status": "completed"
     },
     {
-      "id": "DEC-202",
-      "timestamp": "2025-03-31T11:00:00Z",
-      "topic": "Inference API batching strategy",
-      "meeting": "ML Platform Architecture Review",
-      "participants": ["priya.sharma@contoso.com", "ml-arch@contoso.com", "sre-lead@contoso.com"],
-      "summary": "Agreed to move from fixed-size to dynamic batching in inference-api v3.4.1 to improve GPU utilization and reduce tail latency. Feature flag for gradual rollout.",
+      "id": "DEC-002",
+      "meeting": "AI Factory Planning — Capacity Review",
+      "date": "2025-03-10T14:00:00Z",
+      "participants": ["Sandra Voss", "Oscar Trent", "Priya Nanda"],
+      "outcome": "FinOps approved 3-year reserved instance commitment for 48 GPU nodes. Estimated annual savings: $1.2M. Break-even at 67% average utilization.",
       "action_items": [
-        "ml-arch: finalize dynamic batching config by end of sprint",
-        "sre-lead: add latency SLO alerts before full rollout"
+        "Sandra Voss to initiate procurement workflow",
+        "Priya Nanda to adjust scheduler utilization targets to hit 72% average"
       ],
-      "service": "inference-api",
-      "tags": ["performance", "batching", "ml-platform"]
+      "status": "completed"
     },
     {
-      "id": "DEC-203",
-      "timestamp": "2025-04-01T14:00:00Z",
-      "topic": "Network maintenance risk acceptance",
-      "meeting": "Change Advisory Board",
-      "participants": ["james.liu@contoso.com", "network-arch@contoso.com", "sre-lead@contoso.com"],
-      "summary": "CAB approved BGP route refresh during low-traffic window (22:00–23:00 UTC). Accepted 30-second convergence impact. Runbook prepared and on-call notified.",
+      "id": "DEC-003",
+      "meeting": "AI Factory Planning — Incident Review (INC-0892 & INC-0901)",
+      "date": "2025-03-24T10:00:00Z",
+      "participants": ["Priya Nanda", "Leon Park", "Marcus Chen", "Oscar Trent", "Sandra Voss"],
+      "outcome": "Root cause confirmed: (1) CUDA driver update altered power management defaults causing GPU thermal throttling; (2) BGP reconvergence caused packet loss and latency spikes. Both incidents contributed to training job failures and cost anomalies.",
       "action_items": [
-        "james.liu: execute maintenance on 2025-03-30",
-        "sre-lead: monitor network latency alerts during window"
+        "Leon Park to add CUDA driver pre-flight validation to deployment pipeline",
+        "Marcus Chen to lower BGP reconvergence alerting threshold and add runbook reference",
+        "Priya Nanda to enable scheduler backfill mode to recover reserved capacity utilization",
+        "Oscar Trent to update change governance policy to require post-change telemetry hold period"
       ],
-      "service": "network-fabric",
-      "tags": ["network", "maintenance", "risk-acceptance"]
+      "status": "in_progress"
     },
     {
-      "id": "DEC-204",
-      "timestamp": "2025-04-02T09:00:00Z",
-      "topic": "Cost attribution tagging policy",
-      "meeting": "FinOps Monthly Review",
-      "participants": ["sara.kim@contoso.com", "finops-lead@contoso.com", "platform-pm@contoso.com"],
-      "summary": "Approved new project-level cost tagging policy. All teams must update resource tags by 2025-04-30. Non-compliant resources will be flagged in weekly FinOps report.",
+      "id": "DEC-004",
+      "meeting": "AI Factory Planning — Migration Approval: Data Pipeline v2",
+      "date": "2025-03-17T11:30:00Z",
+      "participants": ["Priya Nanda", "Leon Park", "Oscar Trent"],
+      "outcome": "Approved migration of data-pipeline service to v2 architecture. Migration to proceed in shadow mode for 2 weeks, then cut-over. Rollback plan required before start.",
       "action_items": [
-        "finops-lead: publish tagging guide by 2025-04-05",
-        "platform-pm: communicate deadline to all team leads"
+        "Leon Park to document rollback procedure",
+        "Priya Nanda to configure shadow traffic split (10% → 50% → 100%)"
       ],
-      "service": "cost-attribution",
-      "tags": ["finops", "cost", "tagging"]
+      "status": "in_progress"
+    },
+    {
+      "id": "DEC-005",
+      "meeting": "AI Factory Planning — Q2 Roadmap Alignment",
+      "date": "2025-03-31T15:00:00Z",
+      "participants": ["Priya Nanda", "Sandra Voss", "Oscar Trent", "Marcus Chen", "Leon Park"],
+      "outcome": "Q2 priorities aligned: (1) complete East-2 cluster expansion; (2) graduate data-pipeline v2 migration; (3) implement multi-region failover for nebula-inference; (4) launch automated cost anomaly remediation.",
+      "action_items": [
+        "All team leads to update project tracking by 2025-04-04",
+        "Oscar Trent to draft multi-region failover governance policy",
+        "Sandra Voss to define cost anomaly auto-remediation thresholds"
+      ],
+      "status": "planned"
     }
   ],
   "ownership": [
     {
-      "service": "gpu-scheduler",
-      "team": "platform-infra",
-      "primary_owner": "alex.morgan@contoso.com",
-      "secondary_owner": "ops-oncall@contoso.com",
-      "slack_channel": "#platform-infra",
-      "oncall_rotation": "platform-infra-oncall",
-      "repo": "contoso/gpu-scheduler",
-      "pagerduty_service": "PD-GPU-SCHEDULER",
-      "sla": "99.9% uptime, p99 < 200ms"
+      "service": "nebula-inference",
+      "display_name": "Nebula Inference Service",
+      "description": "Real-time GPU inference serving layer for Contoso AI Factory. Handles customer-facing model inference requests.",
+      "team": "Team Nebula",
+      "lead": "Priya Nanda",
+      "lead_email": "priya.nanda@contoso-demo.invalid",
+      "escalation_contact": "Oscar Trent",
+      "escalation_email": "oscar.trent@contoso-demo.invalid",
+      "on_call_rotation": "team-nebula-oncall@contoso-demo.invalid",
+      "sla_tier": "P1",
+      "runbook_ids": ["RB-001", "RB-002"]
     },
     {
-      "service": "inference-api",
-      "team": "ml-platform",
-      "primary_owner": "priya.sharma@contoso.com",
-      "secondary_owner": "ml-sre@contoso.com",
-      "slack_channel": "#ml-platform",
-      "oncall_rotation": "ml-platform-oncall",
-      "repo": "contoso/inference-api",
-      "pagerduty_service": "PD-INFERENCE-API",
-      "sla": "99.95% uptime, p99 < 500ms"
+      "service": "nebula-training",
+      "display_name": "Nebula Training Orchestrator",
+      "description": "Distributed GPU training job orchestration for Contoso AI Factory. Manages large-scale model training pipelines.",
+      "team": "Team Nebula",
+      "lead": "Priya Nanda",
+      "lead_email": "priya.nanda@contoso-demo.invalid",
+      "escalation_contact": "Leon Park",
+      "escalation_email": "leon.park@contoso-demo.invalid",
+      "on_call_rotation": "team-nebula-oncall@contoso-demo.invalid",
+      "sla_tier": "P2",
+      "runbook_ids": ["RB-001", "RB-003"]
     },
     {
-      "service": "network-fabric",
-      "team": "network-ops",
-      "primary_owner": "james.liu@contoso.com",
-      "secondary_owner": "net-oncall@contoso.com",
-      "slack_channel": "#network-ops",
-      "oncall_rotation": "network-ops-oncall",
-      "repo": "contoso/network-fabric",
-      "pagerduty_service": "PD-NETWORK-FABRIC",
-      "sla": "99.99% uptime, p99 < 10ms"
+      "service": "core-network",
+      "display_name": "Core Network Fabric",
+      "description": "Spine-leaf network fabric for DC-West and DC-East. Provides inter-service connectivity and external peering.",
+      "team": "Team Photon",
+      "lead": "Marcus Chen",
+      "lead_email": "marcus.chen@contoso-demo.invalid",
+      "escalation_contact": "Oscar Trent",
+      "escalation_email": "oscar.trent@contoso-demo.invalid",
+      "on_call_rotation": "team-photon-oncall@contoso-demo.invalid",
+      "sla_tier": "P1",
+      "runbook_ids": ["RB-002"]
     },
     {
-      "service": "cost-attribution",
-      "team": "finops",
-      "primary_owner": "sara.kim@contoso.com",
-      "secondary_owner": "finops-lead@contoso.com",
-      "slack_channel": "#finops",
-      "oncall_rotation": "finops-oncall",
-      "repo": "contoso/cost-attribution",
-      "pagerduty_service": "PD-COST-ATTRIBUTION",
-      "sla": "Best-effort (non-critical path)"
+      "service": "data-pipeline",
+      "display_name": "Data Ingestion Pipeline",
+      "description": "High-throughput data ingestion and preprocessing pipeline feeding training and inference workloads.",
+      "team": "Team Horizon",
+      "lead": "Leon Park",
+      "lead_email": "leon.park@contoso-demo.invalid",
+      "escalation_contact": "Priya Nanda",
+      "escalation_email": "priya.nanda@contoso-demo.invalid",
+      "on_call_rotation": "team-horizon-oncall@contoso-demo.invalid",
+      "sla_tier": "P2",
+      "runbook_ids": ["RB-002"]
     },
     {
-      "service": "gpu-cluster-01",
-      "team": "platform-infra",
-      "primary_owner": "alex.morgan@contoso.com",
-      "secondary_owner": "ops-oncall@contoso.com",
-      "slack_channel": "#platform-infra",
-      "oncall_rotation": "platform-infra-oncall",
-      "repo": "contoso/cluster-ops",
-      "pagerduty_service": "PD-GPU-CLUSTER",
-      "sla": "99.9% uptime"
+      "service": "quota-manager",
+      "display_name": "GPU Quota Manager",
+      "description": "Centralized service for tracking and enforcing GPU quota allocations per tenant and workload tier.",
+      "team": "Team Horizon",
+      "lead": "Leon Park",
+      "lead_email": "leon.park@contoso-demo.invalid",
+      "escalation_contact": "Sandra Voss",
+      "escalation_email": "sandra.voss@contoso-demo.invalid",
+      "on_call_rotation": "team-horizon-oncall@contoso-demo.invalid",
+      "sla_tier": "P2",
+      "runbook_ids": ["RB-003"]
+    },
+    {
+      "service": "autoscaler-service",
+      "display_name": "Autoscaler Service",
+      "description": "Horizontal autoscaling controller for GPU compute pools. Manages scale-out/in decisions based on queue depth and utilization.",
+      "team": "Team Nebula",
+      "lead": "Priya Nanda",
+      "lead_email": "priya.nanda@contoso-demo.invalid",
+      "escalation_contact": "Leon Park",
+      "escalation_email": "leon.park@contoso-demo.invalid",
+      "on_call_rotation": "team-nebula-oncall@contoso-demo.invalid",
+      "sla_tier": "P2",
+      "runbook_ids": ["RB-001"]
+    },
+    {
+      "service": "job-scheduler",
+      "display_name": "Training Job Scheduler",
+      "description": "Priority-aware scheduler for distributed training jobs. Manages queue depth, backfill, and preemption across GPU pools.",
+      "team": "Team Horizon",
+      "lead": "Leon Park",
+      "lead_email": "leon.park@contoso-demo.invalid",
+      "escalation_contact": "Priya Nanda",
+      "escalation_email": "priya.nanda@contoso-demo.invalid",
+      "on_call_rotation": "team-horizon-oncall@contoso-demo.invalid",
+      "sla_tier": "P2",
+      "runbook_ids": ["RB-001", "RB-003"]
     }
   ],
   "runbooks": [
     {
       "id": "RB-001",
-      "title": "GPU Utilization Drop Investigation",
-      "service": "gpu-scheduler",
-      "tags": ["gpu", "utilization", "incident"],
-      "steps": [
-        "1. Check recent change events for gpu-scheduler and gpu-cluster-01 (last 48h).",
-        "2. Query telemetry: SELECT ts, node, utilization_pct FROM telemetry_gpu WHERE ts > NOW()-48h ORDER BY ts.",
-        "3. Identify nodes with utilization_pct < 30% for more than 10 minutes.",
-        "4. Check if a config change (e.g., memory reservation) is correlated with the drop timestamp.",
-        "5. If correlated: open rollback change request via CHG process. Owner: alex.morgan@contoso.com.",
-        "6. If not correlated: check for job queue drain (no workloads scheduled) or hardware fault.",
-        "7. Escalate to platform-infra-oncall if unresolved within 30 minutes."
+      "title": "GPU Throttling: Thermal or Power-Limit Remediation",
+      "scenario": "GPU utilization is sustained above 90%, causing thermal throttling, reduced throughput, or node OOM events.",
+      "severity": "P1",
+      "affected_services": ["nebula-inference", "nebula-training", "autoscaler-service", "job-scheduler"],
+      "detection_signals": [
+        "GPU utilization metric > 90% sustained for > 5 minutes",
+        "nvidia-smi reports thermal throttle (HW Slowdown = Active)",
+        "Inference latency p99 increases > 2x baseline",
+        "Training job throughput drops > 30%"
       ],
-      "severity_threshold": "P2 if > 2 nodes affected; P1 if entire cluster",
-      "last_updated": "2025-03-15T00:00:00Z"
+      "steps": [
+        {
+          "step": 1,
+          "action": "Identify affected nodes",
+          "detail": "Run `kubectl get nodes -l workload=gpu -o wide` and check `nvidia-smi -q | grep 'Throttle Reasons'` on affected hosts. Note node IDs."
+        },
+        {
+          "step": 2,
+          "action": "Drain affected nodes",
+          "detail": "Run `kubectl drain <node-id> --ignore-daemonsets --delete-emptydir-data` to evict workloads. Autoscaler will reschedule to healthy nodes."
+        },
+        {
+          "step": 3,
+          "action": "Check driver power management settings",
+          "detail": "Run `nvidia-smi -q -d PERFORMANCE` and compare against baseline in `/etc/nvidia/baseline_perf_profile.conf`. If diverged, restore defaults with `nvidia-smi -pm 1 && nvidia-smi -pl <baseline_watts>`."
+        },
+        {
+          "step": 4,
+          "action": "Inspect cooling and ambient temperature",
+          "detail": "Check datacenter DCIM dashboard for rack-level temperature. If ambient > 27°C, page Facilities team via `team-facilities-oncall@contoso-demo.invalid`."
+        },
+        {
+          "step": 5,
+          "action": "Reduce workload utilization cap if throttling persists",
+          "detail": "Update autoscaler policy: set `gpu_max_utilization_target` from 88% to 80% in ConfigMap `autoscaler-policy` in namespace `ai-factory`. Apply with `kubectl apply -f`."
+        },
+        {
+          "step": 6,
+          "action": "Re-admit node after remediation",
+          "detail": "Run `kubectl uncordon <node-id>` once GPU telemetry shows stable utilization < 85% for 10 consecutive minutes."
+        },
+        {
+          "step": 7,
+          "action": "File post-remediation report",
+          "detail": "Update incident ticket with root cause (driver / thermal / workload), nodes affected, steps taken, and any policy changes. Notify team-nebula-oncall."
+        }
+      ],
+      "escalation": "If throttling affects > 4 nodes or cannot be resolved within 30 minutes, escalate to Priya Nanda (Platform Ops Lead) and Oscar Trent (Cloud Governance).",
+      "related_change_events": ["CE-006", "CE-007", "CE-008"]
     },
     {
       "id": "RB-002",
-      "title": "Inference API Latency Spike",
-      "service": "inference-api",
-      "tags": ["latency", "inference", "p99"],
-      "steps": [
-        "1. Check p99 latency trend: SELECT ts, p99_ms FROM telemetry_net WHERE service='inference-api' ORDER BY ts DESC LIMIT 60.",
-        "2. Correlate with recent deployments to inference-api (last 24h change events).",
-        "3. Check batch size configuration — large batches increase tail latency.",
-        "4. If a deployment is correlated: assess rollback vs. config fix (timeout increase).",
-        "5. If no recent deployment: check GPU utilization — inference latency tracks GPU saturation.",
-        "6. Notify ml-platform-oncall if p99 > 2x baseline for > 5 minutes.",
-        "7. If SLO breach confirmed: trigger PagerDuty PD-INFERENCE-API."
+      "title": "Network Degradation: Elevated Latency or Packet Loss",
+      "scenario": "Sustained network latency spikes or packet loss (> 0.5%) observed between services or at external peering points.",
+      "severity": "P1",
+      "affected_services": ["core-network", "nebula-inference", "data-pipeline"],
+      "detection_signals": [
+        "p99 inter-service latency > 200ms (baseline ~45ms)",
+        "Packet loss > 0.5% on any service-to-service path",
+        "BGP session flap alert from network monitoring",
+        "Data pipeline ingest throughput drops > 25%"
       ],
-      "severity_threshold": "P2 if p99 > 1000ms; P1 if p99 > 5000ms",
-      "last_updated": "2025-03-20T00:00:00Z"
+      "steps": [
+        {
+          "step": 1,
+          "action": "Confirm scope of degradation",
+          "detail": "Run `mtr --report --report-cycles 60 <affected-endpoint>` from multiple source nodes to isolate whether degradation is at spine, leaf, or peering layer."
+        },
+        {
+          "step": 2,
+          "action": "Check BGP session health",
+          "detail": "SSH to spine switch and run `show bgp summary` (Arista EOS) or equivalent. Confirm all BGP peers are Established. Log any flaps with timestamps."
+        },
+        {
+          "step": 3,
+          "action": "Review recent change events",
+          "detail": "Query change management system for any network changes in the last 2 hours. Correlate with anomaly start time. Check CE log for BGP or routing policy changes."
+        },
+        {
+          "step": 4,
+          "action": "Activate traffic engineering failover",
+          "detail": "If primary path is degraded, update traffic policy to route through backup paths: `te-policy update --service nebula-inference --path backup`. Confirm with `te-policy status`."
+        },
+        {
+          "step": 5,
+          "action": "Isolate and roll back last network change",
+          "detail": "If a recent change correlates with the incident, initiate rollback via change management. Notify Marcus Chen (Network Engineering) immediately."
+        },
+        {
+          "step": 6,
+          "action": "Validate recovery",
+          "detail": "Confirm packet loss < 0.1% and p99 latency returns to within 20% of baseline for 15 consecutive minutes before declaring recovery."
+        },
+        {
+          "step": 7,
+          "action": "File post-mortem",
+          "detail": "Document root cause, timeline, customer impact, and remediation steps. Submit to Oscar Trent (Cloud Governance) within 48 hours of resolution."
+        }
+      ],
+      "escalation": "If packet loss > 2% or p99 latency > 500ms for > 15 minutes, escalate to Marcus Chen (Network Engineering) and page team-photon-oncall immediately.",
+      "related_change_events": ["CE-003", "CE-009", "CE-010", "CE-011"]
     },
     {
       "id": "RB-003",
-      "title": "Network Latency / Packet Loss Incident",
-      "service": "network-fabric",
-      "tags": ["network", "latency", "packet-loss"],
-      "steps": [
-        "1. Identify affected spine/leaf switches from alert metadata.",
-        "2. Check for scheduled maintenance windows (change events, type=maintenance).",
-        "3. If within maintenance window: monitor until window closes; no action unless exceeds window.",
-        "4. If outside maintenance window: SSH to affected switch and run 'show bgp summary'.",
-        "5. Check for BGP session flaps in the last 60 minutes.",
-        "6. If flap detected: collect logs and escalate to network-ops-oncall.",
-        "7. Escalation path: james.liu@contoso.com → network-arch@contoso.com → NOC."
+      "title": "Cost Overrun: GPU Reserved Capacity Under-Utilization",
+      "scenario": "Reserved GPU instances are running at < 65% average utilization for > 2 consecutive days, generating cost anomalies vs budget.",
+      "severity": "P2",
+      "affected_services": ["nebula-training", "quota-manager", "job-scheduler"],
+      "detection_signals": [
+        "Reserved instance utilization metric < 65% for > 48 hours",
+        "FinOps cost anomaly alert: reserved capacity idle hours > budget threshold",
+        "Training job queue depth near zero with reserved nodes idle",
+        "Cost dashboard shows daily GPU spend > 115% of budgeted rate"
       ],
-      "severity_threshold": "P2 if packet loss > 0.1%; P1 if packet loss > 1% or full link down",
-      "last_updated": "2025-02-28T00:00:00Z"
-    },
-    {
-      "id": "RB-004",
-      "title": "Cost Attribution Anomaly",
-      "service": "cost-attribution",
-      "tags": ["cost", "finops", "anomaly"],
       "steps": [
-        "1. Check cost trend: SELECT ts, total_cost_usd, service FROM telemetry_cost ORDER BY ts DESC LIMIT 30.",
-        "2. Identify services with > 20% week-over-week cost increase.",
-        "3. Cross-reference with change events — new deployments often drive cost spikes.",
-        "4. Check tagging compliance — untagged resources may appear as cost spikes in 'unknown' bucket.",
-        "5. Engage finops-lead@contoso.com for budget impact assessment.",
-        "6. If unauthorized spend: file FinOps ticket and notify platform-pm."
+        {
+          "step": 1,
+          "action": "Confirm utilization baseline",
+          "detail": "Query quota-manager API: `GET /v1/utilization/summary?window=48h&tier=reserved`. Confirm actual vs. target utilization. Check which services are underconsuming."
+        },
+        {
+          "step": 2,
+          "action": "Check for upstream causes",
+          "detail": "Review recent incidents (network, GPU, pipeline) that may have reduced job throughput. If jobs failed due to infra issues, utilization drop is a symptom, not root cause."
+        },
+        {
+          "step": 3,
+          "action": "Enable scheduler backfill mode",
+          "detail": "Update job-scheduler ConfigMap: set `backfill_enabled: true` and `backfill_priority: low`. Apply with `kubectl apply -f scheduler-config.yaml`. Lower-priority jobs will fill idle reserved capacity."
+        },
+        {
+          "step": 4,
+          "action": "Review quota allocations",
+          "detail": "Check per-tenant quota allocations in quota-manager. If a tenant has reserved allocation but is not submitting jobs, reduce their reserved quota and return capacity to the shared pool."
+        },
+        {
+          "step": 5,
+          "action": "Trigger on-demand job backlog processing",
+          "detail": "If a job backlog exists, set scheduler priority to prioritize reserved-instance-eligible jobs: `scheduler-cli prioritize --tier reserved --window 24h`."
+        },
+        {
+          "step": 6,
+          "action": "Notify FinOps of remediation actions",
+          "detail": "Send utilization recovery report to Sandra Voss (FinOps Director) including: root cause, actions taken, expected recovery timeline, and projected utilization for next 7 days."
+        },
+        {
+          "step": 7,
+          "action": "Set monitoring alert for recurrence",
+          "detail": "Confirm cost anomaly webhook is active in Azure Monitor. If not, add alert rule: `reserved_utilization_pct < 65 for 24h → notify team-horizon-oncall`."
+        }
       ],
-      "severity_threshold": "Low (informational); escalate if > $10k unexpected spend in 24h",
-      "last_updated": "2025-03-01T00:00:00Z"
+      "escalation": "If utilization remains < 60% after backfill is enabled for 24 hours, or if estimated weekly cost overrun exceeds $15,000, escalate to Sandra Voss (FinOps Director) and Oscar Trent (Cloud Governance).",
+      "related_change_events": ["CE-004", "CE-012", "CE-013"]
     }
   ]
 }

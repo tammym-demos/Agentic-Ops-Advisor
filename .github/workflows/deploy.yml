@@ -1,0 +1,323 @@
+# =============================================================================
+# Deploy — Azure AI Foundry Agent Service
+# =============================================================================
+#
+# Required secrets (configure in GitHub → Settings → Secrets → Actions):
+#
+#   OIDC / Federated Identity (recommended):
+#     AZURE_CLIENT_ID          — App Registration client ID
+#     AZURE_TENANT_ID          — Azure AD tenant ID
+#     AZURE_SUBSCRIPTION_ID    — Target subscription ID
+#
+#   OR Service Principal secret (legacy):
+#     AZURE_CREDENTIALS        — JSON output of `az ad sp create-for-rbac
+#                                  --name "agentic-ops-advisor-deploy"
+#                                  --role contributor
+#                                  --scopes /subscriptions/<id>/resourceGroups/rg-agentic-ops-advisor
+#                                  --sdk-auth`
+#
+#   Agent runtime config (stored as environment secrets in the "production"
+#   GitHub Environment so they are gated by branch-protection review):
+#     AZURE_AI_PROJECT_CONNECTION_STRING — Foundry project connection string
+#     AZURE_OPENAI_ENDPOINT              — Azure OpenAI endpoint URL
+#     AZURE_OPENAI_DEPLOYMENT            — Model deployment name (e.g. gpt-4.1)
+#     APPLICATIONINSIGHTS_CONNECTION_STRING — App Insights (optional)
+#
+# OIDC setup (one-time, run locally):
+#   az ad app create --display-name "agentic-ops-advisor-deploy"
+#   az ad sp create --id <appId>
+#   az role assignment create --assignee <appId> \
+#       --role contributor \
+#       --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor
+#   # Add federated credential for this repo + branch:
+#   az ad app federated-credential create --id <appId> --parameters '{
+#     "name": "agentic-ops-main",
+#     "issuer": "https://token.actions.githubusercontent.com",
+#     "subject": "repo:tammym-demos/Agentic-Ops-Advisor:ref:refs/heads/main",
+#     "audiences": ["api://AzureADTokenExchange"]
+#   }'
+#
+# =============================================================================
+
+name: Deploy — Foundry Agent Service
+
+on:
+    push:
+        branches:
+            - main
+    workflow_dispatch:
+        inputs:
+            force_infra:
+                description: "Force Bicep infra re-deploy even without infra/ changes"
+                required: false
+                default: "false"
+                type: choice
+                options:
+                    - "false"
+                    - "true"
+
+# Prevent concurrent deployments to the same environment.
+concurrency:
+    group: deploy-production
+    cancel-in-progress: false
+
+permissions:
+    contents: read
+    id-token: write   # Required for OIDC login
+    deployments: write
+
+jobs:
+    # -------------------------------------------------------------------------
+    # 1. Detect whether infra/ files changed (used to gate Bicep step)
+    # -------------------------------------------------------------------------
+    detect-changes:
+        name: Detect changed paths
+        runs-on: ubuntu-latest
+        outputs:
+            infra_changed: ${{ steps.filter.outputs.infra }}
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 2  # need previous commit to diff against
+
+            - name: Detect infra/ changes
+              id: filter
+              run: |
+                  if git diff --name-only HEAD~1 HEAD | grep -q '^infra/'; then
+                      echo "infra=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "infra=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+    # -------------------------------------------------------------------------
+    # 2. Deploy infrastructure + agent
+    # -------------------------------------------------------------------------
+    deploy:
+        name: Deploy to production
+        needs: detect-changes
+        runs-on: ubuntu-latest
+        environment: production   # GitHub Environment with protection rules
+
+        env:
+            AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            AZURE_RESOURCE_GROUP: rg-agentic-ops-advisor
+            AZURE_LOCATION: eastus2
+            AZURE_AI_PROJECT_CONNECTION_STRING: ${{ secrets.AZURE_AI_PROJECT_CONNECTION_STRING }}
+            AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+            AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+            APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
+            AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED: "false"
+            ENABLE_WORK_IQ: "true"
+            ENABLE_MCP: "false"
+            DB_MODE: sqlite
+
+        steps:
+            # ------------------------------------------------------------------
+            # Step 1 — Checkout
+            # ------------------------------------------------------------------
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            # ------------------------------------------------------------------
+            # Step 2 — Azure login (OIDC preferred; falls back to SP secret)
+            # ------------------------------------------------------------------
+            - name: Azure login (OIDC)
+              if: ${{ env.AZURE_CLIENT_ID != '' }}
+              uses: azure/login@v2
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+            - name: Azure login (service principal secret fallback)
+              if: ${{ env.AZURE_CLIENT_ID == '' }}
+              uses: azure/login@v2
+              with:
+                  creds: ${{ secrets.AZURE_CREDENTIALS }}
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+            # ------------------------------------------------------------------
+            # Step 3 — Set up Python
+            # ------------------------------------------------------------------
+            - name: Set up Python 3.11
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.11"
+                  cache: "pip"
+
+            - name: Install Python dependencies
+              run: |
+                  python -m pip install --upgrade pip
+                  pip install -r requirements.txt
+
+            # ------------------------------------------------------------------
+            # Step 4 — Deploy Bicep infrastructure (conditional)
+            # ------------------------------------------------------------------
+            - name: Deploy Bicep infrastructure
+              if: >-
+                  needs.detect-changes.outputs.infra_changed == 'true' ||
+                  github.event.inputs.force_infra == 'true'
+              run: |
+                  echo "::group::Bicep deployment"
+                  az deployment group create \
+                      --name "agentic-ops-advisor-$(date -u +%Y%m%d%H%M%S)" \
+                      --resource-group "$AZURE_RESOURCE_GROUP" \
+                      --template-file infra/main.bicep \
+                      --parameters location="$AZURE_LOCATION" \
+                      --output table
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 5 — Deploy agent to Foundry Agent Service
+            # ------------------------------------------------------------------
+            - name: Deploy agent to Foundry Agent Service
+              run: |
+                  echo "::group::Agent deployment"
+                  python - <<'EOF'
+                  import os, sys
+                  from azure.ai.projects import AIProjectClient
+                  from azure.identity import DefaultAzureCredential
+
+                  _PLACEHOLDER = "your-project-connection-string"
+                  conn_str = os.environ["AZURE_AI_PROJECT_CONNECTION_STRING"]
+                  if not conn_str or conn_str == _PLACEHOLDER:
+                      print("⚠️  AZURE_AI_PROJECT_CONNECTION_STRING not configured — skipping agent upsert.")
+                      sys.exit(0)
+
+                  client = AIProjectClient.from_connection_string(
+                      credential=DefaultAzureCredential(),
+                      conn_str=conn_str,
+                  )
+
+                  # Read system prompt from file
+                  prompt_path = "agent/system_prompt.md"
+                  system_prompt = open(prompt_path).read() if os.path.exists(prompt_path) else (
+                      "You are the Agentic Ops Advisor — a governed AI agent for "
+                      "root-cause and change-context reasoning over infrastructure telemetry."
+                  )
+
+                  deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
+
+                  # Upsert agent: list existing, update if found, create if not
+                  agents = client.agents.list_agents()
+                  existing = next((a for a in agents.data if a.name == "agentic-ops-advisor"), None)
+
+                  if existing:
+                      agent_obj = client.agents.update_agent(
+                          assistant_id=existing.id,
+                          model=deployment_name,
+                          name="agentic-ops-advisor",
+                          instructions=system_prompt,
+                          description="Agentic Ops Advisor — infrastructure telemetry & change-context reasoning",
+                      )
+                      print(f"✅ Updated agent: {agent_obj.id}")
+                  else:
+                      agent_obj = client.agents.create_agent(
+                          model=deployment_name,
+                          name="agentic-ops-advisor",
+                          instructions=system_prompt,
+                          description="Agentic Ops Advisor — infrastructure telemetry & change-context reasoning",
+                      )
+                      print(f"✅ Created agent: {agent_obj.id}")
+
+                  # Persist agent ID for subsequent steps
+                  with open(os.environ["GITHUB_ENV"], "a") as f:
+                      f.write(f"DEPLOYED_AGENT_ID={agent_obj.id}\n")
+                  EOF
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 6 — Smoke test: send one query, verify response
+            # ------------------------------------------------------------------
+            - name: Smoke test
+              run: |
+                  echo "::group::Smoke test"
+                  python - <<'EOF'
+                  import os, sys, time
+
+                  _PLACEHOLDER = "your-project-connection-string"
+                  _SMOKE_TEST_TIMEOUT_SECONDS = 120
+                  conn_str = os.environ.get("AZURE_AI_PROJECT_CONNECTION_STRING", "")
+                  agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
+
+                  if not conn_str or conn_str == _PLACEHOLDER or not agent_id:
+                      print("⚠️  Smoke test skipped — agent not deployed (connection string or agent ID missing).")
+                      sys.exit(0)
+
+                  from azure.ai.projects import AIProjectClient
+                  from azure.identity import DefaultAzureCredential
+
+                  client = AIProjectClient.from_connection_string(
+                      credential=DefaultAzureCredential(),
+                      conn_str=conn_str,
+                  )
+
+                  probe = "What is the GPU utilization trend for the last 24 hours?"
+                  print(f"Probe query: {probe}")
+
+                  thread = client.agents.create_thread()
+                  client.agents.create_message(
+                      thread_id=thread.id,
+                      role="user",
+                      content=probe,
+                  )
+
+                  run = client.agents.create_and_process_run(
+                      thread_id=thread.id,
+                      assistant_id=agent_id,
+                  )
+
+                  deadline = time.time() + _SMOKE_TEST_TIMEOUT_SECONDS
+                  while run.status in ("queued", "in_progress") and time.time() < deadline:
+                      time.sleep(3)
+                      run = client.agents.get_run(thread_id=thread.id, run_id=run.id)
+
+                  if run.status != "completed":
+                      print(f"❌ Smoke test FAILED — run status: {run.status}")
+                      sys.exit(1)
+
+                  messages = client.agents.list_messages(thread_id=thread.id)
+                  assistant_msgs = [m for m in messages.data if m.role == "assistant"]
+                  if not assistant_msgs:
+                      print("❌ Smoke test FAILED — no assistant response received.")
+                      sys.exit(1)
+
+                  response_text = assistant_msgs[0].content[0].text.value
+                  print(f"✅ Smoke test PASSED\nResponse preview: {response_text[:300]}")
+                  EOF
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 7 — Post deployment status summary
+            # ------------------------------------------------------------------
+            - name: Post deployment status
+              if: always()
+              run: |
+                  STATUS="${{ job.status }}"
+                  SHA="${{ github.sha }}"
+                  REF="${{ github.ref_name }}"
+                  ACTOR="${{ github.actor }}"
+                  TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                  AGENT_ID="${DEPLOYED_AGENT_ID:-not deployed}"
+
+                  echo "## 🚀 Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+                  echo "" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| Field        | Value |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "|--------------|-------|" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| **Status**   | ${STATUS} |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| **Commit**   | \`${SHA:0:8}\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| **Branch**   | \`${REF}\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| **Actor**    | ${ACTOR} |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| **Agent ID** | \`${AGENT_ID}\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| **Time**     | ${TIMESTAMP} |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "" >> "$GITHUB_STEP_SUMMARY"
+
+                  if [ "$STATUS" = "success" ]; then
+                      echo "✅ **Deployment succeeded.** The agent is live on Azure AI Foundry Agent Service." >> "$GITHUB_STEP_SUMMARY"
+                  else
+                      echo "❌ **Deployment failed.** Check the logs above for details." >> "$GITHUB_STEP_SUMMARY"
+                  fi
