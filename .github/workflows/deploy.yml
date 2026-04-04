@@ -163,11 +163,11 @@ jobs:
                   github.event.inputs.force_infra == 'true'
               run: |
                   echo "::group::Bicep deployment"
-                  az deployment group create \
+                  az deployment sub create \
                       --name "agentic-ops-advisor-$(date -u +%Y%m%d%H%M%S)" \
-                      --resource-group "$AZURE_RESOURCE_GROUP" \
+                      --location "$AZURE_LOCATION" \
                       --template-file infra/main.bicep \
-                      --parameters location="$AZURE_LOCATION" \
+                      --parameters @infra/parameters.json \
                       --output table
                   echo "::endgroup::"
 
