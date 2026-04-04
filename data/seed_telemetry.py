@@ -1,308 +1,339 @@
-"""Synthetic telemetry data generator for Agentic Ops Advisor (local dev).
+"""Synthetic telemetry data generator for Agentic Ops Advisor.
 
-All data is synthetic. This script creates and populates the SQLite database
-at data/telemetry.db with 30 days of plausible infrastructure telemetry,
-including a few planted anomalies that the agent's demo queries are designed
-to surface.
+Generates 30 days of synthetic infrastructure telemetry data with planted anomalies.
+Outputs to both SQLite (data/telemetry.db) and SQL INSERT statements (data/seed_data.sql).
 
-Planted anomalies:
-  - GPU utilisation drop on gpu-cluster-01 (~24 h ago)
-  - Network latency spike on eastus2-primary (~72 h ago, 6 h duration)
-  - Change event (network-policy rollout) ~73 h ago – correlates with spike
-  - Open incident logged for each anomaly
+Anomalies planted:
+  - Day 18: GPU utilization drop  — cluster-a / node-1 collapses to <15 %
+  - Day 22: Network latency spike — site-west latency exceeds 180 ms, packet loss spikes
+  - Day 25: Cost surge            — cluster-a spend jumps 5-7x baseline
+  - Day 18: Incident correlated with GPU drop (P1, resolved)
+
+All data is synthetic. Do not use for production decisions.
 """
 
-from __future__ import annotations
-
-import math
-import os
 import random
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Paths
+# Configuration
 # ---------------------------------------------------------------------------
-_HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_DB_PATH = os.path.join(_HERE, "telemetry.db")
+
+RANDOM_SEED = 42
+
+# Fixed base date so generated data is reproducible
+BASE_DATE = datetime(2025, 3, 1, 0, 0, 0, tzinfo=timezone.utc)
+DAYS = 30
+
+CLUSTERS = ["cluster-a", "cluster-b", "cluster-c"]
+NODES_PER_CLUSTER = ["node-1", "node-2", "node-3", "node-4"]
+SITES = ["site-east", "site-west", "site-central"]
+
+# Anomaly trigger days (0-indexed from BASE_DATE)
+GPU_DROP_DAY = 18
+LATENCY_SPIKE_DAY = 22
+COST_SURGE_DAY = 25
+
+DATA_DIR = Path(__file__).parent
+DB_PATH = DATA_DIR / "telemetry.db"
+SQL_PATH = DATA_DIR / "seed_data.sql"
 
 # ---------------------------------------------------------------------------
-# Schema DDL
+# DDL
 # ---------------------------------------------------------------------------
-DDL = """
+
+DDL = """\
 CREATE TABLE IF NOT EXISTS telemetry_gpu (
-    ts              TEXT    NOT NULL,
-    cluster         TEXT    NOT NULL,
-    node            TEXT    NOT NULL,
-    utilization_pct REAL    NOT NULL,
-    mem_pct         REAL    NOT NULL
+    ts              TEXT NOT NULL,
+    cluster         TEXT NOT NULL,
+    node            TEXT NOT NULL,
+    utilization_pct REAL NOT NULL,
+    mem_pct         REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS telemetry_net (
-    ts              TEXT    NOT NULL,
-    site            TEXT    NOT NULL,
-    latency_ms      REAL    NOT NULL,
-    loss_pct        REAL    NOT NULL,
-    throughput_gbps REAL    NOT NULL
+    ts              TEXT NOT NULL,
+    site            TEXT NOT NULL,
+    latency_ms      REAL NOT NULL,
+    loss_pct        REAL NOT NULL,
+    throughput_gbps REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS telemetry_cost (
-    ts              TEXT    NOT NULL,
-    cluster         TEXT    NOT NULL,
-    cost_usd        REAL    NOT NULL,
-    token_cost_usd  REAL    NOT NULL
+    ts              TEXT NOT NULL,
+    cluster         TEXT NOT NULL,
+    cost_usd        REAL NOT NULL,
+    token_cost_usd  REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS incidents (
-    ts              TEXT    NOT NULL,
-    service         TEXT    NOT NULL,
-    symptom         TEXT    NOT NULL,
-    severity        TEXT    NOT NULL,
-    status          TEXT    NOT NULL
-);
-"""
-
-# ---------------------------------------------------------------------------
-# Configuration constants
-# ---------------------------------------------------------------------------
-CLUSTERS = ["gpu-cluster-01", "gpu-cluster-02"]
-NODES = ["node-a", "node-b", "node-c"]
-SITES = ["eastus2-primary", "eastus2-dr", "westus2-primary"]
-
-# Normal operating ranges
-NORMAL_GPU_UTIL = (62.0, 88.0)
-NORMAL_GPU_MEM = (55.0, 82.0)
-NORMAL_LATENCY_MS = (2.0, 9.0)
-NORMAL_LOSS_PCT = (0.0, 0.3)
-NORMAL_THROUGHPUT = (8.0, 12.0)
-NORMAL_COST_USD = (1_100.0, 1_800.0)
-NORMAL_TOKEN_COST_RATIO = (0.35, 0.55)  # fraction of total cost
-
-
-def _jitter(value: float, pct: float = 0.08) -> float:
-    """Add ±pct random noise to a value (clamped to ≥ 0)."""
-    delta = value * pct * (2 * random.random() - 1)
-    return max(0.0, value + delta)
-
-
-def _rand_between(lo: float, hi: float) -> float:
-    return lo + random.random() * (hi - lo)
+    ts       TEXT NOT NULL,
+    service  TEXT NOT NULL,
+    symptom  TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    status   TEXT NOT NULL
+);"""
 
 
 # ---------------------------------------------------------------------------
-# Data generators
+# Helpers
 # ---------------------------------------------------------------------------
 
-def _generate_gpu_rows(now: datetime, days: int = 30) -> list[tuple]:
-    """Generate hourly GPU telemetry rows with a planted utilisation drop."""
-    rows: list[tuple] = []
-    # Anomaly window: drop starts ~26 h ago, lasts until ~22 h ago (4 h window)
-    anomaly_start = now - timedelta(hours=26)
-    anomaly_end = now - timedelta(hours=22)
 
-    start = now - timedelta(days=days)
-    ts = start
-    while ts <= now:
-        ts_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
-        in_anomaly_window = anomaly_start <= ts <= anomaly_end
+def _randf(rng: random.Random, lo: float, hi: float) -> float:
+    """Return a float rounded to 2 decimal places in [lo, hi]."""
+    return round(rng.uniform(lo, hi), 2)
 
-        for cluster in CLUSTERS:
-            for node in NODES:
-                if in_anomaly_window and cluster == "gpu-cluster-01":
-                    # Planted anomaly: utilisation plummets (likely underutilised / workload paused)
-                    util = _rand_between(10.0, 22.0)
-                    mem = _rand_between(48.0, 62.0)
-                else:
-                    # Add gentle sinusoidal diurnal pattern (higher util during business hours)
-                    hour = ts.hour
-                    diurnal = 6.0 * math.sin(math.pi * (hour - 6) / 12) if 6 <= hour <= 18 else -4.0
-                    util = _jitter(_rand_between(*NORMAL_GPU_UTIL) + diurnal)
-                    mem = _jitter(_rand_between(*NORMAL_GPU_MEM))
-                rows.append((ts_str, cluster, node, round(util, 2), round(mem, 2)))
-        ts += timedelta(hours=1)
+
+def _ts(day: int, hour: int = 0) -> str:
+    return (BASE_DATE + timedelta(days=day, hours=hour)).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Row generators
+# ---------------------------------------------------------------------------
+
+
+def generate_gpu_rows(rng: random.Random) -> list[tuple]:
+    """Hourly GPU metrics for every cluster/node pair over DAYS days.
+
+    Anomaly: day GPU_DROP_DAY — cluster-a / node-1 drops to 5-15 % utilization.
+    """
+    rows = []
+    for day in range(DAYS):
+        for hour in range(24):
+            ts = _ts(day, hour)
+            for cluster in CLUSTERS:
+                for node in NODES_PER_CLUSTER:
+                    # Normal operating range
+                    util = _randf(rng, 55.0, 90.0)
+                    mem = _randf(rng, 40.0, 85.0)
+
+                    # Plant anomaly: GPU utilization collapse
+                    if day == GPU_DROP_DAY and cluster == "cluster-a" and node == "node-1":
+                        util = _randf(rng, 5.0, 15.0)
+                        mem = _randf(rng, 8.0, 22.0)
+
+                    rows.append((ts, cluster, node, util, mem))
     return rows
 
 
-def _generate_net_rows(now: datetime, days: int = 30) -> list[tuple]:
-    """Generate hourly network telemetry rows with a planted latency spike."""
-    rows: list[tuple] = []
-    # Anomaly window: spike on eastus2-primary ~73 h ago, lasting 6 h
-    anomaly_start = now - timedelta(hours=73)
-    anomaly_end = now - timedelta(hours=67)
+def generate_net_rows(rng: random.Random) -> list[tuple]:
+    """Hourly network metrics for every site over DAYS days.
 
-    start = now - timedelta(days=days)
-    ts = start
-    while ts <= now:
-        ts_str = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
-        in_anomaly_window = anomaly_start <= ts <= anomaly_end
+    Anomaly: day LATENCY_SPIKE_DAY — site-west latency spikes to 180-320 ms
+    with elevated packet loss and reduced throughput.
+    """
+    rows = []
+    for day in range(DAYS):
+        for hour in range(24):
+            ts = _ts(day, hour)
+            for site in SITES:
+                # Normal operating range
+                latency = _randf(rng, 5.0, 25.0)
+                loss = _randf(rng, 0.0, 0.5)
+                throughput = _randf(rng, 8.0, 10.0)
 
-        for site in SITES:
-            if in_anomaly_window and site == "eastus2-primary":
-                # Planted anomaly: high latency + packet loss (network policy rollout side-effect)
-                latency = _rand_between(145.0, 260.0)
-                loss = _rand_between(1.2, 4.8)
-                throughput = _rand_between(1.5, 4.0)
-            else:
-                latency = _jitter(_rand_between(*NORMAL_LATENCY_MS))
-                loss = _jitter(_rand_between(*NORMAL_LOSS_PCT))
-                throughput = _jitter(_rand_between(*NORMAL_THROUGHPUT))
-            rows.append((ts_str, site, round(latency, 3), round(loss, 3), round(throughput, 3)))
-        ts += timedelta(hours=1)
+                # Plant anomaly: network latency spike
+                if day == LATENCY_SPIKE_DAY and site == "site-west":
+                    latency = _randf(rng, 180.0, 320.0)
+                    loss = _randf(rng, 5.0, 15.0)
+                    throughput = _randf(rng, 0.5, 2.0)
+
+                rows.append((ts, site, latency, loss, throughput))
     return rows
 
 
-def _generate_cost_rows(now: datetime, days: int = 30) -> list[tuple]:
-    """Generate daily cost rows per cluster."""
-    rows: list[tuple] = []
-    # Cost spike on the day of the network anomaly (correlated)
-    anomaly_day = (now - timedelta(hours=73)).date()
+def generate_cost_rows(rng: random.Random) -> list[tuple]:
+    """Hourly cost metrics for every cluster over DAYS days.
 
-    for day_offset in range(days):
-        day = (now - timedelta(days=(days - 1 - day_offset))).date()
-        ts_str = day.strftime("%Y-%m-%dT00:00:00Z")
-        for cluster in CLUSTERS:
-            base = _rand_between(*NORMAL_COST_USD)
-            if day == anomaly_day:
-                # Spike: retries and redundant traffic inflate cost ~40%
-                base *= 1.38
-            token_ratio = _rand_between(*NORMAL_TOKEN_COST_RATIO)
-            rows.append((ts_str, cluster, round(base, 2), round(base * token_ratio, 2)))
+    Anomaly: day COST_SURGE_DAY — cluster-a cost jumps 5-7x baseline.
+    """
+    rows = []
+    for day in range(DAYS):
+        for hour in range(24):
+            ts = _ts(day, hour)
+            for cluster in CLUSTERS:
+                # Normal operating range
+                cost = _randf(rng, 10.0, 30.0)
+                token_cost = _randf(rng, 2.0, 8.0)
+
+                # Plant anomaly: cost surge
+                if day == COST_SURGE_DAY and cluster == "cluster-a":
+                    cost = _randf(rng, 120.0, 200.0)
+                    token_cost = _randf(rng, 40.0, 80.0)
+
+                rows.append((ts, cluster, cost, token_cost))
     return rows
 
 
-def _generate_incidents(now: datetime) -> list[tuple]:
-    """Generate a small set of synthetic incidents."""
-    return [
-        # Open: GPU underutilisation on cluster-01 (planted, ~24 h ago)
+def generate_incident_rows() -> list[tuple]:
+    """A small set of incidents, including three correlated with the planted anomalies."""
+    rows = [
+        # --- Correlated with GPU drop (day 18) ---
         (
-            (now - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "gpu-cluster-01",
-            "GPU utilisation dropped to <25% across all nodes — potential workload stall or scheduler issue",
-            "high",
-            "open",
-        ),
-        # Open: network latency on eastus2-primary (planted, ~72 h ago)
-        (
-            (now - timedelta(hours=72)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "network/eastus2-primary",
-            "Latency spike >150 ms with 2-5% packet loss observed on eastus2-primary after network-policy rollout",
-            "critical",
-            "open",
-        ),
-        # Resolved: routine GPU memory pressure (older, resolved)
-        (
-            (now - timedelta(days=12)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "gpu-cluster-02",
-            "GPU memory pressure (>90%) on node-c during batch job overflow",
-            "medium",
+            _ts(GPU_DROP_DAY, hour=2),
+            "ml-training-service",
+            "GPU utilization collapsed to <15% on cluster-a/node-1",
+            "P1",
             "resolved",
         ),
-        # Resolved: cost overrun (older, resolved)
+        # --- Correlated with network latency spike (day 22) ---
         (
-            (now - timedelta(days=20)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "billing",
-            "Token cost exceeded daily budget by 18% due to unthrottled eval runs",
-            "low",
+            _ts(LATENCY_SPIKE_DAY, hour=14),
+            "api-gateway",
+            "High latency detected on site-west (p99 > 250 ms)",
+            "P2",
             "resolved",
         ),
-        # Open: intermittent throughput degradation on westus2 (recent)
+        # --- Correlated with cost surge (day 25) ---
         (
-            (now - timedelta(hours=6)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "network/westus2-primary",
-            "Throughput dropped to <5 Gbps on westus2-primary (below SLO of 8 Gbps)",
-            "medium",
+            _ts(COST_SURGE_DAY, hour=8),
+            "cost-monitor",
+            "Unexpected cost surge: cluster-a spend 5x above baseline",
+            "P2",
             "open",
+        ),
+        # --- Background incidents for realism ---
+        (
+            _ts(5, hour=9),
+            "storage-service",
+            "Disk I/O throttling on node-3 exceeding 90%",
+            "P3",
+            "resolved",
+        ),
+        (
+            _ts(11, hour=16),
+            "scheduler",
+            "Job queue depth exceeded 500 for 30+ minutes",
+            "P3",
+            "resolved",
+        ),
+        (
+            _ts(28, hour=3),
+            "auth-service",
+            "Elevated 5xx error rate (>2%) on auth endpoints",
+            "P2",
+            "investigating",
         ),
     ]
+    return rows
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Output writers
 # ---------------------------------------------------------------------------
 
-def create_schema(conn: sqlite3.Connection) -> None:
-    """Create all telemetry tables (idempotent)."""
-    conn.executescript(DDL)
-    conn.commit()
 
+def write_sqlite(
+    gpu_rows: list[tuple],
+    net_rows: list[tuple],
+    cost_rows: list[tuple],
+    incident_rows: list[tuple],
+    db_path: Path = DB_PATH,
+) -> None:
+    """Write all rows to a SQLite database, replacing any existing file."""
+    if db_path.exists():
+        db_path.unlink()
 
-def seed(conn: sqlite3.Connection, *, days: int = 30, seed_value: int | None = 42) -> dict[str, int]:
-    """Seed synthetic telemetry data.
-
-    Args:
-        conn: Open SQLite connection.
-        days: How many days of historical data to generate.
-        seed_value: Random seed for reproducibility (None for random).
-
-    Returns:
-        Dict of {table_name: row_count} for verification.
-    """
-    if seed_value is not None:
-        random.seed(seed_value)
-
-    now = datetime.now(tz=timezone.utc).replace(minute=0, second=0, microsecond=0)
-
-    gpu_rows = _generate_gpu_rows(now, days=days)
-    net_rows = _generate_net_rows(now, days=days)
-    cost_rows = _generate_cost_rows(now, days=days)
-    incident_rows = _generate_incidents(now)
-
-    conn.executemany(
-        "INSERT INTO telemetry_gpu (ts, cluster, node, utilization_pct, mem_pct) VALUES (?,?,?,?,?)",
-        gpu_rows,
-    )
-    conn.executemany(
-        "INSERT INTO telemetry_net (ts, site, latency_ms, loss_pct, throughput_gbps) VALUES (?,?,?,?,?)",
-        net_rows,
-    )
-    conn.executemany(
-        "INSERT INTO telemetry_cost (ts, cluster, cost_usd, token_cost_usd) VALUES (?,?,?,?)",
-        cost_rows,
-    )
-    conn.executemany(
-        "INSERT INTO incidents (ts, service, symptom, severity, status) VALUES (?,?,?,?,?)",
-        incident_rows,
-    )
-    conn.commit()
-
-    return {
-        "telemetry_gpu": len(gpu_rows),
-        "telemetry_net": len(net_rows),
-        "telemetry_cost": len(cost_rows),
-        "incidents": len(incident_rows),
-    }
-
-
-def seed_db(db_path: str = DEFAULT_DB_PATH, *, days: int = 30) -> dict[str, int]:
-    """Create schema and seed the database at *db_path*.
-
-    Returns:
-        Dict of {table_name: row_count}.
-    """
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
     try:
-        create_schema(conn)
-        counts = seed(conn, days=days)
+        cur = conn.cursor()
+        cur.executescript(DDL)
+        cur.executemany("INSERT INTO telemetry_gpu VALUES (?,?,?,?,?)", gpu_rows)
+        cur.executemany("INSERT INTO telemetry_net VALUES (?,?,?,?,?)", net_rows)
+        cur.executemany("INSERT INTO telemetry_cost VALUES (?,?,?,?)", cost_rows)
+        cur.executemany("INSERT INTO incidents VALUES (?,?,?,?,?)", incident_rows)
+        conn.commit()
     finally:
         conn.close()
-    return counts
+
+    print(f"  SQLite written → {db_path}")
+
+
+def _sql_literal(value: object) -> str:
+    """Render a Python value as a SQL literal (single-quote escaped strings)."""
+    if isinstance(value, str):
+        escaped = value.replace("'", "''")
+        return f"'{escaped}'"
+    return str(value)
+
+
+def write_sql(
+    gpu_rows: list[tuple],
+    net_rows: list[tuple],
+    cost_rows: list[tuple],
+    incident_rows: list[tuple],
+    sql_path: Path = SQL_PATH,
+) -> None:
+    """Write all rows to a plain SQL file with INSERT statements."""
+
+    def inserts(table: str, rows: list[tuple]) -> list[str]:
+        return [
+            f"INSERT INTO {table} VALUES ({', '.join(_sql_literal(v) for v in row)});"
+            for row in rows
+        ]
+
+    sections = [
+        "-- Synthetic telemetry seed data for Agentic Ops Advisor",
+        "-- Generated by data/seed_telemetry.py  (do not hand-edit)",
+        "-- All data is synthetic. Do not use for production decisions.",
+        "",
+        DDL,
+        "",
+        *inserts("telemetry_gpu", gpu_rows),
+        "",
+        *inserts("telemetry_net", net_rows),
+        "",
+        *inserts("telemetry_cost", cost_rows),
+        "",
+        *inserts("incidents", incident_rows),
+        "",
+    ]
+
+    sql_path.write_text("\n".join(sections), encoding="utf-8")
+    print(f"  SQL written    → {sql_path}")
 
 
 # ---------------------------------------------------------------------------
-# CLI entry-point
+# Public entry point (importable)
+# ---------------------------------------------------------------------------
+
+
+def seed(
+    db_path: Path = DB_PATH,
+    sql_path: Path = SQL_PATH,
+    random_seed: int = RANDOM_SEED,
+) -> dict[str, list[tuple]]:
+    """Generate all synthetic rows, write outputs, and return a dict of row lists.
+
+    Returns:
+        dict with keys "gpu", "net", "cost", "incidents".
+    """
+    rng = random.Random(random_seed)
+
+    gpu_rows = generate_gpu_rows(rng)
+    net_rows = generate_net_rows(rng)
+    cost_rows = generate_cost_rows(rng)
+    incident_rows = generate_incident_rows()
+
+    write_sqlite(gpu_rows, net_rows, cost_rows, incident_rows, db_path=db_path)
+    write_sql(gpu_rows, net_rows, cost_rows, incident_rows, sql_path=sql_path)
+
+    return {"gpu": gpu_rows, "net": net_rows, "cost": cost_rows, "incidents": incident_rows}
+
+
+# ---------------------------------------------------------------------------
+# CLI runner
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Seed synthetic telemetry into the local SQLite database.")
-    parser.add_argument("--db", default=DEFAULT_DB_PATH, help="Path to SQLite database file")
-    parser.add_argument("--days", type=int, default=30, help="Number of days of history to generate")
-    args = parser.parse_args()
-
-    print(f"Seeding {args.days} days of synthetic telemetry into {args.db} …")
-    counts = seed_db(args.db, days=args.days)
-    for table, n in counts.items():
-        print(f"  {table}: {n:,} rows inserted")
+    print("Generating synthetic telemetry data…")
+    rows = seed()
+    print(f"  GPU rows:      {len(rows['gpu']):,}")
+    print(f"  Net rows:      {len(rows['net']):,}")
+    print(f"  Cost rows:     {len(rows['cost']):,}")
+    print(f"  Incident rows: {len(rows['incidents'])}")
     print("Done.")
