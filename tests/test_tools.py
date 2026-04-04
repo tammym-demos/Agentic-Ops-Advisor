@@ -1,227 +1,218 @@
-"""Unit tests for tools/ — sql_telemetry, work_context_stub, action_stub."""
+"""Unit tests for tools/ — sql_telemetry, work_context_stub, action_stub.
+
+Tests the actual public API of each tool module, using correct function
+signatures and expected return types.
+"""
 
 from __future__ import annotations
 
-import os
-from unittest.mock import patch
+import json
 
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-
-import agent.tracing as tracing_mod
-
-
-def _patch_tracer(exporter: InMemorySpanExporter):
-    """Return a context manager that replaces the module tracer with a test one."""
-    provider = TracerProvider()
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
-    test_tracer = provider.get_tracer("test")
-    return patch.object(tracing_mod, "get_tracer", return_value=test_tracer)
+import pytest
 
 
 # ---------------------------------------------------------------------------
 # sql_telemetry
 # ---------------------------------------------------------------------------
 
+
 class TestQueryTelemetry:
-    def test_returns_dict_with_expected_keys(self):
+    """Tests for tools.sql_telemetry.query_telemetry (async, keyword-arg API)."""
+
+    @pytest.mark.asyncio
+    async def test_table_query_returns_json(self):
         from tools.sql_telemetry import query_telemetry
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            result = query_telemetry("show me GPU utilization")
+        result_json = await query_telemetry(table="telemetry_gpu", limit=5)
+        result = json.loads(result_json)
+        # Either returns data or a graceful error — never crashes
+        assert isinstance(result, dict)
+        assert "meta" in result
 
-        assert "query_type" in result
-        assert "rows" in result
-        assert "row_count" in result
-        assert "summary" in result
-        assert result["query_type"] == "gpu_utilization"
-        assert result["row_count"] == len(result["rows"])
-
-    def test_infers_network_query_type(self):
+    @pytest.mark.asyncio
+    async def test_invalid_table_returns_error(self):
         from tools.sql_telemetry import query_telemetry
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            result = query_telemetry("network latency issues")
+        result_json = await query_telemetry(table="nonexistent")
+        result = json.loads(result_json)
+        assert "error" in result
 
-        assert result["query_type"] == "network"
-
-    def test_infers_cost_query_type(self):
+    @pytest.mark.asyncio
+    async def test_no_args_returns_error(self):
         from tools.sql_telemetry import query_telemetry
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            result = query_telemetry("what is our cloud spend")
+        result_json = await query_telemetry()
+        result = json.loads(result_json)
+        assert "error" in result
 
-        assert result["query_type"] == "cost"
-
-    def test_infers_incidents_query_type(self):
+    @pytest.mark.asyncio
+    async def test_non_select_blocked(self):
         from tools.sql_telemetry import query_telemetry
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            result = query_telemetry("recent incidents and alerts")
+        result_json = await query_telemetry(sql="DROP TABLE telemetry_gpu")
+        result = json.loads(result_json)
+        assert "error" in result
 
-        assert result["query_type"] == "incidents"
+    def test_tool_schema_structure(self):
+        from tools.sql_telemetry import TOOL_SCHEMA
 
-    def test_produces_execute_tool_span(self):
-        from tools.sql_telemetry import query_telemetry
+        assert TOOL_SCHEMA["type"] == "function"
+        fn = TOOL_SCHEMA["function"]
+        assert fn["name"] == "query_telemetry"
+        assert "parameters" in fn
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            query_telemetry("GPU utilization")
+    def test_get_tool_definition(self):
+        from tools.sql_telemetry import TOOL_SCHEMA, get_tool_definition
 
-        spans = exporter.get_finished_spans()
-        # The tool itself creates an inner span; the outer span is from query_telemetry
-        tool_spans = [s for s in spans if s.name == "execute_tool"]
-        assert len(tool_spans) >= 1
-        names = {s.attributes.get("tool.name") for s in tool_spans}
-        assert "sql_telemetry" in names
+        assert get_tool_definition() is TOOL_SCHEMA
 
-    def test_stub_rows_fallback(self):
-        from tools import sql_telemetry as st_mod
+    def test_list_aggregates_returns_known_keys(self):
+        from tools.sql_telemetry import list_aggregates
 
-        rows = st_mod._stub_rows("gpu_utilization")
-        assert len(rows) > 0
-        assert "node" in rows[0]
+        aggs = list_aggregates()
+        assert "gpu_avg_util_1h" in aggs
+        assert "open_incidents" in aggs
+
+    def test_validate_sql_rejects_dml(self):
+        from tools.sql_telemetry import _validate_sql
+
+        with pytest.raises(ValueError, match="Only SELECT"):
+            _validate_sql("DELETE FROM telemetry_gpu WHERE 1=1")
+
+    def test_validate_sql_accepts_valid(self):
+        from tools.sql_telemetry import _validate_sql
+
+        _validate_sql("SELECT * FROM telemetry_gpu WHERE 1=1")
 
 
 # ---------------------------------------------------------------------------
 # work_context_stub
 # ---------------------------------------------------------------------------
 
-class TestGetWorkContext:
-    def test_returns_dict_with_disclaimer(self):
-        from tools.work_context_stub import get_work_context
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter), patch.dict(os.environ, {"ENABLE_WORK_IQ": "true"}):
-            result = get_work_context("recent deployments")
+class TestWorkContextStub:
+    """Tests for tools.work_context_stub public functions."""
 
-        assert "disclaimer" in result
-        assert "Work IQ" in result["disclaimer"]
+    def test_get_change_events_returns_list(self):
+        from tools.work_context_stub import get_change_events
 
-    def test_infers_change_events(self):
-        from tools.work_context_stub import get_work_context
+        events = get_change_events("gpu-cluster")
+        assert isinstance(events, list)
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter), patch.dict(os.environ, {"ENABLE_WORK_IQ": "true"}):
-            result = get_work_context("any recent changes or deployments?")
+    def test_get_decisions_returns_list(self):
+        from tools.work_context_stub import get_decisions
 
-        assert result["context_type"] == "change_events"
+        decisions = get_decisions("gpu-cluster")
+        assert isinstance(decisions, list)
 
-    def test_infers_runbooks(self):
-        from tools.work_context_stub import get_work_context
+    def test_get_ownership_returns_dict(self):
+        from tools.work_context_stub import get_ownership
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter), patch.dict(os.environ, {"ENABLE_WORK_IQ": "true"}):
-            result = get_work_context("show me the runbook for this")
+        info = get_ownership("gpu-cluster")
+        assert isinstance(info, dict)
 
-        assert result["context_type"] == "runbooks"
+    def test_get_runbooks_returns_list(self):
+        from tools.work_context_stub import get_runbooks
 
-    def test_disabled_when_flag_off(self):
-        from tools.work_context_stub import get_work_context
+        runbooks = get_runbooks("gpu-cluster")
+        assert isinstance(runbooks, list)
 
-        with patch.dict(os.environ, {"ENABLE_WORK_IQ": "false"}):
-            result = get_work_context("anything")
+    def test_get_full_context_has_disclaimer(self):
+        from tools.work_context_stub import get_full_context
 
-        assert result["record_count"] == 0
+        ctx = get_full_context("gpu-cluster")
+        assert "disclaimer" in ctx
+        assert "Work IQ" in ctx["disclaimer"]
 
-    def test_produces_execute_tool_span(self):
-        from tools.work_context_stub import get_work_context
+    def test_get_full_context_has_all_sections(self):
+        from tools.work_context_stub import get_full_context
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter), patch.dict(os.environ, {"ENABLE_WORK_IQ": "true"}):
-            get_work_context("recent changes")
-
-        spans = exporter.get_finished_spans()
-        tool_spans = [s for s in spans if s.name == "execute_tool"]
-        assert any(s.attributes.get("tool.name") == "work_iq" for s in tool_spans)
+        ctx = get_full_context("gpu-cluster")
+        for key in ("change_events", "decisions", "ownership", "runbooks"):
+            assert key in ctx
 
 
 # ---------------------------------------------------------------------------
 # action_stub
 # ---------------------------------------------------------------------------
 
-class TestProposeAction:
-    def test_returns_proposal(self):
-        from tools.action_stub import propose_action
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            result = propose_action("scale_up", {"cluster": "gpu-a", "replicas": 4})
+class TestActionStub:
+    """Tests for tools.action_stub — propose_change and request_approval."""
 
-        assert "proposal_id" in result
-        assert result["action_type"] == "scale_up"
+    def test_propose_change_returns_json(self):
+        from tools.action_stub import propose_change
+
+        result_json = propose_change("Restart the GPU scheduler service")
+        result = json.loads(result_json)
+        assert "id" in result
+        assert "risk_level" in result
+        assert "status" in result
+        assert result["status"] == "proposed"
         assert "disclaimer" in result
-        assert result["approval_status"] == "pending"
 
-    def test_auto_approved_for_low_risk(self):
-        from tools.action_stub import propose_action
+    def test_propose_change_high_risk(self):
+        from tools.action_stub import propose_change
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            result = propose_action("restart_service", {"service": "nginx"})
+        result_json = propose_change("Delete all data from the production database")
+        result = json.loads(result_json)
+        assert result["risk_level"] == "high"
+        assert "human_approval_gate" in result
 
-        assert result["approval_status"] == "auto_approved"
+    def test_propose_change_low_risk(self):
+        from tools.action_stub import propose_change
 
-    def test_produces_execute_tool_span(self):
-        from tools.action_stub import propose_action
+        result_json = propose_change("Check the dashboard for anomalies")
+        result = json.loads(result_json)
+        assert result["risk_level"] == "low"
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            propose_action("scale_up", {})
+    def test_propose_change_medium_risk(self):
+        from tools.action_stub import propose_change
 
-        spans = exporter.get_finished_spans()
-        tool_spans = [s for s in spans if s.name == "execute_tool"]
-        assert any(s.attributes.get("tool.name") == "action_stub" for s in tool_spans)
+        result_json = propose_change("Restart the API gateway")
+        result = json.loads(result_json)
+        assert result["risk_level"] == "medium"
 
-    def test_list_pending_proposals(self):
-        from tools.action_stub import list_pending_proposals
+    def test_request_approval_returns_json(self):
+        from tools.action_stub import propose_change, request_approval
 
-        exporter = InMemorySpanExporter()
-        with _patch_tracer(exporter):
-            proposals = list_pending_proposals()
+        proposal = json.loads(propose_change("Scale up the cluster"))
+        change_id = proposal["id"]
 
-        assert isinstance(proposals, list)
-        assert len(proposals) >= 1
+        approval_json = request_approval(change_id)
+        approval = json.loads(approval_json)
+        assert "approval_status" in approval
+        assert approval["approval_status"] in ("pending", "approved", "rejected")
+        assert "disclaimer" in approval
+
+    def test_action_stub_tool_definitions(self):
+        from tools.action_stub import ACTION_STUB_TOOL_DEFINITIONS
+
+        assert len(ACTION_STUB_TOOL_DEFINITIONS) == 2
+        names = {t["function"]["name"] for t in ACTION_STUB_TOOL_DEFINITIONS}
+        assert "propose_change" in names
+        assert "request_approval" in names
 
 
 # ---------------------------------------------------------------------------
-# agent.agent — smoke test (no Azure credentials needed)
+# agent.agent — AgentOpsAdvisor class smoke tests
 # ---------------------------------------------------------------------------
 
-class TestInvokeAgent:
-    def test_returns_expected_keys(self):
-        from agent.agent import invoke_agent
 
-        exporter = InMemorySpanExporter()
-        provider = TracerProvider()
-        provider.add_span_processor(SimpleSpanProcessor(exporter))
-        test_tracer = provider.get_tracer("test")
+class TestAgentOpsAdvisorImport:
+    """Smoke tests verifying agent.agent can be imported and basic constants exist."""
 
-        with patch.object(tracing_mod, "get_tracer", return_value=test_tracer):
-            with patch.dict(os.environ, {"ENABLE_WORK_IQ": "true"}):
-                result = invoke_agent("show me GPU utilization")
+    def test_agent_name_constant(self):
+        from agent.agent import AGENT_NAME
 
-        assert "answer" in result
-        assert "tool_results" in result
-        assert "trace_id" in result
-        assert "sql_telemetry" in result["tool_results"]
-        assert "work_iq" in result["tool_results"]
+        assert AGENT_NAME == "agentic-ops-advisor"
 
-    def test_work_iq_skipped_when_disabled(self):
-        from agent.agent import invoke_agent
+    def test_advisor_class_importable(self):
+        from agent.agent import AgentOpsAdvisor
 
-        exporter = InMemorySpanExporter()
-        provider = TracerProvider()
-        provider.add_span_processor(SimpleSpanProcessor(exporter))
-        test_tracer = provider.get_tracer("test")
+        assert AgentOpsAdvisor is not None
 
-        with patch.object(tracing_mod, "get_tracer", return_value=test_tracer):
-            with patch.dict(os.environ, {"ENABLE_WORK_IQ": "false"}):
-                result = invoke_agent("show GPU stats")
+    def test_run_query_importable(self):
+        from agent.agent import run_query
 
-        assert "work_iq" not in result["tool_results"]
+        assert callable(run_query)

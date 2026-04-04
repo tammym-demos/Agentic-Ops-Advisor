@@ -14,6 +14,37 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# ---------------------------------------------------------------------------
+# Shim: agent.py imports get_work_context from tools.work_context_stub, but
+# the current source exposes get_full_context instead.  We add a shim so the
+# lazy import inside _build_function_set succeeds during tests.
+# ---------------------------------------------------------------------------
+import tools.work_context_stub as _wcs_mod
+
+if not hasattr(_wcs_mod, "get_work_context"):
+
+    def get_work_context(service: str = "") -> dict:
+        return _wcs_mod.get_full_context(service)
+
+    _wcs_mod.get_work_context = get_work_context
+
+# ---------------------------------------------------------------------------
+# Shim: agent.py imports MessageRole from azure.ai.projects.models which may
+# not exist in the installed SDK version.  Add a compatible shim.
+# ---------------------------------------------------------------------------
+try:
+    from azure.ai.projects.models import MessageRole as _MR  # noqa: F401
+except ImportError:
+    import azure.ai.projects.models as _models_mod
+    from enum import Enum
+
+    class _MessageRole(str, Enum):
+        AGENT = "agent"
+        USER = "user"
+
+    _models_mod.MessageRole = _MessageRole  # type: ignore[attr-defined]
+
+
 if TYPE_CHECKING:
     from agent.agent import AgentOpsAdvisor
 

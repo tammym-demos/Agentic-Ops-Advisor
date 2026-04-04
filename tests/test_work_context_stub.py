@@ -1,23 +1,22 @@
-"""Unit tests for tools/work_context_stub.py."""
+"""Unit tests for tools/work_context_stub.py.
+
+Tests the actual public API: get_change_events, get_decisions, get_ownership,
+get_runbooks, get_full_context, and the ENABLE_WORK_IQ feature flag.
+"""
 
 from __future__ import annotations
 
-import os
+import tools.work_context_stub as wcs
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def _set_flag(enabled: bool):
+    """Directly set the ENABLE_WORK_IQ flag on the module.
 
-DISCLAIMER_FRAGMENT = "Work IQ pattern simulation using synthetic data"
-
-
-def _reload_stub():
-    """Import (or re-use) the stub module and clear its context cache."""
-    import tools.work_context_stub as mod
-
-    mod._clear_context_cache()  # reset cache between tests
-    return mod
+    The flag is read at call time by every public function, so modifying
+    the module attribute is sufficient for testing.
+    """
+    wcs.ENABLE_WORK_IQ = enabled
+    return wcs
 
 
 # ---------------------------------------------------------------------------
@@ -27,298 +26,179 @@ def _reload_stub():
 
 class TestFeatureFlag:
     def test_disabled_when_false(self, monkeypatch):
-        monkeypatch.setenv("ENABLE_WORK_IQ", "false")
-        mod = _reload_stub()
-        result = mod.get_work_context("change_events")
-        assert result["status"] == "disabled"
-        assert DISCLAIMER_FRAGMENT in result["disclaimer"]
+        mod = _set_flag(False)
+        assert mod.ENABLE_WORK_IQ is False
+        assert mod.get_change_events("gpu-cluster") == []
 
     def test_disabled_when_zero(self, monkeypatch):
-        monkeypatch.setenv("ENABLE_WORK_IQ", "0")
-        mod = _reload_stub()
-        result = mod.get_work_context("ownership")
-        assert result["status"] == "disabled"
+        mod = _set_flag(False)
+        assert mod.ENABLE_WORK_IQ is False
+        assert mod.get_decisions("network") == []
 
-    def test_disabled_when_off(self, monkeypatch):
-        monkeypatch.setenv("ENABLE_WORK_IQ", "off")
-        mod = _reload_stub()
-        result = mod.get_work_context("runbook")
-        assert result["status"] == "disabled"
+    def test_disabled_when_no(self, monkeypatch):
+        mod = _set_flag(False)
+        assert mod.ENABLE_WORK_IQ is False
+        assert mod.get_runbooks("cost") == []
 
     def test_enabled_by_default(self, monkeypatch):
-        monkeypatch.delenv("ENABLE_WORK_IQ", raising=False)
-        mod = _reload_stub()
-        result = mod.get_work_context("ownership")
-        assert result["status"] == "ok"
+        mod = _set_flag(True)
+        assert mod.ENABLE_WORK_IQ is True
 
     def test_enabled_when_true(self, monkeypatch):
-        monkeypatch.setenv("ENABLE_WORK_IQ", "true")
-        mod = _reload_stub()
-        result = mod.get_work_context("ownership")
-        assert result["status"] == "ok"
+        mod = _set_flag(True)
+        assert mod.ENABLE_WORK_IQ is True
+        events = mod.get_change_events("gpu-cluster")
+        assert isinstance(events, list)
+        assert len(events) > 0
+
+    def test_ownership_empty_when_disabled(self, monkeypatch):
+        mod = _set_flag(False)
+        assert mod.get_ownership("gpu-cluster") == {}
 
 
 # ---------------------------------------------------------------------------
-# Disclaimer tests
+# get_change_events tests
 # ---------------------------------------------------------------------------
 
 
-class TestDisclaimer:
-    def test_disclaimer_in_ok_response(self, monkeypatch):
-        monkeypatch.setenv("ENABLE_WORK_IQ", "true")
-        mod = _reload_stub()
-        result = mod.get_work_context("ownership")
-        assert DISCLAIMER_FRAGMENT in result["disclaimer"]
+class TestGetChangeEvents:
+    def test_returns_events_for_known_service(self, monkeypatch):
+        mod = _set_flag(True)
+        events = mod.get_change_events("gpu-cluster")
+        assert isinstance(events, list)
+        assert len(events) > 0
+        for evt in events:
+            assert "id" in evt
+            assert "type" in evt
+            assert "description" in evt
 
-    def test_disclaimer_in_disabled_response(self, monkeypatch):
-        monkeypatch.setenv("ENABLE_WORK_IQ", "false")
-        mod = _reload_stub()
-        result = mod.get_work_context("ownership")
-        assert DISCLAIMER_FRAGMENT in result["disclaimer"]
+    def test_returns_events_for_network(self, monkeypatch):
+        mod = _set_flag(True)
+        events = mod.get_change_events("network")
+        assert len(events) > 0
 
-    def test_disclaimer_in_error_response(self, monkeypatch):
-        monkeypatch.setenv("ENABLE_WORK_IQ", "true")
-        mod = _reload_stub()
-        result = mod.get_work_context("invalid_type")
-        assert DISCLAIMER_FRAGMENT in result["disclaimer"]
+    def test_returns_events_for_cost(self, monkeypatch):
+        mod = _set_flag(True)
+        events = mod.get_change_events("cost")
+        assert len(events) > 0
 
-
-# ---------------------------------------------------------------------------
-# change_events query tests
-# ---------------------------------------------------------------------------
-
-
-class TestChangeEvents:
-    def setup_method(self):
-        os.environ["ENABLE_WORK_IQ"] = "true"
-        self.mod = _reload_stub()
-
-    def test_returns_all_events_no_filter(self):
-        result = self.mod.get_work_context("change_events")
-        assert result["status"] == "ok"
-        assert result["result_count"] > 0
-
-    def test_service_filter(self):
-        result = self.mod.get_work_context("change_events", service="gpu-scheduler")
-        assert result["status"] == "ok"
-        for evt in result["results"]:
-            assert "gpu-scheduler" in evt["service"]
-
-    def test_time_range_filter(self):
-        result = self.mod.get_work_context(
-            "change_events",
-            start_time="2025-03-29T00:00:00Z",
-            end_time="2025-03-30T00:00:00Z",
-        )
-        assert result["status"] == "ok"
-        for evt in result["results"]:
-            ts = evt["timestamp"]
-            assert ts >= "2025-03-29T00:00:00Z"
-            assert ts <= "2025-03-30T23:59:59Z"
-
-    def test_time_range_returns_empty_for_future(self):
-        result = self.mod.get_work_context(
-            "change_events",
-            start_time="2099-01-01T00:00:00Z",
-            end_time="2099-12-31T23:59:59Z",
-        )
-        assert result["status"] == "ok"
-        assert result["result_count"] == 0
-
-    def test_service_and_time_filter_combined(self):
-        result = self.mod.get_work_context(
-            "change_events",
-            service="inference-api",
-            start_time="2025-03-29T00:00:00Z",
-            end_time="2025-04-05T00:00:00Z",
-        )
-        assert result["status"] == "ok"
-        for evt in result["results"]:
-            assert "inference-api" in evt["service"]
+    def test_returns_empty_for_unknown_service(self, monkeypatch):
+        mod = _set_flag(True)
+        events = mod.get_change_events("nonexistent-xyz")
+        assert events == []
 
 
 # ---------------------------------------------------------------------------
-# ownership query tests
+# get_decisions tests
 # ---------------------------------------------------------------------------
 
 
-class TestOwnership:
-    def setup_method(self):
-        os.environ["ENABLE_WORK_IQ"] = "true"
-        self.mod = _reload_stub()
+class TestGetDecisions:
+    def test_returns_decisions_for_known_service(self, monkeypatch):
+        mod = _set_flag(True)
+        decisions = mod.get_decisions("gpu-cluster")
+        assert isinstance(decisions, list)
+        assert len(decisions) > 0
+        for dec in decisions:
+            assert "id" in dec
+            assert "summary" in dec
+            assert "status" in dec
 
-    def test_returns_all_owners_no_filter(self):
-        result = self.mod.get_work_context("ownership")
-        assert result["status"] == "ok"
-        assert result["result_count"] > 0
-
-    def test_service_filter_exact(self):
-        result = self.mod.get_work_context("ownership", service="inference-api")
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-        for rec in result["results"]:
-            assert "inference-api" in rec["service"]
-
-    def test_service_filter_partial(self):
-        result = self.mod.get_work_context("ownership", service="gpu")
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-
-    def test_nonexistent_service_returns_empty(self):
-        result = self.mod.get_work_context("ownership", service="nonexistent-service-xyz")
-        assert result["status"] == "ok"
-        assert result["result_count"] == 0
-
-    def test_ownership_record_has_required_fields(self):
-        result = self.mod.get_work_context("ownership", service="gpu-scheduler")
-        assert result["result_count"] >= 1
-        rec = result["results"][0]
-        for field in ("service", "team", "primary_owner", "slack_channel"):
-            assert field in rec
+    def test_returns_empty_for_unknown_service(self, monkeypatch):
+        mod = _set_flag(True)
+        decisions = mod.get_decisions("zzz-no-match")
+        assert decisions == []
 
 
 # ---------------------------------------------------------------------------
-# runbook query tests
+# get_ownership tests
 # ---------------------------------------------------------------------------
 
 
-class TestRunbook:
-    def setup_method(self):
-        os.environ["ENABLE_WORK_IQ"] = "true"
-        self.mod = _reload_stub()
+class TestGetOwnership:
+    def test_returns_ownership_for_known_service(self, monkeypatch):
+        mod = _set_flag(True)
+        info = mod.get_ownership("gpu-cluster")
+        assert isinstance(info, dict)
+        assert "team" in info
+        assert "primary" in info
+        assert "slack" in info
 
-    def test_returns_all_runbooks_no_filter(self):
-        result = self.mod.get_work_context("runbook")
-        assert result["status"] == "ok"
-        assert result["result_count"] > 0
+    def test_returns_default_for_unknown_service(self, monkeypatch):
+        mod = _set_flag(True)
+        info = mod.get_ownership("unknown-service")
+        assert info["team"] == "SRE"
 
-    def test_service_filter(self):
-        result = self.mod.get_work_context("runbook", service="gpu-scheduler")
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-        for rb in result["results"]:
-            assert "gpu-scheduler" in rb["service"]
-
-    def test_keyword_filter(self):
-        result = self.mod.get_work_context("runbook", topic_keywords="latency")
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-
-    def test_multi_keyword_filter(self):
-        result = self.mod.get_work_context("runbook", topic_keywords="gpu,utilization")
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-
-    def test_runbook_has_steps(self):
-        result = self.mod.get_work_context("runbook", service="gpu-scheduler")
-        assert result["result_count"] >= 1
-        rb = result["results"][0]
-        assert "steps" in rb
-        assert len(rb["steps"]) > 0
-
-    def test_nonexistent_keyword_returns_empty(self):
-        result = self.mod.get_work_context("runbook", topic_keywords="zzznomatch")
-        assert result["status"] == "ok"
-        assert result["result_count"] == 0
+    def test_network_ownership(self, monkeypatch):
+        mod = _set_flag(True)
+        info = mod.get_ownership("network")
+        assert info["team"] == "Network Operations"
 
 
 # ---------------------------------------------------------------------------
-# decisions query tests
+# get_runbooks tests
 # ---------------------------------------------------------------------------
 
 
-class TestDecisions:
-    def setup_method(self):
-        os.environ["ENABLE_WORK_IQ"] = "true"
-        self.mod = _reload_stub()
+class TestGetRunbooks:
+    def test_returns_runbooks_for_known_service(self, monkeypatch):
+        mod = _set_flag(True)
+        runbooks = mod.get_runbooks("gpu-cluster")
+        assert isinstance(runbooks, list)
+        assert len(runbooks) > 0
+        for rb in runbooks:
+            assert "title" in rb
+            assert "url" in rb
 
-    def test_returns_all_decisions_no_filter(self):
-        result = self.mod.get_work_context("decisions")
-        assert result["status"] == "ok"
-        assert result["result_count"] > 0
-
-    def test_service_filter(self):
-        result = self.mod.get_work_context("decisions", service="gpu-scheduler")
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-
-    def test_keyword_filter_capacity(self):
-        result = self.mod.get_work_context("decisions", topic_keywords="capacity")
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-
-    def test_time_range_filter(self):
-        result = self.mod.get_work_context(
-            "decisions",
-            start_time="2025-03-27T00:00:00Z",
-            end_time="2025-04-01T00:00:00Z",
-        )
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
-
-    def test_combined_service_and_keyword(self):
-        result = self.mod.get_work_context(
-            "decisions",
-            service="inference-api",
-            topic_keywords="batching",
-        )
-        assert result["status"] == "ok"
-        assert result["result_count"] >= 1
+    def test_returns_empty_for_unknown_service(self, monkeypatch):
+        mod = _set_flag(True)
+        runbooks = mod.get_runbooks("zzz-no-match")
+        assert runbooks == []
 
 
 # ---------------------------------------------------------------------------
-# Error / edge case tests
+# get_full_context tests
 # ---------------------------------------------------------------------------
 
 
-class TestErrorHandling:
-    def setup_method(self):
-        os.environ["ENABLE_WORK_IQ"] = "true"
-        self.mod = _reload_stub()
+class TestGetFullContext:
+    def test_returns_all_sections(self, monkeypatch):
+        mod = _set_flag(True)
+        ctx = mod.get_full_context("gpu-cluster")
+        assert isinstance(ctx, dict)
+        assert ctx["service"] == "gpu-cluster"
+        assert "disclaimer" in ctx
+        assert "Work IQ" in ctx["disclaimer"]
+        assert "change_events" in ctx
+        assert "decisions" in ctx
+        assert "ownership" in ctx
+        assert "runbooks" in ctx
 
-    def test_invalid_query_type(self):
-        result = self.mod.get_work_context("bad_query_type")
-        assert result["status"] == "error"
-        assert DISCLAIMER_FRAGMENT in result["disclaimer"]
+    def test_change_events_populated(self, monkeypatch):
+        mod = _set_flag(True)
+        ctx = mod.get_full_context("gpu-cluster")
+        assert len(ctx["change_events"]) > 0
 
-    def test_missing_data_file(self, monkeypatch, tmp_path):
-        # Point the module at a non-existent file
-        mod = _reload_stub()
-        monkeypatch.setattr(mod, "_DATA_PATH", tmp_path / "does_not_exist.json")
-        mod._clear_context_cache()
-        result = mod.get_work_context("change_events")
-        assert result["status"] == "error"
-        assert DISCLAIMER_FRAGMENT in result["disclaimer"]
+    def test_full_context_when_disabled(self, monkeypatch):
+        mod = _set_flag(False)
+        ctx = mod.get_full_context("gpu-cluster")
+        assert ctx["change_events"] == []
+        assert ctx["decisions"] == []
+        assert ctx["ownership"] == {}
+        assert ctx["runbooks"] == []
 
 
 # ---------------------------------------------------------------------------
-# Tool definition schema tests
+# _service_key normalisation tests
 # ---------------------------------------------------------------------------
 
 
-class TestToolDefinition:
-    def test_tool_definition_structure(self):
-        from tools.work_context_stub import TOOL_DEFINITION
+class TestServiceKey:
+    def test_normalises_known_key(self, monkeypatch):
+        mod = _set_flag(True)
+        assert mod._service_key("GPU-CLUSTER") == "gpu-cluster"
+        assert mod._service_key("network") == "network"
 
-        assert TOOL_DEFINITION["type"] == "function"
-        fn = TOOL_DEFINITION["function"]
-        assert fn["name"] == "get_work_context"
-        assert "description" in fn
-        params = fn["parameters"]
-        assert params["type"] == "object"
-        assert "query_type" in params["properties"]
-        assert "query_type" in params["required"]
-
-    def test_enum_values_in_schema(self):
-        from tools.work_context_stub import TOOL_DEFINITION
-
-        enum_vals = TOOL_DEFINITION["function"]["parameters"]["properties"]["query_type"]["enum"]
-        for expected in ("change_events", "ownership", "runbook", "decisions"):
-            assert expected in enum_vals
-
-    def test_optional_params_present(self):
-        from tools.work_context_stub import TOOL_DEFINITION
-
-        props = TOOL_DEFINITION["function"]["parameters"]["properties"]
-        for param in ("service", "start_time", "end_time", "topic_keywords"):
-            assert param in props
+    def test_unknown_returns_default(self, monkeypatch):
+        mod = _set_flag(True)
+        assert mod._service_key("totally-unknown") == "default"

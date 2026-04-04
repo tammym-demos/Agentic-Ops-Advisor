@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import random
 import sqlite3
 from pathlib import Path
 
 import pytest
 
 from agent.config import Settings
-from tools.sql_telemetry import _DDL, _seed_db
+from data.seed_telemetry import (
+    DDL,
+    generate_cost_rows,
+    generate_gpu_rows,
+    generate_incident_rows,
+    generate_net_rows,
+    seed,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -20,10 +28,8 @@ from tools.sql_telemetry import _DDL, _seed_db
 def tmp_db_path(tmp_path: Path) -> str:
     """Return the path to a temporary, seeded SQLite database file."""
     db_file = tmp_path / "test_agentops.db"
-    conn = sqlite3.connect(str(db_file))
-    conn.executescript(_DDL)
-    _seed_db(conn, days=3)  # 3 days of data is enough for tests
-    conn.close()
+    sql_file = tmp_path / "test_seed.sql"
+    seed(db_path=db_file, sql_path=sql_file)
     return str(db_file)
 
 
@@ -31,8 +37,15 @@ def tmp_db_path(tmp_path: Path) -> str:
 def in_memory_db() -> sqlite3.Connection:
     """Return an open, seeded in-memory SQLite connection."""
     conn = sqlite3.connect(":memory:")
-    conn.executescript(_DDL)
-    _seed_db(conn, days=2)
+    conn.executescript(DDL)
+    rng = random.Random(42)
+    conn.executemany("INSERT INTO telemetry_gpu VALUES (?,?,?,?,?)", generate_gpu_rows(rng)[:200])
+    rng2 = random.Random(42)
+    conn.executemany("INSERT INTO telemetry_net VALUES (?,?,?,?,?)", generate_net_rows(rng2)[:200])
+    rng3 = random.Random(42)
+    conn.executemany("INSERT INTO telemetry_cost VALUES (?,?,?,?)", generate_cost_rows(rng3)[:200])
+    conn.executemany("INSERT INTO incidents VALUES (?,?,?,?,?)", generate_incident_rows())
+    conn.commit()
     return conn
 
 
