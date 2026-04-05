@@ -5,7 +5,7 @@
 //
 // Deploy with:
 //   az deployment sub create \
-//     --location eastus2 \
+//     --location eastus \
 //     --template-file infra/main.bicep \
 //     --parameters @infra/parameters.json
 // ============================================================
@@ -15,7 +15,7 @@ targetScope = 'subscription'
 // ---- Parameters -----------------------------------------------
 
 @description('Azure region for all resources.')
-param location string = 'eastus2'
+param location string = 'eastus'
 
 @description('Name of the resource group to create.')
 param resourceGroupName string = 'rg-agentic-ops-advisor'
@@ -33,6 +33,9 @@ param sqlDatabaseName string = 'agentops-telemetry'
 
 @description('Azure SQL Database SKU.')
 param sqlDatabaseSku string = 'Basic'
+
+@description('Override location for Azure SQL (use when primary region has capacity constraints).')
+param sqlLocation string = location
 
 @description('Azure OpenAI GPT-4.1 model deployment capacity (1 000 TPM units).')
 param openAiCapacity int = 10
@@ -113,7 +116,7 @@ module sql 'modules/sql.bicep' = {
     databaseSku: sqlDatabaseSku
     managedIdentityPrincipalId: identity.outputs.principalId
     managedIdentityName: identityName
-    location: location
+    location: sqlLocation
     tags: tags
   }
 }
@@ -147,6 +150,7 @@ module aiFoundry 'modules/aifoundry.bicep' = {
     openAiAccountId: openAi.outputs.resourceId
     openAiEndpoint: openAi.outputs.endpoint
     managedIdentityId: identity.outputs.resourceId
+    managedIdentityPrincipalId: identity.outputs.principalId
     tags: tags
   }
 }
@@ -173,3 +177,9 @@ output resourceGroupName string = rg.name
 
 @description('Managed identity client ID.')
 output managedIdentityClientId string = identity.outputs.clientId
+
+@description('Container Registry login server URL (e.g., crhubagentopsprod.azurecr.io).')
+output acrLoginServer string = aiFoundry.outputs.acrLoginServer
+
+@description('Container Registry name.')
+output acrName string = aiFoundry.outputs.acrName
