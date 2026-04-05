@@ -1,0 +1,60 @@
+{
+  "agents": [
+    {
+      "persistent_name": "Holden",
+      "role": "Lead",
+      "universe": "the-expanse",
+      "created_at": "2026-04-04T19:53:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Naomi",
+      "role": "Backend Dev",
+      "universe": "the-expanse",
+      "created_at": "2026-04-04T19:53:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Amos",
+      "role": "DevOps",
+      "universe": "the-expanse",
+      "created_at": "2026-04-04T19:53:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Alex",
+      "role": "Tester",
+      "universe": "the-expanse",
+      "created_at": "2026-04-04T19:53:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Miller",
+      "role": "PM",
+      "universe": "the-expanse",
+      "created_at": "2026-04-04T19:53:00Z",
+      "legacy_named": false,
+      "status": "retired"
+    },
+    {
+      "persistent_name": "Scribe",
+      "role": "Session Logger",
+      "universe": "n/a",
+      "created_at": "2026-04-04T19:53:00Z",
+      "legacy_named": false,
+      "status": "active"
+    },
+    {
+      "persistent_name": "Ralph",
+      "role": "Work Monitor",
+      "universe": "n/a",
+      "created_at": "2026-04-04T19:53:00Z",
+      "legacy_named": false,
+      "status": "active"
+    }
+  ]
+}

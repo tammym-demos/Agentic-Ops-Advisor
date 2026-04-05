@@ -1,4 +1,4 @@
-# Scribe — History
+# Miller — History
 
 ## Core Context
 - **Project:** Agentic Ops Advisor — governed AI agent for infrastructure telemetry reasoning
