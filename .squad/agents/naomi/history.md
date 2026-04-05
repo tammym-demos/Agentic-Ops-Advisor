@@ -34,3 +34,28 @@
 - **Section 8 (Env Vars):** Added `SQLITE_DB_PATH` (used by `sql_telemetry.py`). Fixed `DB_MODE` description: `sqlite` or `azure_sql` (not a connection string). Fixed `DB_CONNECTION_STRING` description.
 - **Section 11 (Troubleshooting):** Updated provider list to match Section 2. Removed nonexistent `--verbose` flag reference.
 - **Step 4 .env docs:** Separated Demo mode (minimal) from Agent mode (Azure OpenAI) config.
+
+### 2025-04-05: Dashboard Data Export Script
+- **Task:** Create `scripts/export_dashboard_data.py` to export synthetic telemetry data as JSON for GitHub Pages KPI dashboard.
+- **Output:** `docs/pages/assets/dashboard-data.json` (generated, 40.7 KB).
+- **Schema:** GPU (avg by cluster, daily trend, anomalies), Network (latency by site, daily trend, anomalies), Cost (total by cluster, daily trend, anomalies), Incidents (summary by severity/status, list, MTTR), Health Score (overall + component scores), KPI Questions (15 questions with insights).
+- **Queries:** All queries run against `data/telemetry.db` using sqlite3 with row_factory=Row for dict conversion.
+- **Percentile calculation:** SQLite lacks PERCENTILE_CONT; implemented manual p95/p99 by sorting latencies and indexing at 95%/99% position.
+- **Anomaly detection:** GPU (avg <30% or >95% daily), Network (max latency >100ms or loss >5% daily), Cost (daily cost >2x cluster baseline).
+- **Health score logic:** GPU 1.0 if 40-80% util, Network 1.0 if <30ms latency & <1% loss, Cost 0.5 if anomalies, Incidents 1.0 minus (P1 open × 0.3 + P2 open × 0.2 + P3 open × 0.1). Overall = weighted avg (GPU 30%, Net 25%, Cost 20%, Inc 25%).
+- **Verified output:** 3 clusters, 1 GPU anomaly (cluster-a/node-1 @ 9.32% on 2025-03-19), 1 network anomaly, 1 cost anomaly (cluster-a @ 3967.54 vs baseline 592.13 on 2025-03-26), 6 incidents, MTTR 12h, overall health 0.8.
+- **Key files:** `scripts/export_dashboard_data.py`, `docs/pages/assets/dashboard-data.json`, `data/telemetry.db`.
+
+### 2025-04-05: KPI Dashboard HTML/CSS Implementation
+- **Task:** Create interactive KPI dashboard page with Chart.js for GitHub Pages.
+- **Files created:** `docs/pages/dashboard.html` (22.4 KB), `docs/pages/dashboard.css` (7.0 KB), `docs/pages/assets/` directory.
+- **Files edited:** `docs/index.html` (added "📊 Dashboard" nav link before GitHub link).
+- **Tech stack:** Chart.js 4.x CDN (no build step), vanilla HTML/JS, dark theme CSS variables from `docs/style.css`.
+- **Dashboard sections:** (1) Health Score Tiles — 5 tiles (overall + 4 components) with color-coding (green >0.8, yellow >0.5, red ≤0.5). (2) GPU Utilization — horizontal bar chart (avg by cluster) + multi-line trend (daily by cluster). (3) Network Reliability — grouped bar (P50/P95/P99 latency by site) + multi-line trend (daily latency by site). (4) Cost Intelligence — stacked horizontal bar (compute + token cost by cluster) + multi-line trend (daily cost by cluster). (5) Incident Analytics — doughnut chart (incidents by severity) + table (first 10 incidents with severity/status badges). (6) KPI Questions Reference — grid of cards (category + question + insight).
+- **Chart.js global defaults:** `Chart.defaults.color = '#8b949e'` (text-secondary), `Chart.defaults.borderColor = '#30363d'` (border), font family = system font stack.
+- **Color palette:** cluster-a: #58a6ff (blue), cluster-b: #3fb950 (green), cluster-c: #bc8cff (purple), site-east: #58a6ff, site-west: #f0883e (orange), site-central: #3fb950, P1: #f85149 (red), P2: #f0883e, P3: #d29922 (yellow).
+- **Data loading:** `fetch('assets/dashboard-data.json')` with error fallback showing message to run export script.
+- **CSS patterns:** Reuses existing variables (--bg-primary, --bg-secondary, --bg-card, --border, --text-primary, --text-secondary, accent colors). Dashboard-specific: `.health-score-grid` (auto-fit grid), `.chart-grid` (2-column responsive, 500px min), `.chart-card` (feature-card style with hover), `.kpi-question` (italic annotation with blue left border), `.incident-table` (dark striped), `.severity-badge`/`.status-badge` (color-coded pills).
+- **Nav structure:** Dashboard page nav shows "Home" link + active "📊 Dashboard" + same disclaimer banner as main site.
+- **Responsive:** Chart grid collapses to 1 column on mobile (<768px). Health tiles auto-fit from 200px min.
+- **Key files:** `docs/pages/dashboard.html`, `docs/pages/dashboard.css`, `docs/index.html`, `docs/style.css` (reference only).
