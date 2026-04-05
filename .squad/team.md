@@ -48,3 +48,14 @@
 
 - **Repository:** tammym-demos/Agentic-Ops-Advisor
 - **Connected:** 2026-04-04
+
+## GitHub Project Board
+
+- **Owner:** tmcclell
+- **Project Number:** 13
+- **Project Title:** Agentic Ops Advisor
+- **Project ID:** PVT_kwHOAzARAM4BTtI0
+- **Access Note:** The `GH_TOKEN` env var does NOT have project scopes. To access the board via CLI, temporarily clear it: `$env:GH_TOKEN = ""` then use `gh project` commands with `--owner tmcclell`.
+- **Commands:**
+  - List items: `gh project item-list 13 --owner tmcclell`
+  - Add issue: `gh project item-add 13 --owner tmcclell --url https://github.com/tammym-demos/Agentic-Ops-Advisor/issues/{N}`

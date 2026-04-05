@@ -38,3 +38,13 @@
 - **PM Gap Identified:** No GitHub issue had been created for the Container Deployment feature despite completion. This is a PM accountability gap — all features should have tracking issues from start.
 - **Updated:** deploy-list.json with GitHub issue numbers for both the main feature and follow-up items
 - **Decision file created:** `.squad/decisions/inbox/drummer-container-github-issues.md` documenting the issues and pattern
+
+### 2026-04-05: GitHub Project Board Connected
+- **Board:** Project #13 "Agentic Ops Advisor" owned by `tmcclell`
+- **Project ID:** PVT_kwHOAzARAM4BTtI0
+- **Issues added to board:** #54, #57, #58, #59, #60, #61, #62 (7 items added, total 30 items on board)
+- **Access pattern:** `GH_TOKEN` env var lacks project scopes. Must clear it first: `$env:GH_TOKEN = ""` then use `gh project` commands with `--owner tmcclell`.
+- **Key commands:**
+  - List items: `gh project item-list 13 --owner tmcclell`
+  - Add issue: `gh project item-add 13 --owner tmcclell --url https://github.com/tammym-demos/Agentic-Ops-Advisor/issues/{N}`
+- **Board reference also saved in:** `.squad/team.md` under `## GitHub Project Board`
