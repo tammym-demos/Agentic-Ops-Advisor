@@ -28,13 +28,6 @@ param environmentName string = 'prod'
 @maxLength(16)
 param projectName string = 'agentops'
 
-@description('Azure SQL Server administrator login name.')
-param sqlAdminLogin string = 'sqladmin'
-
-@description('Azure SQL Server administrator password.')
-@secure()
-param sqlAdminPassword string
-
 @description('Azure SQL Database name.')
 param sqlDatabaseName string = 'agentops-telemetry'
 
@@ -118,9 +111,8 @@ module sql 'modules/sql.bicep' = {
     serverName: sqlServerName
     databaseName: sqlDatabaseName
     databaseSku: sqlDatabaseSku
-    adminLogin: sqlAdminLogin
-    adminPassword: sqlAdminPassword
     managedIdentityPrincipalId: identity.outputs.principalId
+    managedIdentityName: identityName
     location: location
     tags: tags
   }

@@ -14,17 +14,6 @@
     "projectName": {
       "value": "agentops"
     },
-    "sqlAdminLogin": {
-      "value": "sqladmin"
-    },
-    "sqlAdminPassword": {
-      "reference": {
-        "keyVault": {
-          "id": "/subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-secrets/providers/Microsoft.KeyVault/vaults/kv-agentic-ops-secrets"
-        },
-        "secretName": "sql-admin-password"
-      }
-    },
     "sqlDatabaseName": {
       "value": "agentops-telemetry"
     },

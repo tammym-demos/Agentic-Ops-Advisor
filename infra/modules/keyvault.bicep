@@ -35,9 +35,10 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     }
     tenantId: tenantId
     enableRbacAuthorization: true
+    enabledForTemplateDeployment: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
-    enablePurgeProtection: false
+    enablePurgeProtection: null
     publicNetworkAccess: 'Enabled'
     networkAcls: {
       defaultAction: 'Allow'

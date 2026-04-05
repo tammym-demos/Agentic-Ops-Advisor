@@ -1,0 +1,8 @@
+ERROR: unrecognized arguments: --location eastus2
+
+Examples from AI knowledge base:
+az deployment sub list
+List deployments at subscription scope.
+
+https://docs.microsoft.com/en-US/cli/azure/deployment/sub#az_deployment_sub_list
+Read more about the command in reference docs

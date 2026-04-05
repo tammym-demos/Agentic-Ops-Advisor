@@ -1,23 +1,19 @@
 // Azure SQL Server + Database
 // Hosts production telemetry data for the Agentic Ops Advisor.
 //
-// Auth: SQL admin account is provided for initial setup; the managed identity
-// is granted db_datareader / db_datawriter via post-deployment script or
-// Azure AD admin configuration.
+// Auth: Azure AD-only authentication via the user-assigned managed identity.
+// MCAPS policy requires azureADOnlyAuthentication = true (no SQL auth).
 
 param serverName string
 param databaseName string
-param adminLogin string
-
-@secure()
-param adminPassword string
 
 param databaseSku string = 'Basic'
 param managedIdentityPrincipalId string
+param managedIdentityName string = 'agentops-identity'
 param location string
 param tags object = {}
 
-// ---- SQL Server -----------------------------------------------
+// ---- SQL Server (Azure AD-only auth) --------------------------
 
 resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   name: serverName
@@ -27,8 +23,14 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
     type: 'SystemAssigned'
   }
   properties: {
-    administratorLogin: adminLogin
-    administratorLoginPassword: adminPassword
+    administrators: {
+      administratorType: 'ActiveDirectory'
+      principalType: 'Application'
+      login: managedIdentityName
+      sid: managedIdentityPrincipalId
+      tenantId: subscription().tenantId
+      azureADOnlyAuthentication: true
+    }
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
   }
