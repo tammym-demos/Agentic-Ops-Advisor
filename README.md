@@ -16,11 +16,12 @@ A **governed, production-style AI agent** that performs root-cause + change-cont
 4. [Feature Flags](#4-feature-flags)
 5. [Running Evaluations](#5-running-evaluations)
 6. [Deploying to Azure](#6-deploying-to-azure)
-7. [Regression Demo Walkthrough](#7-regression-demo-walkthrough)
-8. [Environment Variables Reference](#8-environment-variables-reference)
-9. [Monitoring Setup](#9-monitoring-setup)
-10. [Disclaimers](#10-disclaimers)
-11. [Troubleshooting / FAQ](#11-troubleshooting--faq)
+7. [Container Deployment](#7-container-deployment)
+8. [Regression Demo Walkthrough](#8-regression-demo-walkthrough)
+9. [Environment Variables Reference](#9-environment-variables-reference)
+10. [Monitoring Setup](#10-monitoring-setup)
+11. [Disclaimers](#11-disclaimers)
+12. [Troubleshooting / FAQ](#12-troubleshooting--faq)
 
 ---
 
@@ -68,7 +69,9 @@ graph TD
     end
 
     subgraph Azure AI Foundry Agent Service
-        A[🤖 Agentic Ops Advisor<br/>GPT-4.1 via Azure OpenAI]
+        subgraph Docker Container - ACR
+            A[🤖 Agentic Ops Advisor<br/>GPT-4.1 via Azure OpenAI]
+        end
     end
 
     subgraph Tool Surfaces
@@ -120,6 +123,7 @@ graph TD
 | Observability | OpenTelemetry → Application Insights / Azure Monitor |
 | IaC | Bicep templates (`infra/`) |
 | CI/CD | GitHub Actions |
+| Container | Docker → Azure Container Registry (ACR) |
 
 ---
 
@@ -134,6 +138,7 @@ Before you begin, ensure you have the following installed and configured:
 | GitHub CLI (`gh`) | [Install guide](https://cli.github.com/) — for CI/CD operations |
 | Git | Any recent version |
 | Azure Subscription | With access to create AI Foundry, Azure OpenAI, and Azure SQL resources |
+| Docker | [Install guide](https://docs.docker.com/get-docker/) — for container builds and local testing |
 
 **Required Azure resource providers** (register once per subscription):
 
@@ -409,9 +414,88 @@ This registers the agent definition (system prompt + tool schemas) with the Foun
 
 Open the [Azure AI Foundry portal](https://ai.azure.com), navigate to your project, and select **Agents** in the left pane. You should see the **Agentic Ops Advisor** agent listed and ready to test.
 
+> 📦 For **container-based deployment** (recommended for production with custom tools), see [Container Deployment](#7-container-deployment) below.
+
 ---
 
-## 7. Regression Demo Walkthrough
+## 7. Container Deployment
+
+The agent and all three custom tool surfaces are packaged into a Docker container for production deployment. This ensures the deployed agent has access to the same tools available during local development.
+
+### Why containers?
+
+The prompt-agent model (SDK-only deployment) registers the agent definition with Foundry but does not deploy the custom Python tool code (`tools/sql_telemetry.py`, `tools/work_context_stub.py`, `tools/action_stub.py`). Container deployment solves this by packaging everything together.
+
+### Container architecture
+
+```
+┌─────────────────────────────────────────┐
+│  Docker Container (ACR)                 │
+│  ┌──────────────────────────────────┐   │
+│  │  Python 3.11 + ODBC Driver 18   │   │
+│  ├──────────────────────────────────┤   │
+│  │  agent/     → Agent definition   │   │
+│  │  tools/     → 3 tool surfaces    │   │
+│  │  data/      → Seeded SQLite DB   │   │
+│  │  scripts/   → Entrypoint         │   │
+│  │  eval/      → Evaluators         │   │
+│  └──────────────────────────────────┘   │
+│  Port 8080 · Health check · Non-root   │
+└─────────────────────────────────────────┘
+         ↕
+   Azure AI Foundry Agent Service
+         ↕
+   GPT-4.1 (Azure OpenAI)
+```
+
+### Key files
+
+| File | Purpose |
+|---|---|
+| `Dockerfile` | Production container image definition |
+| `agent.yaml` | Foundry container agent manifest |
+| `.dockerignore` | Excludes secrets, docs, and build artifacts from image |
+
+### Building locally
+
+```bash
+# Build the image
+docker build -t agentic-ops-advisor:local .
+
+# Run locally (demo mode — no Azure credentials needed)
+docker run -p 8080:8080 agentic-ops-advisor:local
+
+# Run with Azure credentials (agent mode)
+docker run -p 8080:8080 \
+  -e AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/ \
+  -e AZURE_OPENAI_DEPLOYMENT=gpt-4.1 \
+  -e AZURE_AI_PROJECT_CONNECTION_STRING=your-connection-string \
+  agentic-ops-advisor:local
+```
+
+### CI/CD container deployment
+
+The GitHub Actions workflow (`.github/workflows/deploy.yml`) automatically:
+
+1. Builds the Docker image tagged with the commit SHA
+2. Pushes to Azure Container Registry (ACR)
+3. Deploys the container agent to Foundry Agent Service
+4. Runs a smoke test to verify the deployed agent responds correctly
+
+### Pushing to ACR manually
+
+```bash
+# Authenticate to ACR
+az acr login --name <acr-name>
+
+# Tag and push
+docker tag agentic-ops-advisor:local <acr-login-server>/agentic-ops-advisor:latest
+docker push <acr-login-server>/agentic-ops-advisor:latest
+```
+
+---
+
+## 8. Regression Demo Walkthrough
 
 This is the canonical 7-step demo script. Run it in order to show the full build → evaluate → regress → detect → fix → recover → monitor narrative.
 
@@ -527,7 +611,7 @@ python eval/run_eval.py --compare-baseline
 
 ---
 
-## 8. Environment Variables Reference
+## 9. Environment Variables Reference
 
 Copy `.env.example` to `.env` and fill in these values. Variables marked **Required for Azure** are only needed for cloud deployment; local dev works with just the **Required for local** variables.
 
@@ -550,7 +634,7 @@ Copy `.env.example` to `.env` and fill in these values. Variables marked **Requi
 
 ---
 
-## 9. Monitoring Setup
+## 10. Monitoring Setup
 
 ### Import the Azure Monitor Workbook
 
@@ -582,7 +666,7 @@ The workbook shows:
 
 ---
 
-## 10. Disclaimers
+## 11. Disclaimers
 
 ### ⚠️ Synthetic Data Only
 
@@ -600,7 +684,7 @@ For a production integration, replace `tools/work_context_stub.py` with a live W
 
 ---
 
-## 11. Troubleshooting / FAQ
+## 12. Troubleshooting / FAQ
 
 ### Agent doesn't call tools
 

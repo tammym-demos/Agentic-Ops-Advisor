@@ -65,6 +65,10 @@ eval/*_results.json
 # Node (for GitHub Pages tooling if any)
 node_modules/
 
+# Docker
+docker-compose.override.yml
+docker-compose.override.yaml
+
 # Misc
 *.log
 *.tmp

@@ -43,6 +43,7 @@
         <li><a href="#architecture">Architecture</a></li>
         <li><a href="#demo">Demo</a></li>
         <li><a href="#techstack">Tech Stack</a></li>
+        <li><a href="pages/dashboard.html">📊 Dashboard</a></li>
         <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub ↗</a></li>
       </ul>
     </div>
@@ -164,11 +165,11 @@
         </article>
 
         <article class="feature-card fade-in" style="--card-accent: #79b8ff;">
-          <span class="feature-icon" aria-hidden="true">⚙️</span>
-          <h3 class="feature-title">Production Deployment</h3>
+          <span class="feature-icon" aria-hidden="true">🐳</span>
+          <h3 class="feature-title">Container Deployment</h3>
           <p class="feature-desc">
-            Deploys to Azure AI Foundry Agent Service via Bicep IaC templates.
-            GitHub Actions CI/CD pipeline with automated evaluation gates on every PR.
+            Containerized agent deployed to Azure AI Foundry Agent Service via Docker + ACR.
+            Bicep IaC, GitHub Actions CI/CD with automated build, push, and evaluation gates.
           </p>
         </article>
 
@@ -232,6 +233,11 @@
           <text x="340" y="257" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="600">GPT-4.1 · System Prompt · Tools</text>
           <rect x="265" y="270" width="150" height="22" rx="5" fill="rgba(63,185,80,0.08)" stroke="rgba(63,185,80,0.25)" stroke-width="1"/>
           <text x="340" y="285" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="600">OpenTelemetry Traces</text>
+
+          <!-- Container runtime label -->
+          <rect x="235" y="135" width="210" height="185" rx="14" fill="none"
+                stroke="#79b8ff" stroke-width="1" stroke-dasharray="6 3" opacity="0.5"/>
+          <text x="340" y="148" text-anchor="middle" fill="#79b8ff" font-size="9" font-weight="600" opacity="0.7">🐳 Docker Container (ACR)</text>
 
           <!-- ── TOOL SURFACES (right column) ── -->
           <!-- SQL Telemetry Tool -->
@@ -394,6 +400,8 @@
         <span class="badge badge-sqlite" role="listitem">🗄️ SQLite / Azure SQL</span>
         <span class="badge badge-actions" role="listitem">⚙️ GitHub Actions</span>
         <span class="badge badge-azure" role="listitem">🏗️ Bicep IaC</span>
+        <span class="badge badge-actions" role="listitem">🐳 Docker</span>
+        <span class="badge badge-azure" role="listitem">📦 Azure Container Registry</span>
         <span class="badge badge-python" role="listitem">🧪 Pytest + azure-ai-evaluation</span>
       </div>
 
@@ -440,6 +448,11 @@
             <td>IaC</td>
             <td>Bicep</td>
             <td>Foundry project, Azure SQL, App Insights provisioning</td>
+          </tr>
+          <tr>
+            <td>Container</td>
+            <td>Docker → Azure Container Registry</td>
+            <td>Reproducible packaging and deployment of agent + tools</td>
           </tr>
           <tr>
             <td>Context (simulated)</td>

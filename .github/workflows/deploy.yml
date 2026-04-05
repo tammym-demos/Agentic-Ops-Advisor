@@ -172,9 +172,59 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 5 — Deploy agent to Foundry Agent Service
+            # Step 5a — Resolve ACR login server
             # ------------------------------------------------------------------
-            - name: Deploy agent to Foundry Agent Service
+            - name: Resolve ACR login server
+              run: |
+                  # Try Bicep outputs first; fall back to convention-based name
+                  ACR_NAME=$(az deployment sub show \
+                      --name "$(az deployment sub list --location "$AZURE_LOCATION" \
+                          --query "[?starts_with(name,'agentic-ops-advisor')].name | [0]" -o tsv 2>/dev/null || echo '')" \
+                      --query "properties.outputs.acrName.value" -o tsv 2>/dev/null || echo '')
+
+                  if [ -z "$ACR_NAME" ]; then
+                      # Convention: cr<hubName> with hyphens stripped
+                      ACR_NAME="crhubagentopsprod"
+                      echo "⚠️  Could not resolve ACR from Bicep outputs — using convention: $ACR_NAME"
+                  fi
+
+                  ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv 2>/dev/null || echo "${ACR_NAME}.azurecr.io")
+                  echo "ACR_LOGIN_SERVER=${ACR_LOGIN_SERVER}" >> "$GITHUB_ENV"
+                  echo "ACR_NAME=${ACR_NAME}" >> "$GITHUB_ENV"
+                  echo "✅ ACR: ${ACR_LOGIN_SERVER}"
+
+            # ------------------------------------------------------------------
+            # Step 5b — Build and push container image to ACR
+            # ------------------------------------------------------------------
+            - name: Build and push container image
+              run: |
+                  echo "::group::Container build & push"
+                  IMAGE_TAG="${{ github.sha }}"
+                  IMAGE_NAME="${ACR_LOGIN_SERVER}/agentic-ops-advisor"
+
+                  # Authenticate to ACR
+                  az acr login --name "$ACR_NAME"
+
+                  # Build the container image
+                  docker build \
+                      --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
+                      --tag "${IMAGE_NAME}:latest" \
+                      --label "org.opencontainers.image.revision=${{ github.sha }}" \
+                      --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+                      .
+
+                  # Push both tags
+                  docker push "${IMAGE_NAME}:${IMAGE_TAG}"
+                  docker push "${IMAGE_NAME}:latest"
+
+                  echo "CONTAINER_IMAGE=${IMAGE_NAME}:${IMAGE_TAG}" >> "$GITHUB_ENV"
+                  echo "✅ Pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 5c — Deploy container agent to Foundry Agent Service
+            # ------------------------------------------------------------------
+            - name: Deploy container agent to Foundry Agent Service
               run: |
                   echo "::group::Agent deployment"
                   python - <<'EOF'
@@ -185,7 +235,7 @@ jobs:
                   _PLACEHOLDER = "your-project-connection-string"
                   conn_str = os.environ["AZURE_AI_PROJECT_CONNECTION_STRING"]
                   if not conn_str or conn_str == _PLACEHOLDER:
-                      print("⚠️  AZURE_AI_PROJECT_CONNECTION_STRING not configured — skipping agent upsert.")
+                      print("⚠️  AZURE_AI_PROJECT_CONNECTION_STRING not configured — skipping agent deploy.")
                       sys.exit(0)
 
                   client = AIProjectClient.from_connection_string(
@@ -201,28 +251,29 @@ jobs:
                   )
 
                   deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
+                  container_image = os.environ.get("CONTAINER_IMAGE", "")
 
                   # Upsert agent: list existing, update if found, create if not
                   agents = client.agents.list_agents()
                   existing = next((a for a in agents.data if a.name == "agentic-ops-advisor"), None)
 
+                  agent_kwargs = dict(
+                      model=deployment_name,
+                      name="agentic-ops-advisor",
+                      instructions=system_prompt,
+                      description="Agentic Ops Advisor — containerised agent for infrastructure telemetry & change-context reasoning",
+                      metadata={"container_image": container_image} if container_image else {},
+                  )
+
                   if existing:
-                      agent_obj = client.agents.update_agent(
-                          assistant_id=existing.id,
-                          model=deployment_name,
-                          name="agentic-ops-advisor",
-                          instructions=system_prompt,
-                          description="Agentic Ops Advisor — infrastructure telemetry & change-context reasoning",
-                      )
+                      agent_obj = client.agents.update_agent(assistant_id=existing.id, **agent_kwargs)
                       print(f"✅ Updated agent: {agent_obj.id}")
                   else:
-                      agent_obj = client.agents.create_agent(
-                          model=deployment_name,
-                          name="agentic-ops-advisor",
-                          instructions=system_prompt,
-                          description="Agentic Ops Advisor — infrastructure telemetry & change-context reasoning",
-                      )
+                      agent_obj = client.agents.create_agent(**agent_kwargs)
                       print(f"✅ Created agent: {agent_obj.id}")
+
+                  if container_image:
+                      print(f"📦 Container image: {container_image}")
 
                   # Persist agent ID for subsequent steps
                   with open(os.environ["GITHUB_ENV"], "a") as f:
@@ -303,6 +354,7 @@ jobs:
                   ACTOR="${{ github.actor }}"
                   TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
                   AGENT_ID="${DEPLOYED_AGENT_ID:-not deployed}"
+                  CONTAINER="${CONTAINER_IMAGE:-not built}"
 
                   echo "## 🚀 Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
                   echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -313,6 +365,7 @@ jobs:
                   echo "| **Branch**   | \`${REF}\` |" >> "$GITHUB_STEP_SUMMARY"
                   echo "| **Actor**    | ${ACTOR} |" >> "$GITHUB_STEP_SUMMARY"
                   echo "| **Agent ID** | \`${AGENT_ID}\` |" >> "$GITHUB_STEP_SUMMARY"
+                  echo "| **Container** | \`${CONTAINER}\` |" >> "$GITHUB_STEP_SUMMARY"
                   echo "| **Time**     | ${TIMESTAMP} |" >> "$GITHUB_STEP_SUMMARY"
                   echo "" >> "$GITHUB_STEP_SUMMARY"
 

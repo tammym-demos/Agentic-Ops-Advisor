@@ -5,13 +5,13 @@
     "_generator": {
       "name": "bicep",
       "version": "0.40.2.10011",
-      "templateHash": "8362533789900434024"
+      "templateHash": "6109755714757300582"
     }
   },
   "parameters": {
     "location": {
       "type": "string",
-      "defaultValue": "eastus2",
+      "defaultValue": "eastus",
       "metadata": {
         "description": "Azure region for all resources."
       }
@@ -51,6 +51,13 @@
       "defaultValue": "Basic",
       "metadata": {
         "description": "Azure SQL Database SKU."
+      }
+    },
+    "sqlLocation": {
+      "type": "string",
+      "defaultValue": "[parameters('location')]",
+      "metadata": {
+        "description": "Override location for Azure SQL (use when primary region has capacity constraints)."
       }
     },
     "openAiCapacity": {
@@ -367,7 +374,7 @@
             "value": "[variables('identityName')]"
           },
           "location": {
-            "value": "[parameters('location')]"
+            "value": "[parameters('sqlLocation')]"
           },
           "tags": {
             "value": "[parameters('tags')]"
@@ -676,6 +683,9 @@
           "managedIdentityId": {
             "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'identity'), '2025-04-01').outputs.resourceId.value]"
           },
+          "managedIdentityPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'identity'), '2025-04-01').outputs.principalId.value]"
+          },
           "tags": {
             "value": "[parameters('tags')]"
           }
@@ -687,7 +697,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.40.2.10011",
-              "templateHash": "16992651705396724993"
+              "templateHash": "18262438139758444675"
             }
           },
           "parameters": {
@@ -712,12 +722,17 @@
             "managedIdentityId": {
               "type": "string"
             },
+            "managedIdentityPrincipalId": {
+              "type": "string",
+              "defaultValue": ""
+            },
             "tags": {
               "type": "object",
               "defaultValue": {}
             }
           },
           "variables": {
+            "keyVaultReaderRoleId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '21090545-7ca7-4776-b22c-e363652d74d2')]",
             "subscriptionId": "[subscription().subscriptionId]",
             "resourceGroupName": "[resourceGroup().name]"
           },
@@ -756,6 +771,21 @@
                 "softDeleteRetentionInDays": 7,
                 "publicNetworkAccess": "Enabled"
               }
+            },
+            {
+              "condition": "[not(empty(parameters('managedIdentityPrincipalId')))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', take(parameters('hubName'), 18)))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', take(parameters('hubName'), 18))), parameters('managedIdentityPrincipalId'), variables('keyVaultReaderRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[variables('keyVaultReaderRoleId')]",
+                "principalId": "[parameters('managedIdentityPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', take(parameters('hubName'), 18)))]"
+              ]
             },
             {
               "type": "Microsoft.ContainerRegistry/registries",
@@ -806,7 +836,7 @@
               "properties": {
                 "category": "AzureOpenAI",
                 "target": "[parameters('openAiEndpoint')]",
-                "authType": "ManagedIdentity",
+                "authType": "AAD",
                 "isSharedToAll": true,
                 "metadata": {
                   "ApiVersion": "2025-01-01-preview",
@@ -838,7 +868,8 @@
                 "primaryUserAssignedIdentity": "[parameters('managedIdentityId')]"
               },
               "dependsOn": [
-                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('hubName'))]"
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', parameters('hubName'))]",
+                "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', take(parameters('hubName'), 18))), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', take(parameters('hubName'), 18))), parameters('managedIdentityPrincipalId'), variables('keyVaultReaderRoleId')))]"
               ]
             }
           ],
@@ -862,6 +893,20 @@
             "storageId": {
               "type": "string",
               "value": "[resourceId('Microsoft.Storage/storageAccounts', toLower(replace(format('st{0}', parameters('hubName')), '-', '')))]"
+            },
+            "acrLoginServer": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Registry login server URL."
+              },
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', toLower(replace(format('cr{0}', parameters('hubName')), '-', ''))), '2023-11-01-preview').loginServer]"
+            },
+            "acrName": {
+              "type": "string",
+              "metadata": {
+                "description": "Container Registry name."
+              },
+              "value": "[toLower(replace(format('cr{0}', parameters('hubName')), '-', ''))]"
             }
           }
         }
@@ -924,6 +969,20 @@
         "description": "Managed identity client ID."
       },
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'identity'), '2025-04-01').outputs.clientId.value]"
+    },
+    "acrLoginServer": {
+      "type": "string",
+      "metadata": {
+        "description": "Container Registry login server URL (e.g., crhubagentopsprod.azurecr.io)."
+      },
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'aifoundry'), '2025-04-01').outputs.acrLoginServer.value]"
+    },
+    "acrName": {
+      "type": "string",
+      "metadata": {
+        "description": "Container Registry name."
+      },
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'aifoundry'), '2025-04-01').outputs.acrName.value]"
     }
   }
 }

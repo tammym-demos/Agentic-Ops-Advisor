@@ -1,0 +1,343 @@
+/* ============================================================
+   KPI Dashboard — Dashboard-specific styles
+   Extends docs/style.css (dark theme design system)
+   ============================================================ */
+
+/* ---------- Dashboard Container ---------- */
+.dashboard-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  padding: 2rem 1.5rem;
+}
+
+.dashboard-title {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+.dashboard-subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* ---------- Health Score Tiles ---------- */
+.health-score-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+.health-tile {
+  background: var(--gradient-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.25s ease;
+}
+
+.health-tile:hover {
+  border-color: var(--border-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+.health-tile.score-high {
+  border-top: 3px solid var(--accent-green);
+}
+
+.health-tile.score-med {
+  border-top: 3px solid var(--accent-orange);
+}
+
+.health-tile.score-low {
+  border-top: 3px solid #f85149;
+}
+
+.health-score-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.health-tile.score-high .health-score-value {
+  color: var(--accent-green);
+}
+
+.health-tile.score-med .health-score-value {
+  color: var(--accent-orange);
+}
+
+.health-tile.score-low .health-score-value {
+  color: #f85149;
+}
+
+.health-score-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---------- Dashboard Sections ---------- */
+.dashboard-section {
+  margin-bottom: 4rem;
+}
+
+.section-header {
+  margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.kpi-question {
+  display: inline-block;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 0.4rem 0.9rem;
+  background: rgba(88, 166, 255, 0.08);
+  border-left: 3px solid var(--accent-blue);
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.kpi-question::before {
+  content: "💬 ";
+  margin-right: 0.25rem;
+}
+
+/* ---------- Chart Grid ---------- */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chart-card {
+  background: var(--gradient-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.25s ease;
+  position: relative;
+}
+
+.chart-card:hover {
+  border-color: var(--border-accent);
+  background: var(--bg-card-hover);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.chart-card h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+}
+
+.chart-container {
+  position: relative;
+  height: 320px;
+  width: 100%;
+}
+
+.chart-container.tall {
+  height: 400px;
+}
+
+/* ---------- Incident Table ---------- */
+.incident-table-wrapper {
+  overflow-x: auto;
+}
+
+.incident-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.incident-table thead {
+  background: var(--bg-primary);
+  border-bottom: 2px solid var(--border);
+}
+
+.incident-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.incident-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+  color: var(--text-secondary);
+}
+
+.incident-table tr:hover {
+  background: rgba(88, 166, 255, 0.05);
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.severity-P1 {
+  background: rgba(248, 81, 73, 0.2);
+  color: #f85149;
+  border: 1px solid rgba(248, 81, 73, 0.4);
+}
+
+.severity-P2 {
+  background: rgba(240, 136, 62, 0.2);
+  color: var(--accent-orange);
+  border: 1px solid rgba(240, 136, 62, 0.4);
+}
+
+.severity-P3 {
+  background: rgba(210, 153, 34, 0.2);
+  color: #d29922;
+  border: 1px solid rgba(210, 153, 34, 0.4);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-resolved {
+  background: rgba(63, 185, 80, 0.2);
+  color: var(--accent-green);
+}
+
+.status-investigating {
+  background: rgba(240, 136, 62, 0.2);
+  color: var(--accent-orange);
+}
+
+/* ---------- KPI Questions Reference ---------- */
+.kpi-questions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.kpi-question-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: border-color 0.2s ease;
+}
+
+.kpi-question-card:hover {
+  border-color: var(--accent-blue);
+}
+
+.kpi-question-card .category {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-blue);
+  margin-bottom: 0.5rem;
+}
+
+.kpi-question-card .question {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 0.35rem;
+}
+
+.kpi-question-card .insight {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* ---------- Back Link ---------- */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  margin-bottom: 1.5rem;
+  transition: color 0.2s ease;
+}
+
+.back-link:hover {
+  color: var(--accent-blue);
+}
+
+/* ---------- Error Message ---------- */
+.error-message {
+  background: rgba(248, 81, 73, 0.12);
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  color: #f85149;
+  font-size: 0.95rem;
+}
+
+.error-message code {
+  background: rgba(248, 81, 73, 0.15);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+/* ---------- Loading State ---------- */
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.loading::before {
+  content: "⏳ ";
+  font-size: 1.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}

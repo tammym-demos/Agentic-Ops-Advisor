@@ -241,8 +241,10 @@ APPINSIGHTS_CONN=$(get_output appInsightsConnectionString)
 SQL_CONN=$(get_output sqlConnectionString)
 RG_NAME=$(get_output resourceGroupName)
 IDENTITY_CLIENT_ID=$(get_output managedIdentityClientId)
+ACR_LOGIN_SERVER=$(get_output acrLoginServer)
+ACR_NAME=$(get_output acrName)
 
-# ---- Print .env snippet -----------------------------------------------
+# ---- Print .env snippet-----------------------------------------------
 
 echo ""
 echo "================================================================"
@@ -268,6 +270,10 @@ AZURE_SUBSCRIPTION_ID=${SUBSCRIPTION_ID}
 AZURE_RESOURCE_GROUP=${RG_NAME}
 AZURE_LOCATION=${LOCATION}
 AZURE_CLIENT_ID=${IDENTITY_CLIENT_ID}
+
+# === Container Registry ===
+ACR_LOGIN_SERVER=${ACR_LOGIN_SERVER}
+ACR_NAME=${ACR_NAME}
 ENV
 echo "================================================================"
 echo ""

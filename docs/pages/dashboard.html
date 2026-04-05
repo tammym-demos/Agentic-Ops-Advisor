@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KPI Dashboard — Agentic Ops Advisor</title>
+  <meta name="description" content="Infrastructure KPI Dashboard — GPU, Network, Cost, and Incident Analytics" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>" />
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="../style.css" />
+  <link rel="stylesheet" href="dashboard.css" />
+
+  <!-- Chart.js 4.x -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       DISCLAIMER BANNER
+  ═══════════════════════════════════════════ -->
+  <div class="disclaimer-banner" role="banner" aria-label="Important disclaimer">
+    <p>
+      <strong>⚠️ Demo Notice:</strong>
+      Synthetic data only — no real infrastructure or customer data is used. &nbsp;|&nbsp;
+      Work IQ outputs are simulated. Work IQ is in public preview and requires Microsoft 365 Copilot licensing + admin consent.
+    </p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       NAVIGATION
+  ═══════════════════════════════════════════ -->
+  <nav class="site-nav" aria-label="Main navigation">
+    <div class="container">
+      <a href="../index.html" class="nav-brand">
+        <span class="brand-icon" aria-hidden="true">🤖</span>
+        Agentic Ops Advisor
+      </a>
+      <ul class="nav-links" role="list">
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="../index.html#features">Features</a></li>
+        <li><a href="../index.html#architecture">Architecture</a></li>
+        <li><a href="dashboard.html" style="color: var(--accent-blue);">📊 Dashboard</a></li>
+        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub ↗</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════
+       DASHBOARD CONTENT
+  ═══════════════════════════════════════════ -->
+  <main class="dashboard-container" id="dashboard-content">
+    
+    <!-- Header -->
+    <div class="dashboard-header">
+      <a href="../index.html" class="back-link">← Back to Home</a>
+      <h1 class="dashboard-title">Infrastructure KPI Dashboard</h1>
+      <p class="dashboard-subtitle">
+        Real-time operational metrics across GPU utilization, network reliability, cost intelligence, and incident analytics.
+      </p>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading" class="loading">Loading dashboard data...</div>
+
+    <!-- Health Score Tiles -->
+    <section id="health-scores" class="dashboard-section" style="display: none;">
+      <div class="section-header">
+        <h2>Health Score</h2>
+        <div class="kpi-question">What is my overall infrastructure health?</div>
+      </div>
+      <div class="health-score-grid" id="health-tiles"></div>
+    </section>
+
+    <!-- GPU Utilization -->
+    <section id="gpu-section" class="dashboard-section" style="display: none;">
+      <div class="section-header">
+        <h2>GPU Utilization</h2>
+        <div class="kpi-question">What is my average GPU utilization across clusters?</div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Average Utilization by Cluster</h3>
+          <div class="chart-container">
+            <canvas id="gpu-avg-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>Daily GPU Utilization Trend</h3>
+          <div class="chart-container">
+            <canvas id="gpu-trend-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Network Reliability -->
+    <section id="network-section" class="dashboard-section" style="display: none;">
+      <div class="section-header">
+        <h2>Network Reliability</h2>
+        <div class="kpi-question">What is my P50/P95/P99 network latency by site?</div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Latency Percentiles by Site</h3>
+          <div class="chart-container">
+            <canvas id="network-latency-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>Daily Latency Trend by Site</h3>
+          <div class="chart-container">
+            <canvas id="network-trend-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cost Intelligence -->
+    <section id="cost-section" class="dashboard-section" style="display: none;">
+      <div class="section-header">
+        <h2>Cost Intelligence</h2>
+        <div class="kpi-question">What is my total spend by cluster?</div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Total Cost by Cluster</h3>
+          <div class="chart-container">
+            <canvas id="cost-cluster-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>Daily Cost Trend</h3>
+          <div class="chart-container">
+            <canvas id="cost-trend-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Incident Analytics -->
+    <section id="incident-section" class="dashboard-section" style="display: none;">
+      <div class="section-header">
+        <h2>Incident Analytics</h2>
+        <div class="kpi-question">How many open vs. resolved incidents by severity?</div>
+      </div>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Incidents by Severity</h3>
+          <div class="chart-container">
+            <canvas id="incident-doughnut-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h3>Incident List</h3>
+          <div class="incident-table-wrapper">
+            <table class="incident-table" id="incident-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Service</th>
+                  <th>Symptom</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI Questions Reference -->
+    <section id="kpi-questions-section" class="dashboard-section" style="display: none;">
+      <div class="section-header">
+        <h2>KPI Questions Reference</h2>
+        <p class="dashboard-subtitle" style="margin: 0.5rem 0;">
+          All the questions this dashboard helps you answer at a glance.
+        </p>
+      </div>
+      <div class="kpi-questions-grid" id="kpi-questions-grid"></div>
+    </section>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════ -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-brand">Agentic Ops Advisor</div>
+      <div class="footer-note">Powered by Azure AI Foundry Agent Service</div>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════
+       DASHBOARD JAVASCRIPT
+  ═══════════════════════════════════════════ -->
+  <script>
+    // Chart.js global defaults for dark theme
+    Chart.defaults.color = '#8b949e';
+    Chart.defaults.borderColor = '#30363d';
+    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif';
+
+    // Color palette
+    const COLORS = {
+      'cluster-a': '#58a6ff',
+      'cluster-b': '#3fb950',
+      'cluster-c': '#bc8cff',
+      'site-east': '#58a6ff',
+      'site-west': '#f0883e',
+      'site-central': '#3fb950',
+      'P1': '#f85149',
+      'P2': '#f0883e',
+      'P3': '#d29922'
+    };
+
+    // Load dashboard data
+    fetch('assets/dashboard-data.json')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('loading').style.display = 'none';
+        renderHealthScore(data.health_score);
+        renderGPUCharts(data.gpu);
+        renderNetworkCharts(data.network);
+        renderCostCharts(data.cost);
+        renderIncidentCharts(data.incidents);
+        renderKPIQuestions(data.kpi_questions);
+      })
+      .catch(err => {
+        console.error('Failed to load dashboard data:', err);
+        document.getElementById('loading').innerHTML = 
+          '<div class="error-message">⚠️ Failed to load dashboard data.<br>Run: <code>python scripts/export_dashboard_data.py</code></div>';
+      });
+
+    // Render Health Score Tiles
+    function renderHealthScore(healthData) {
+      const section = document.getElementById('health-scores');
+      section.style.display = 'block';
+
+      const tilesContainer = document.getElementById('health-tiles');
+      const tiles = [
+        { label: 'Overall Health', value: healthData.overall, key: 'overall' },
+        { label: 'GPU', value: healthData.components.gpu, key: 'gpu' },
+        { label: 'Network', value: healthData.components.network, key: 'network' },
+        { label: 'Cost', value: healthData.components.cost, key: 'cost' },
+        { label: 'Incidents', value: healthData.components.incidents, key: 'incidents' }
+      ];
+
+      tiles.forEach(tile => {
+        const scoreClass = tile.value > 0.8 ? 'score-high' : tile.value > 0.5 ? 'score-med' : 'score-low';
+        const tileHTML = `
+          <div class="health-tile ${scoreClass}">
+            <div class="health-score-value">${(tile.value * 100).toFixed(0)}%</div>
+            <div class="health-score-label">${tile.label}</div>
+          </div>
+        `;
+        tilesContainer.innerHTML += tileHTML;
+      });
+    }
+
+    // Render GPU Charts
+    function renderGPUCharts(gpuData) {
+      const section = document.getElementById('gpu-section');
+      section.style.display = 'block';
+
+      // Average Utilization by Cluster (Horizontal Bar)
+      const avgByCluster = gpuData.avg_by_cluster;
+      new Chart(document.getElementById('gpu-avg-chart'), {
+        type: 'bar',
+        data: {
+          labels: avgByCluster.map(d => d.cluster),
+          datasets: [{
+            label: 'Avg Utilization (%)',
+            data: avgByCluster.map(d => d.avg_util),
+            backgroundColor: avgByCluster.map(d => COLORS[d.cluster] || '#58a6ff'),
+            borderWidth: 0
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: '#1c2330',
+              titleColor: '#e6edf3',
+              bodyColor: '#8b949e',
+              borderColor: '#30363d',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: { 
+              beginAtZero: true, 
+              max: 100,
+              grid: { color: '#30363d' }
+            },
+            y: { grid: { display: false } }
+          }
+        }
+      });
+
+      // Daily GPU Utilization Trend (Multi-line)
+      const trendData = gpuData.daily_trend;
+      const clusters = [...new Set(trendData.map(d => d.cluster))];
+      const dates = [...new Set(trendData.map(d => d.date))].sort();
+
+      const datasets = clusters.map(cluster => ({
+        label: cluster,
+        data: dates.map(date => {
+          const entry = trendData.find(d => d.date === date && d.cluster === cluster);
+          return entry ? entry.avg_util : null;
+        }),
+        borderColor: COLORS[cluster] || '#58a6ff',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderWidth: 2
+      }));
+
+      new Chart(document.getElementById('gpu-trend-chart'), {
+        type: 'line',
+        data: { labels: dates, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              display: true,
+              labels: { color: '#8b949e', padding: 12 }
+            },
+            tooltip: {
+              backgroundColor: '#1c2330',
+              titleColor: '#e6edf3',
+              bodyColor: '#8b949e',
+              borderColor: '#30363d',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: { 
+              grid: { color: '#30363d' },
+              ticks: { maxRotation: 45, minRotation: 45 }
+            },
+            y: { 
+              beginAtZero: true,
+              max: 100,
+              grid: { color: '#30363d' }
+            }
+          }
+        }
+      });
+    }
+
+    // Render Network Charts
+    function renderNetworkCharts(networkData) {
+      const section = document.getElementById('network-section');
+      section.style.display = 'block';
+
+      // Latency Percentiles by Site (Grouped Bar)
+      const latencyBySite = networkData.latency_by_site;
+      new Chart(document.getElementById('network-latency-chart'), {
+        type: 'bar',
+        data: {
+          labels: latencyBySite.map(d => d.site),
+          datasets: [
+            {
+              label: 'Avg Latency (ms)',
+              data: latencyBySite.map(d => d.avg_latency),
+              backgroundColor: '#58a6ff'
+            },
+            {
+              label: 'P95 Latency (ms)',
+              data: latencyBySite.map(d => d.p95_latency),
+              backgroundColor: '#f0883e'
+            },
+            {
+              label: 'P99 Latency (ms)',
+              data: latencyBySite.map(d => d.p99_latency),
+              backgroundColor: '#f85149'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              display: true,
+              labels: { color: '#8b949e', padding: 12 }
+            },
+            tooltip: {
+              backgroundColor: '#1c2330',
+              titleColor: '#e6edf3',
+              bodyColor: '#8b949e',
+              borderColor: '#30363d',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: { grid: { display: false } },
+            y: { 
+              beginAtZero: true,
+              grid: { color: '#30363d' }
+            }
+          }
+        }
+      });
+
+      // Daily Latency Trend by Site (Multi-line)
+      const trendData = networkData.daily_trend;
+      const sites = [...new Set(trendData.map(d => d.site))];
+      const dates = [...new Set(trendData.map(d => d.date))].sort();
+
+      const datasets = sites.map(site => ({
+        label: site,
+        data: dates.map(date => {
+          const entry = trendData.find(d => d.date === date && d.site === site);
+          return entry ? entry.avg_latency : null;
+        }),
+        borderColor: COLORS[site] || '#58a6ff',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderWidth: 2
+      }));
+
+      new Chart(document.getElementById('network-trend-chart'), {
+        type: 'line',
+        data: { labels: dates, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              display: true,
+              labels: { color: '#8b949e', padding: 12 }
+            },
+            tooltip: {
+              backgroundColor: '#1c2330',
+              titleColor: '#e6edf3',
+              bodyColor: '#8b949e',
+              borderColor: '#30363d',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: { 
+              grid: { color: '#30363d' },
+              ticks: { maxRotation: 45, minRotation: 45 }
+            },
+            y: { 
+              beginAtZero: true,
+              grid: { color: '#30363d' }
+            }
+          }
+        }
+      });
+    }
+
+    // Render Cost Charts
+    function renderCostCharts(costData) {
+      const section = document.getElementById('cost-section');
+      section.style.display = 'block';
+
+      // Total Cost by Cluster (Horizontal Bar with Stacked Token Cost)
+      const costByCluster = costData.total_by_cluster;
+      new Chart(document.getElementById('cost-cluster-chart'), {
+        type: 'bar',
+        data: {
+          labels: costByCluster.map(d => d.cluster),
+          datasets: [
+            {
+              label: 'Compute Cost ($)',
+              data: costByCluster.map(d => d.total_cost - d.total_token_cost),
+              backgroundColor: '#58a6ff'
+            },
+            {
+              label: 'Token Cost ($)',
+              data: costByCluster.map(d => d.total_token_cost),
+              backgroundColor: '#bc8cff'
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              display: true,
+              labels: { color: '#8b949e', padding: 12 }
+            },
+            tooltip: {
+              backgroundColor: '#1c2330',
+              titleColor: '#e6edf3',
+              bodyColor: '#8b949e',
+              borderColor: '#30363d',
+              borderWidth: 1
+            }
+          },
+          scales: {
+            x: { 
+              stacked: true,
+              beginAtZero: true,
+              grid: { color: '#30363d' }
+            },
+            y: { 
+              stacked: true,
+              grid: { display: false }
+            }
+          }
+        }
+      });
+
+      // Daily Cost Trend (Line)
+      const trendData = costData.daily_trend;
+      const clusters = [...new Set(trendData.map(d => d.cluster))];
+      const dates = [...new Set(trendData.map(d => d.date))].sort();
+
+      const datasets = clusters.map(cluster => ({
+        label: cluster,
+        data: dates.map(date => {
+          const entry = trendData.find(d => d.date === date && d.cluster === cluster);
+          return entry ? entry.daily_cost : null;
+        }),
+        borderColor: COLORS[cluster] || '#58a6ff',
+        backgroundColor: 'transparent',
+        tension: 0.3,
+        borderWidth: 2
+      }));
+
+      new Chart(document.getElementById('cost-trend-chart'), {
+        type: 'line',
+        data: { labels: dates, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              display: true,
+              labels: { color: '#8b949e', padding: 12 }
+            },
+            tooltip: {
+              backgroundColor: '#1c2330',
+              titleColor: '#e6edf3',
+              bodyColor: '#8b949e',
+              borderColor: '#30363d',
+              borderWidth: 1,
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': $' + context.parsed.y.toFixed(2);
+                }
+              }
+            }
+          },
+          scales: {
+            x: { 
+              grid: { color: '#30363d' },
+              ticks: { maxRotation: 45, minRotation: 45 }
+            },
+            y: { 
+              beginAtZero: true,
+              grid: { color: '#30363d' },
+              ticks: {
+                callback: function(value) {
+                  return '$' + value;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Render Incident Charts
+    function renderIncidentCharts(incidentData) {
+      const section = document.getElementById('incident-section');
+      section.style.display = 'block';
+
+      // Incidents by Severity (Doughnut)
+      const summary = incidentData.summary;
+      const severities = summary.map(s => s.severity);
+      const totals = summary.map(s => s.open + s.resolved);
+
+      new Chart(document.getElementById('incident-doughnut-chart'), {
+        type: 'doughnut',
+        data: {
+          labels: severities,
+          datasets: [{
+            data: totals,
+            backgroundColor: severities.map(s => COLORS[s]),
+            borderWidth: 2,
+            borderColor: '#1c2330'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { 
+              display: true,
+              position: 'right',
+              labels: { color: '#8b949e', padding: 12 }
+            },
+            tooltip: {
+              backgroundColor: '#1c2330',
+              titleColor: '#e6edf3',
+              bodyColor: '#8b949e',
+              borderColor: '#30363d',
+              borderWidth: 1
+            }
+          }
+        }
+      });
+
+      // Incident Table
+      const tableBody = document.querySelector('#incident-table tbody');
+      incidentData.list.slice(0, 10).forEach(incident => {
+        const row = `
+          <tr>
+            <td>${new Date(incident.ts).toLocaleString()}</td>
+            <td>${incident.service}</td>
+            <td>${incident.symptom}</td>
+            <td><span class="severity-badge severity-${incident.severity}">${incident.severity}</span></td>
+            <td><span class="status-badge status-${incident.status}">${incident.status}</span></td>
+          </tr>
+        `;
+        tableBody.innerHTML += row;
+      });
+    }
+
+    // Render KPI Questions Reference
+    function renderKPIQuestions(questions) {
+      const section = document.getElementById('kpi-questions-section');
+      section.style.display = 'block';
+
+      const grid = document.getElementById('kpi-questions-grid');
+      questions.forEach(q => {
+        const card = `
+          <div class="kpi-question-card">
+            <div class="category">${q.category}</div>
+            <div class="question">${q.question}</div>
+            <div class="insight">${q.insight}</div>
+          </div>
+        `;
+        grid.innerHTML += card;
+      });
+    }
+  </script>
+
+</body>
+</html>

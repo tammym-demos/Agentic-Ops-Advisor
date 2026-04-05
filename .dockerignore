@@ -1,0 +1,78 @@
+# === Docker build context exclusions ===
+# Keep the build context small and avoid leaking secrets.
+
+# Version control
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment / secrets
+.env
+.env.*
+*.local
+
+# Pre-built databases (rebuilt at build time)
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation & non-runtime assets
+docs/
+monitoring/
+infra/
+.squad/
+customerfriendly-plan.md
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test / coverage artifacts
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.tox/
+.nox/
+
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# Node (if any)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Eval results (generated, not needed in image)
+eval/results/
+eval/*_results.json
+
+# Misc
+*.log
+*.tmp
+*.bak
+
+# Copilot session state
+.copilot/

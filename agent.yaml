@@ -1,0 +1,242 @@
+# =============================================================================
+# Agentic Ops Advisor — Azure AI Foundry Agent Service Manifest
+# =============================================================================
+# This manifest defines the container-based agent deployment for the Agentic
+# Ops Advisor on Azure AI Foundry Agent Service.
+#
+# Usage:
+#   az ai agent create --file agent.yaml
+#
+# Prerequisites:
+#   - Container image pushed to ACR
+#   - Azure OpenAI deployment (gpt-4.1) provisioned
+#   - Environment variables configured (see env section below)
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Agent metadata
+# ---------------------------------------------------------------------------
+name: agentic-ops-advisor
+description: >
+  Governed AI agent that performs root-cause and change-context reasoning over
+  infrastructure telemetry and operator intent. Combines deep telemetry analysis
+  with organisational change context to drive self-driving operations.
+  All data is synthetic — for demo purposes only.
+version: "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Model configuration
+# ---------------------------------------------------------------------------
+model:
+  # Azure OpenAI deployment name for the backing LLM
+  deployment: gpt-4.1
+  api_version: "2025-01-01-preview"
+
+# ---------------------------------------------------------------------------
+# System prompt
+# ---------------------------------------------------------------------------
+# The system prompt is loaded from a file to keep this manifest readable.
+# It defines the agent persona, response format, confidence levels, and
+# tool-usage instructions.
+instructions_file: agent/system_prompt.md
+
+# ---------------------------------------------------------------------------
+# Tool definitions
+# ---------------------------------------------------------------------------
+# Three tool surfaces: telemetry queries, work-context lookups, and action
+# stubs.  Schemas follow the OpenAI function-calling JSON Schema format.
+tools:
+  # --- 1. SQL Telemetry Tool -----------------------------------------------
+  # Queries synthetic infrastructure telemetry (GPU, network, cost, incidents)
+  # from SQLite (local dev) or Azure SQL (production).
+  - type: function
+    function:
+      name: query_telemetry
+      description: >
+        Query synthetic infrastructure telemetry data stored in SQL.
+        Covers GPU utilisation, network throughput/latency, cost, and incidents.
+        All data is synthetic and for demo purposes only.
+      parameters:
+        type: object
+        properties:
+          table:
+            type: string
+            description: >
+              Return raw rows from one of the telemetry tables:
+              'telemetry_gpu', 'telemetry_net', 'telemetry_cost', 'incidents'.
+            enum:
+              - telemetry_gpu
+              - telemetry_net
+              - telemetry_cost
+              - incidents
+          aggregate:
+            type: string
+            description: >
+              Run a pre-built aggregate query. Available keys:
+              cost_by_service_24h, gpu_avg_util_1h, gpu_avg_util_24h,
+              net_avg_latency_1h, open_incidents, recent_incidents_24h.
+              Use 'list_aggregates' pseudo-value to see descriptions.
+          sql:
+            type: string
+            description: >
+              A raw SELECT statement scoped to the known telemetry tables.
+              Only SELECT is permitted; no DDL or DML.
+          limit:
+            type: integer
+            description: >
+              Maximum number of rows to return for plain table queries
+              (default 100, max 500).
+            default: 100
+            minimum: 1
+            maximum: 500
+          filters:
+            type: object
+            description: >
+              Optional key/value pairs applied as equality WHERE filters for
+              plain table queries.
+              Example: {"host": "gpu-node-01", "severity": "P1"}
+            additionalProperties:
+              type: string
+        required: []
+        additionalProperties: false
+
+  # --- 2. Work IQ Context Tool ---------------------------------------------
+  # Returns synthetic work context: change events, decisions, ownership, and
+  # runbooks.  Gated by the ENABLE_WORK_IQ feature flag.
+  - type: function
+    function:
+      name: get_work_context
+      description: >
+        Return synthetic work context for a given service — change events,
+        decisions, ownership records, and runbook links.  Simulates Work IQ
+        outputs.  Work IQ is in public preview and requires Microsoft 365
+        Copilot licensing + admin consent.  All data is synthetic.
+      parameters:
+        type: object
+        properties:
+          service:
+            type: string
+            description: >
+              Service or domain to retrieve context for (e.g. 'gpu-cluster',
+              'network', 'cost').  If omitted, returns context for all known
+              services.
+        required: []
+        additionalProperties: false
+
+  # --- 3a. Action Stub — propose_change ------------------------------------
+  # Proposes a simulated infrastructure change based on the operator's plan.
+  - type: function
+    function:
+      name: propose_change
+      description: >
+        Propose a simulated infrastructure change based on an operator's plan.
+        Returns a structured change request payload including risk level,
+        affected services, rollback plan, and estimated duration.
+        When risk is high, a human approval gate is included.
+        NEVER modifies external systems — purely simulated.
+      parameters:
+        type: object
+        properties:
+          plan:
+            type: string
+            description: >
+              Free-text description of the intended infrastructure change.
+        required:
+          - plan
+        additionalProperties: false
+
+  # --- 3b. Action Stub — request_approval ----------------------------------
+  # Returns simulated approval status for a previously proposed change.
+  - type: function
+    function:
+      name: request_approval
+      description: >
+        Return a simulated approval status for a previously proposed change
+        request.  Cycles through 'pending', 'approved', and 'rejected' states
+        for demo purposes.  NEVER contacts a real approval system — purely
+        simulated.
+      parameters:
+        type: object
+        properties:
+          change_id:
+            type: string
+            description: >
+              The UUID of the change request returned by propose_change.
+          approver:
+            type: string
+            description: >
+              Email address or alias of the intended approver.
+        required:
+          - change_id
+          - approver
+        additionalProperties: false
+
+# ---------------------------------------------------------------------------
+# Container configuration
+# ---------------------------------------------------------------------------
+# The agent runs as a containerised application.  The image is built from the
+# project Dockerfile and pushed to Azure Container Registry (ACR).
+container:
+  # ACR image reference — uses variable substitution for CI/CD flexibility.
+  image: ${ACR_LOGIN_SERVER}/agentic-ops-advisor:${CONTAINER_IMAGE_TAG}
+
+  # Port the container exposes for the agent HTTP server.
+  port: 8080
+
+  # Health check endpoint used by the platform to verify container readiness.
+  health:
+    path: /health
+    interval_seconds: 30
+    timeout_seconds: 5
+    failure_threshold: 3
+
+  # Resource requests for the container runtime.
+  resources:
+    requests:
+      cpu: "1.0"
+      memory: "2Gi"
+    limits:
+      cpu: "2.0"
+      memory: "4Gi"
+
+  # Environment variables injected into the container at runtime.
+  # Secrets should be supplied via Azure Key Vault references or platform
+  # secret injection — never hard-code credentials here.
+  environment:
+    # --- Database -----------------------------------------------------------
+    - name: DB_MODE
+      value: sqlite
+    - name: DB_CONNECTION_STRING
+      secret: true                       # Injected from platform secrets
+    - name: SQLITE_DB_PATH
+      value: /app/data/telemetry.db
+
+    # --- Azure AI / OpenAI --------------------------------------------------
+    - name: AZURE_AI_PROJECT_CONNECTION_STRING
+      secret: true                       # Injected from platform secrets
+    - name: AZURE_OPENAI_ENDPOINT
+      secret: true                       # Injected from platform secrets
+    - name: AZURE_OPENAI_DEPLOYMENT
+      value: gpt-4.1
+    - name: AZURE_OPENAI_API_VERSION
+      value: "2025-01-01-preview"
+
+    # --- Feature flags ------------------------------------------------------
+    - name: ENABLE_WORK_IQ
+      value: "true"
+    - name: ENABLE_MCP
+      value: "false"
+
+    # --- Observability ------------------------------------------------------
+    - name: APPLICATIONINSIGHTS_CONNECTION_STRING
+      secret: true                       # Injected from platform secrets
+    - name: AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED
+      value: "false"                     # Keep content recording OFF by default
+
+    # --- Azure deployment metadata ------------------------------------------
+    - name: AZURE_SUBSCRIPTION_ID
+      value: e0b48569-71a2-40fe-9b7a-2fb859f31288
+    - name: AZURE_RESOURCE_GROUP
+      value: rg-agentic-ops-advisor
+    - name: AZURE_LOCATION
+      value: eastus2

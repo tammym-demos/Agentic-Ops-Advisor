@@ -1,0 +1,1786 @@
+{
+  "generated_at": "2026-04-05T17:47:52.725616+00:00",
+  "disclaimer": "All data is synthetic \u2014 for demo purposes only.",
+  "gpu": {
+    "avg_by_cluster": [
+      {
+        "cluster": "cluster-a",
+        "avg_util": 72.16,
+        "max_util": 89.99,
+        "min_util": 5.17,
+        "avg_mem": 62.08
+      },
+      {
+        "cluster": "cluster-b",
+        "avg_util": 72.44,
+        "max_util": 89.99,
+        "min_util": 55.01,
+        "avg_mem": 62.53
+      },
+      {
+        "cluster": "cluster-c",
+        "avg_util": 72.49,
+        "max_util": 90.0,
+        "min_util": 55.0,
+        "avg_mem": 62.56
+      }
+    ],
+    "daily_trend": [
+      {
+        "date": "2025-03-01",
+        "cluster": "cluster-a",
+        "avg_util": 72.45
+      },
+      {
+        "date": "2025-03-01",
+        "cluster": "cluster-b",
+        "avg_util": 71.79
+      },
+      {
+        "date": "2025-03-01",
+        "cluster": "cluster-c",
+        "avg_util": 73.54
+      },
+      {
+        "date": "2025-03-02",
+        "cluster": "cluster-a",
+        "avg_util": 73.74
+      },
+      {
+        "date": "2025-03-02",
+        "cluster": "cluster-b",
+        "avg_util": 73.44
+      },
+      {
+        "date": "2025-03-02",
+        "cluster": "cluster-c",
+        "avg_util": 72.61
+      },
+      {
+        "date": "2025-03-03",
+        "cluster": "cluster-a",
+        "avg_util": 74.47
+      },
+      {
+        "date": "2025-03-03",
+        "cluster": "cluster-b",
+        "avg_util": 72.92
+      },
+      {
+        "date": "2025-03-03",
+        "cluster": "cluster-c",
+        "avg_util": 70.26
+      },
+      {
+        "date": "2025-03-04",
+        "cluster": "cluster-a",
+        "avg_util": 72.36
+      },
+      {
+        "date": "2025-03-04",
+        "cluster": "cluster-b",
+        "avg_util": 71.36
+      },
+      {
+        "date": "2025-03-04",
+        "cluster": "cluster-c",
+        "avg_util": 71.17
+      },
+      {
+        "date": "2025-03-05",
+        "cluster": "cluster-a",
+        "avg_util": 72.76
+      },
+      {
+        "date": "2025-03-05",
+        "cluster": "cluster-b",
+        "avg_util": 71.81
+      },
+      {
+        "date": "2025-03-05",
+        "cluster": "cluster-c",
+        "avg_util": 74.3
+      },
+      {
+        "date": "2025-03-06",
+        "cluster": "cluster-a",
+        "avg_util": 73.24
+      },
+      {
+        "date": "2025-03-06",
+        "cluster": "cluster-b",
+        "avg_util": 72.46
+      },
+      {
+        "date": "2025-03-06",
+        "cluster": "cluster-c",
+        "avg_util": 72.35
+      },
+      {
+        "date": "2025-03-07",
+        "cluster": "cluster-a",
+        "avg_util": 71.41
+      },
+      {
+        "date": "2025-03-07",
+        "cluster": "cluster-b",
+        "avg_util": 73.53
+      },
+      {
+        "date": "2025-03-07",
+        "cluster": "cluster-c",
+        "avg_util": 73.78
+      },
+      {
+        "date": "2025-03-08",
+        "cluster": "cluster-a",
+        "avg_util": 71.64
+      },
+      {
+        "date": "2025-03-08",
+        "cluster": "cluster-b",
+        "avg_util": 72.98
+      },
+      {
+        "date": "2025-03-08",
+        "cluster": "cluster-c",
+        "avg_util": 71.16
+      },
+      {
+        "date": "2025-03-09",
+        "cluster": "cluster-a",
+        "avg_util": 71.24
+      },
+      {
+        "date": "2025-03-09",
+        "cluster": "cluster-b",
+        "avg_util": 71.94
+      },
+      {
+        "date": "2025-03-09",
+        "cluster": "cluster-c",
+        "avg_util": 72.54
+      },
+      {
+        "date": "2025-03-10",
+        "cluster": "cluster-a",
+        "avg_util": 73.52
+      },
+      {
+        "date": "2025-03-10",
+        "cluster": "cluster-b",
+        "avg_util": 72.03
+      },
+      {
+        "date": "2025-03-10",
+        "cluster": "cluster-c",
+        "avg_util": 73.2
+      },
+      {
+        "date": "2025-03-11",
+        "cluster": "cluster-a",
+        "avg_util": 72.56
+      },
+      {
+        "date": "2025-03-11",
+        "cluster": "cluster-b",
+        "avg_util": 71.48
+      },
+      {
+        "date": "2025-03-11",
+        "cluster": "cluster-c",
+        "avg_util": 71.04
+      },
+      {
+        "date": "2025-03-12",
+        "cluster": "cluster-a",
+        "avg_util": 72.98
+      },
+      {
+        "date": "2025-03-12",
+        "cluster": "cluster-b",
+        "avg_util": 73.92
+      },
+      {
+        "date": "2025-03-12",
+        "cluster": "cluster-c",
+        "avg_util": 71.34
+      },
+      {
+        "date": "2025-03-13",
+        "cluster": "cluster-a",
+        "avg_util": 71.8
+      },
+      {
+        "date": "2025-03-13",
+        "cluster": "cluster-b",
+        "avg_util": 73.35
+      },
+      {
+        "date": "2025-03-13",
+        "cluster": "cluster-c",
+        "avg_util": 71.1
+      },
+      {
+        "date": "2025-03-14",
+        "cluster": "cluster-a",
+        "avg_util": 71.04
+      },
+      {
+        "date": "2025-03-14",
+        "cluster": "cluster-b",
+        "avg_util": 73.29
+      },
+      {
+        "date": "2025-03-14",
+        "cluster": "cluster-c",
+        "avg_util": 73.04
+      },
+      {
+        "date": "2025-03-15",
+        "cluster": "cluster-a",
+        "avg_util": 71.56
+      },
+      {
+        "date": "2025-03-15",
+        "cluster": "cluster-b",
+        "avg_util": 74.24
+      },
+      {
+        "date": "2025-03-15",
+        "cluster": "cluster-c",
+        "avg_util": 72.87
+      },
+      {
+        "date": "2025-03-16",
+        "cluster": "cluster-a",
+        "avg_util": 73.66
+      },
+      {
+        "date": "2025-03-16",
+        "cluster": "cluster-b",
+        "avg_util": 74.36
+      },
+      {
+        "date": "2025-03-16",
+        "cluster": "cluster-c",
+        "avg_util": 73.04
+      },
+      {
+        "date": "2025-03-17",
+        "cluster": "cluster-a",
+        "avg_util": 73.47
+      },
+      {
+        "date": "2025-03-17",
+        "cluster": "cluster-b",
+        "avg_util": 70.41
+      },
+      {
+        "date": "2025-03-17",
+        "cluster": "cluster-c",
+        "avg_util": 72.15
+      },
+      {
+        "date": "2025-03-18",
+        "cluster": "cluster-a",
+        "avg_util": 71.72
+      },
+      {
+        "date": "2025-03-18",
+        "cluster": "cluster-b",
+        "avg_util": 70.68
+      },
+      {
+        "date": "2025-03-18",
+        "cluster": "cluster-c",
+        "avg_util": 73.74
+      },
+      {
+        "date": "2025-03-19",
+        "cluster": "cluster-a",
+        "avg_util": 57.36
+      },
+      {
+        "date": "2025-03-19",
+        "cluster": "cluster-b",
+        "avg_util": 71.28
+      },
+      {
+        "date": "2025-03-19",
+        "cluster": "cluster-c",
+        "avg_util": 73.38
+      },
+      {
+        "date": "2025-03-20",
+        "cluster": "cluster-a",
+        "avg_util": 70.84
+      },
+      {
+        "date": "2025-03-20",
+        "cluster": "cluster-b",
+        "avg_util": 72.43
+      },
+      {
+        "date": "2025-03-20",
+        "cluster": "cluster-c",
+        "avg_util": 71.2
+      },
+      {
+        "date": "2025-03-21",
+        "cluster": "cluster-a",
+        "avg_util": 74.3
+      },
+      {
+        "date": "2025-03-21",
+        "cluster": "cluster-b",
+        "avg_util": 74.51
+      },
+      {
+        "date": "2025-03-21",
+        "cluster": "cluster-c",
+        "avg_util": 73.96
+      },
+      {
+        "date": "2025-03-22",
+        "cluster": "cluster-a",
+        "avg_util": 72.89
+      },
+      {
+        "date": "2025-03-22",
+        "cluster": "cluster-b",
+        "avg_util": 71.65
+      },
+      {
+        "date": "2025-03-22",
+        "cluster": "cluster-c",
+        "avg_util": 73.25
+      },
+      {
+        "date": "2025-03-23",
+        "cluster": "cluster-a",
+        "avg_util": 72.58
+      },
+      {
+        "date": "2025-03-23",
+        "cluster": "cluster-b",
+        "avg_util": 71.93
+      },
+      {
+        "date": "2025-03-23",
+        "cluster": "cluster-c",
+        "avg_util": 72.77
+      },
+      {
+        "date": "2025-03-24",
+        "cluster": "cluster-a",
+        "avg_util": 72.56
+      },
+      {
+        "date": "2025-03-24",
+        "cluster": "cluster-b",
+        "avg_util": 72.58
+      },
+      {
+        "date": "2025-03-24",
+        "cluster": "cluster-c",
+        "avg_util": 72.74
+      },
+      {
+        "date": "2025-03-25",
+        "cluster": "cluster-a",
+        "avg_util": 72.05
+      },
+      {
+        "date": "2025-03-25",
+        "cluster": "cluster-b",
+        "avg_util": 72.89
+      },
+      {
+        "date": "2025-03-25",
+        "cluster": "cluster-c",
+        "avg_util": 72.86
+      },
+      {
+        "date": "2025-03-26",
+        "cluster": "cluster-a",
+        "avg_util": 73.25
+      },
+      {
+        "date": "2025-03-26",
+        "cluster": "cluster-b",
+        "avg_util": 72.04
+      },
+      {
+        "date": "2025-03-26",
+        "cluster": "cluster-c",
+        "avg_util": 72.93
+      },
+      {
+        "date": "2025-03-27",
+        "cluster": "cluster-a",
+        "avg_util": 72.61
+      },
+      {
+        "date": "2025-03-27",
+        "cluster": "cluster-b",
+        "avg_util": 73.38
+      },
+      {
+        "date": "2025-03-27",
+        "cluster": "cluster-c",
+        "avg_util": 72.6
+      },
+      {
+        "date": "2025-03-28",
+        "cluster": "cluster-a",
+        "avg_util": 74.49
+      },
+      {
+        "date": "2025-03-28",
+        "cluster": "cluster-b",
+        "avg_util": 72.43
+      },
+      {
+        "date": "2025-03-28",
+        "cluster": "cluster-c",
+        "avg_util": 71.97
+      },
+      {
+        "date": "2025-03-29",
+        "cluster": "cluster-a",
+        "avg_util": 72.43
+      },
+      {
+        "date": "2025-03-29",
+        "cluster": "cluster-b",
+        "avg_util": 71.12
+      },
+      {
+        "date": "2025-03-29",
+        "cluster": "cluster-c",
+        "avg_util": 71.45
+      },
+      {
+        "date": "2025-03-30",
+        "cluster": "cluster-a",
+        "avg_util": 73.84
+      },
+      {
+        "date": "2025-03-30",
+        "cluster": "cluster-b",
+        "avg_util": 70.97
+      },
+      {
+        "date": "2025-03-30",
+        "cluster": "cluster-c",
+        "avg_util": 72.45
+      }
+    ],
+    "anomalies": [
+      {
+        "date": "2025-03-19",
+        "cluster": "cluster-a",
+        "node": "node-1",
+        "avg_util": 9.32
+      }
+    ]
+  },
+  "network": {
+    "latency_by_site": [
+      {
+        "site": "site-central",
+        "avg_latency": 14.89,
+        "p95_latency": 24.04,
+        "p99_latency": 24.81,
+        "avg_loss": 0.25
+      },
+      {
+        "site": "site-east",
+        "avg_latency": 15.28,
+        "p95_latency": 24.27,
+        "p99_latency": 24.77,
+        "avg_loss": 0.25
+      },
+      {
+        "site": "site-west",
+        "avg_latency": 22.53,
+        "p95_latency": 24.58,
+        "p99_latency": 283.63,
+        "avg_loss": 0.56
+      }
+    ],
+    "daily_trend": [
+      {
+        "date": "2025-03-01",
+        "site": "site-central",
+        "avg_latency": 16.49,
+        "avg_throughput": 9.07
+      },
+      {
+        "date": "2025-03-01",
+        "site": "site-east",
+        "avg_latency": 14.2,
+        "avg_throughput": 8.94
+      },
+      {
+        "date": "2025-03-01",
+        "site": "site-west",
+        "avg_latency": 16.95,
+        "avg_throughput": 9.02
+      },
+      {
+        "date": "2025-03-02",
+        "site": "site-central",
+        "avg_latency": 12.91,
+        "avg_throughput": 8.97
+      },
+      {
+        "date": "2025-03-02",
+        "site": "site-east",
+        "avg_latency": 15.08,
+        "avg_throughput": 9.1
+      },
+      {
+        "date": "2025-03-02",
+        "site": "site-west",
+        "avg_latency": 13.63,
+        "avg_throughput": 9.25
+      },
+      {
+        "date": "2025-03-03",
+        "site": "site-central",
+        "avg_latency": 15.55,
+        "avg_throughput": 9.02
+      },
+      {
+        "date": "2025-03-03",
+        "site": "site-east",
+        "avg_latency": 15.2,
+        "avg_throughput": 8.88
+      },
+      {
+        "date": "2025-03-03",
+        "site": "site-west",
+        "avg_latency": 15.37,
+        "avg_throughput": 9.04
+      },
+      {
+        "date": "2025-03-04",
+        "site": "site-central",
+        "avg_latency": 14.89,
+        "avg_throughput": 9.12
+      },
+      {
+        "date": "2025-03-04",
+        "site": "site-east",
+        "avg_latency": 16.18,
+        "avg_throughput": 8.97
+      },
+      {
+        "date": "2025-03-04",
+        "site": "site-west",
+        "avg_latency": 14.77,
+        "avg_throughput": 9.18
+      },
+      {
+        "date": "2025-03-05",
+        "site": "site-central",
+        "avg_latency": 15.81,
+        "avg_throughput": 8.89
+      },
+      {
+        "date": "2025-03-05",
+        "site": "site-east",
+        "avg_latency": 15.42,
+        "avg_throughput": 9.13
+      },
+      {
+        "date": "2025-03-05",
+        "site": "site-west",
+        "avg_latency": 13.42,
+        "avg_throughput": 9.08
+      },
+      {
+        "date": "2025-03-06",
+        "site": "site-central",
+        "avg_latency": 14.73,
+        "avg_throughput": 8.96
+      },
+      {
+        "date": "2025-03-06",
+        "site": "site-east",
+        "avg_latency": 17.0,
+        "avg_throughput": 9.11
+      },
+      {
+        "date": "2025-03-06",
+        "site": "site-west",
+        "avg_latency": 13.58,
+        "avg_throughput": 9.09
+      },
+      {
+        "date": "2025-03-07",
+        "site": "site-central",
+        "avg_latency": 15.15,
+        "avg_throughput": 8.92
+      },
+      {
+        "date": "2025-03-07",
+        "site": "site-east",
+        "avg_latency": 15.52,
+        "avg_throughput": 8.78
+      },
+      {
+        "date": "2025-03-07",
+        "site": "site-west",
+        "avg_latency": 15.14,
+        "avg_throughput": 9.12
+      },
+      {
+        "date": "2025-03-08",
+        "site": "site-central",
+        "avg_latency": 14.24,
+        "avg_throughput": 9.11
+      },
+      {
+        "date": "2025-03-08",
+        "site": "site-east",
+        "avg_latency": 15.4,
+        "avg_throughput": 9.13
+      },
+      {
+        "date": "2025-03-08",
+        "site": "site-west",
+        "avg_latency": 16.36,
+        "avg_throughput": 8.98
+      },
+      {
+        "date": "2025-03-09",
+        "site": "site-central",
+        "avg_latency": 14.05,
+        "avg_throughput": 9.06
+      },
+      {
+        "date": "2025-03-09",
+        "site": "site-east",
+        "avg_latency": 14.97,
+        "avg_throughput": 9.01
+      },
+      {
+        "date": "2025-03-09",
+        "site": "site-west",
+        "avg_latency": 14.14,
+        "avg_throughput": 8.76
+      },
+      {
+        "date": "2025-03-10",
+        "site": "site-central",
+        "avg_latency": 14.02,
+        "avg_throughput": 9.15
+      },
+      {
+        "date": "2025-03-10",
+        "site": "site-east",
+        "avg_latency": 16.01,
+        "avg_throughput": 8.76
+      },
+      {
+        "date": "2025-03-10",
+        "site": "site-west",
+        "avg_latency": 14.0,
+        "avg_throughput": 8.99
+      },
+      {
+        "date": "2025-03-11",
+        "site": "site-central",
+        "avg_latency": 16.34,
+        "avg_throughput": 9.05
+      },
+      {
+        "date": "2025-03-11",
+        "site": "site-east",
+        "avg_latency": 17.11,
+        "avg_throughput": 8.8
+      },
+      {
+        "date": "2025-03-11",
+        "site": "site-west",
+        "avg_latency": 14.18,
+        "avg_throughput": 9.1
+      },
+      {
+        "date": "2025-03-12",
+        "site": "site-central",
+        "avg_latency": 14.05,
+        "avg_throughput": 9.32
+      },
+      {
+        "date": "2025-03-12",
+        "site": "site-east",
+        "avg_latency": 16.74,
+        "avg_throughput": 8.94
+      },
+      {
+        "date": "2025-03-12",
+        "site": "site-west",
+        "avg_latency": 13.92,
+        "avg_throughput": 9.05
+      },
+      {
+        "date": "2025-03-13",
+        "site": "site-central",
+        "avg_latency": 16.86,
+        "avg_throughput": 9.13
+      },
+      {
+        "date": "2025-03-13",
+        "site": "site-east",
+        "avg_latency": 14.91,
+        "avg_throughput": 8.7
+      },
+      {
+        "date": "2025-03-13",
+        "site": "site-west",
+        "avg_latency": 13.92,
+        "avg_throughput": 8.96
+      },
+      {
+        "date": "2025-03-14",
+        "site": "site-central",
+        "avg_latency": 12.89,
+        "avg_throughput": 9.16
+      },
+      {
+        "date": "2025-03-14",
+        "site": "site-east",
+        "avg_latency": 14.15,
+        "avg_throughput": 9.08
+      },
+      {
+        "date": "2025-03-14",
+        "site": "site-west",
+        "avg_latency": 14.56,
+        "avg_throughput": 8.99
+      },
+      {
+        "date": "2025-03-15",
+        "site": "site-central",
+        "avg_latency": 13.37,
+        "avg_throughput": 8.98
+      },
+      {
+        "date": "2025-03-15",
+        "site": "site-east",
+        "avg_latency": 15.46,
+        "avg_throughput": 8.82
+      },
+      {
+        "date": "2025-03-15",
+        "site": "site-west",
+        "avg_latency": 14.28,
+        "avg_throughput": 9.12
+      },
+      {
+        "date": "2025-03-16",
+        "site": "site-central",
+        "avg_latency": 14.44,
+        "avg_throughput": 8.95
+      },
+      {
+        "date": "2025-03-16",
+        "site": "site-east",
+        "avg_latency": 15.05,
+        "avg_throughput": 9.06
+      },
+      {
+        "date": "2025-03-16",
+        "site": "site-west",
+        "avg_latency": 17.7,
+        "avg_throughput": 9.05
+      },
+      {
+        "date": "2025-03-17",
+        "site": "site-central",
+        "avg_latency": 16.45,
+        "avg_throughput": 9.12
+      },
+      {
+        "date": "2025-03-17",
+        "site": "site-east",
+        "avg_latency": 14.65,
+        "avg_throughput": 9.0
+      },
+      {
+        "date": "2025-03-17",
+        "site": "site-west",
+        "avg_latency": 14.75,
+        "avg_throughput": 9.12
+      },
+      {
+        "date": "2025-03-18",
+        "site": "site-central",
+        "avg_latency": 15.81,
+        "avg_throughput": 9.02
+      },
+      {
+        "date": "2025-03-18",
+        "site": "site-east",
+        "avg_latency": 13.98,
+        "avg_throughput": 9.01
+      },
+      {
+        "date": "2025-03-18",
+        "site": "site-west",
+        "avg_latency": 15.8,
+        "avg_throughput": 8.94
+      },
+      {
+        "date": "2025-03-19",
+        "site": "site-central",
+        "avg_latency": 16.95,
+        "avg_throughput": 8.94
+      },
+      {
+        "date": "2025-03-19",
+        "site": "site-east",
+        "avg_latency": 14.89,
+        "avg_throughput": 8.96
+      },
+      {
+        "date": "2025-03-19",
+        "site": "site-west",
+        "avg_latency": 12.17,
+        "avg_throughput": 8.91
+      },
+      {
+        "date": "2025-03-20",
+        "site": "site-central",
+        "avg_latency": 13.98,
+        "avg_throughput": 9.04
+      },
+      {
+        "date": "2025-03-20",
+        "site": "site-east",
+        "avg_latency": 16.48,
+        "avg_throughput": 8.99
+      },
+      {
+        "date": "2025-03-20",
+        "site": "site-west",
+        "avg_latency": 14.96,
+        "avg_throughput": 9.1
+      },
+      {
+        "date": "2025-03-21",
+        "site": "site-central",
+        "avg_latency": 14.86,
+        "avg_throughput": 8.93
+      },
+      {
+        "date": "2025-03-21",
+        "site": "site-east",
+        "avg_latency": 15.1,
+        "avg_throughput": 8.86
+      },
+      {
+        "date": "2025-03-21",
+        "site": "site-west",
+        "avg_latency": 12.99,
+        "avg_throughput": 8.98
+      },
+      {
+        "date": "2025-03-22",
+        "site": "site-central",
+        "avg_latency": 15.79,
+        "avg_throughput": 9.15
+      },
+      {
+        "date": "2025-03-22",
+        "site": "site-east",
+        "avg_latency": 16.23,
+        "avg_throughput": 9.0
+      },
+      {
+        "date": "2025-03-22",
+        "site": "site-west",
+        "avg_latency": 12.73,
+        "avg_throughput": 9.06
+      },
+      {
+        "date": "2025-03-23",
+        "site": "site-central",
+        "avg_latency": 14.31,
+        "avg_throughput": 9.16
+      },
+      {
+        "date": "2025-03-23",
+        "site": "site-east",
+        "avg_latency": 15.12,
+        "avg_throughput": 9.05
+      },
+      {
+        "date": "2025-03-23",
+        "site": "site-west",
+        "avg_latency": 252.22,
+        "avg_throughput": 1.03
+      },
+      {
+        "date": "2025-03-24",
+        "site": "site-central",
+        "avg_latency": 17.28,
+        "avg_throughput": 9.17
+      },
+      {
+        "date": "2025-03-24",
+        "site": "site-east",
+        "avg_latency": 13.12,
+        "avg_throughput": 8.88
+      },
+      {
+        "date": "2025-03-24",
+        "site": "site-west",
+        "avg_latency": 16.46,
+        "avg_throughput": 8.96
+      },
+      {
+        "date": "2025-03-25",
+        "site": "site-central",
+        "avg_latency": 13.53,
+        "avg_throughput": 8.99
+      },
+      {
+        "date": "2025-03-25",
+        "site": "site-east",
+        "avg_latency": 13.77,
+        "avg_throughput": 8.87
+      },
+      {
+        "date": "2025-03-25",
+        "site": "site-west",
+        "avg_latency": 15.5,
+        "avg_throughput": 9.14
+      },
+      {
+        "date": "2025-03-26",
+        "site": "site-central",
+        "avg_latency": 12.55,
+        "avg_throughput": 9.01
+      },
+      {
+        "date": "2025-03-26",
+        "site": "site-east",
+        "avg_latency": 14.48,
+        "avg_throughput": 8.7
+      },
+      {
+        "date": "2025-03-26",
+        "site": "site-west",
+        "avg_latency": 13.93,
+        "avg_throughput": 9.03
+      },
+      {
+        "date": "2025-03-27",
+        "site": "site-central",
+        "avg_latency": 14.12,
+        "avg_throughput": 8.87
+      },
+      {
+        "date": "2025-03-27",
+        "site": "site-east",
+        "avg_latency": 15.51,
+        "avg_throughput": 8.97
+      },
+      {
+        "date": "2025-03-27",
+        "site": "site-west",
+        "avg_latency": 13.89,
+        "avg_throughput": 8.94
+      },
+      {
+        "date": "2025-03-28",
+        "site": "site-central",
+        "avg_latency": 16.9,
+        "avg_throughput": 9.04
+      },
+      {
+        "date": "2025-03-28",
+        "site": "site-east",
+        "avg_latency": 15.98,
+        "avg_throughput": 8.83
+      },
+      {
+        "date": "2025-03-28",
+        "site": "site-west",
+        "avg_latency": 12.78,
+        "avg_throughput": 9.06
+      },
+      {
+        "date": "2025-03-29",
+        "site": "site-central",
+        "avg_latency": 14.39,
+        "avg_throughput": 8.97
+      },
+      {
+        "date": "2025-03-29",
+        "site": "site-east",
+        "avg_latency": 14.12,
+        "avg_throughput": 8.98
+      },
+      {
+        "date": "2025-03-29",
+        "site": "site-west",
+        "avg_latency": 16.49,
+        "avg_throughput": 9.01
+      },
+      {
+        "date": "2025-03-30",
+        "site": "site-central",
+        "avg_latency": 14.03,
+        "avg_throughput": 8.9
+      },
+      {
+        "date": "2025-03-30",
+        "site": "site-east",
+        "avg_latency": 16.5,
+        "avg_throughput": 8.71
+      },
+      {
+        "date": "2025-03-30",
+        "site": "site-west",
+        "avg_latency": 15.42,
+        "avg_throughput": 9.03
+      }
+    ],
+    "anomalies": [
+      {
+        "date": "2025-03-23",
+        "site": "site-west",
+        "max_latency": 311.99,
+        "max_loss": 14.25
+      }
+    ]
+  },
+  "cost": {
+    "total_by_cluster": [
+      {
+        "cluster": "cluster-a",
+        "total_cost": 17764.05,
+        "total_token_cost": 4876.53
+      },
+      {
+        "cluster": "cluster-b",
+        "total_cost": 14194.31,
+        "total_token_cost": 3642.51
+      },
+      {
+        "cluster": "cluster-c",
+        "total_cost": 14516.41,
+        "total_token_cost": 3554.78
+      }
+    ],
+    "daily_trend": [
+      {
+        "date": "2025-03-01",
+        "cluster": "cluster-a",
+        "daily_cost": 482.03,
+        "daily_token_cost": 121.79
+      },
+      {
+        "date": "2025-03-01",
+        "cluster": "cluster-b",
+        "daily_cost": 481.11,
+        "daily_token_cost": 130.05
+      },
+      {
+        "date": "2025-03-01",
+        "cluster": "cluster-c",
+        "daily_cost": 471.11,
+        "daily_token_cost": 104.02
+      },
+      {
+        "date": "2025-03-02",
+        "cluster": "cluster-a",
+        "daily_cost": 476.91,
+        "daily_token_cost": 117.25
+      },
+      {
+        "date": "2025-03-02",
+        "cluster": "cluster-b",
+        "daily_cost": 482.98,
+        "daily_token_cost": 119.38
+      },
+      {
+        "date": "2025-03-02",
+        "cluster": "cluster-c",
+        "daily_cost": 502.64,
+        "daily_token_cost": 100.58
+      },
+      {
+        "date": "2025-03-03",
+        "cluster": "cluster-a",
+        "daily_cost": 426.81,
+        "daily_token_cost": 101.98
+      },
+      {
+        "date": "2025-03-03",
+        "cluster": "cluster-b",
+        "daily_cost": 463.06,
+        "daily_token_cost": 106.6
+      },
+      {
+        "date": "2025-03-03",
+        "cluster": "cluster-c",
+        "daily_cost": 491.48,
+        "daily_token_cost": 105.75
+      },
+      {
+        "date": "2025-03-04",
+        "cluster": "cluster-a",
+        "daily_cost": 448.83,
+        "daily_token_cost": 127.42
+      },
+      {
+        "date": "2025-03-04",
+        "cluster": "cluster-b",
+        "daily_cost": 475.74,
+        "daily_token_cost": 101.56
+      },
+      {
+        "date": "2025-03-04",
+        "cluster": "cluster-c",
+        "daily_cost": 496.36,
+        "daily_token_cost": 111.84
+      },
+      {
+        "date": "2025-03-05",
+        "cluster": "cluster-a",
+        "daily_cost": 514.14,
+        "daily_token_cost": 118.68
+      },
+      {
+        "date": "2025-03-05",
+        "cluster": "cluster-b",
+        "daily_cost": 441.63,
+        "daily_token_cost": 137.2
+      },
+      {
+        "date": "2025-03-05",
+        "cluster": "cluster-c",
+        "daily_cost": 502.59,
+        "daily_token_cost": 124.79
+      },
+      {
+        "date": "2025-03-06",
+        "cluster": "cluster-a",
+        "daily_cost": 505.91,
+        "daily_token_cost": 112.46
+      },
+      {
+        "date": "2025-03-06",
+        "cluster": "cluster-b",
+        "daily_cost": 455.56,
+        "daily_token_cost": 126.86
+      },
+      {
+        "date": "2025-03-06",
+        "cluster": "cluster-c",
+        "daily_cost": 495.11,
+        "daily_token_cost": 118.99
+      },
+      {
+        "date": "2025-03-07",
+        "cluster": "cluster-a",
+        "daily_cost": 468.73,
+        "daily_token_cost": 115.84
+      },
+      {
+        "date": "2025-03-07",
+        "cluster": "cluster-b",
+        "daily_cost": 475.33,
+        "daily_token_cost": 128.08
+      },
+      {
+        "date": "2025-03-07",
+        "cluster": "cluster-c",
+        "daily_cost": 506.83,
+        "daily_token_cost": 138.23
+      },
+      {
+        "date": "2025-03-08",
+        "cluster": "cluster-a",
+        "daily_cost": 406.4,
+        "daily_token_cost": 128.03
+      },
+      {
+        "date": "2025-03-08",
+        "cluster": "cluster-b",
+        "daily_cost": 476.68,
+        "daily_token_cost": 127.17
+      },
+      {
+        "date": "2025-03-08",
+        "cluster": "cluster-c",
+        "daily_cost": 462.14,
+        "daily_token_cost": 113.92
+      },
+      {
+        "date": "2025-03-09",
+        "cluster": "cluster-a",
+        "daily_cost": 467.98,
+        "daily_token_cost": 122.33
+      },
+      {
+        "date": "2025-03-09",
+        "cluster": "cluster-b",
+        "daily_cost": 489.3,
+        "daily_token_cost": 111.67
+      },
+      {
+        "date": "2025-03-09",
+        "cluster": "cluster-c",
+        "daily_cost": 483.81,
+        "daily_token_cost": 132.29
+      },
+      {
+        "date": "2025-03-10",
+        "cluster": "cluster-a",
+        "daily_cost": 454.16,
+        "daily_token_cost": 135.91
+      },
+      {
+        "date": "2025-03-10",
+        "cluster": "cluster-b",
+        "daily_cost": 503.8,
+        "daily_token_cost": 113.88
+      },
+      {
+        "date": "2025-03-10",
+        "cluster": "cluster-c",
+        "daily_cost": 491.7,
+        "daily_token_cost": 109.97
+      },
+      {
+        "date": "2025-03-11",
+        "cluster": "cluster-a",
+        "daily_cost": 472.34,
+        "daily_token_cost": 128.7
+      },
+      {
+        "date": "2025-03-11",
+        "cluster": "cluster-b",
+        "daily_cost": 467.54,
+        "daily_token_cost": 135.19
+      },
+      {
+        "date": "2025-03-11",
+        "cluster": "cluster-c",
+        "daily_cost": 465.86,
+        "daily_token_cost": 135.12
+      },
+      {
+        "date": "2025-03-12",
+        "cluster": "cluster-a",
+        "daily_cost": 449.49,
+        "daily_token_cost": 129.91
+      },
+      {
+        "date": "2025-03-12",
+        "cluster": "cluster-b",
+        "daily_cost": 493.73,
+        "daily_token_cost": 119.97
+      },
+      {
+        "date": "2025-03-12",
+        "cluster": "cluster-c",
+        "daily_cost": 454.33,
+        "daily_token_cost": 117.42
+      },
+      {
+        "date": "2025-03-13",
+        "cluster": "cluster-a",
+        "daily_cost": 510.59,
+        "daily_token_cost": 134.2
+      },
+      {
+        "date": "2025-03-13",
+        "cluster": "cluster-b",
+        "daily_cost": 492.11,
+        "daily_token_cost": 125.52
+      },
+      {
+        "date": "2025-03-13",
+        "cluster": "cluster-c",
+        "daily_cost": 488.89,
+        "daily_token_cost": 110.13
+      },
+      {
+        "date": "2025-03-14",
+        "cluster": "cluster-a",
+        "daily_cost": 464.73,
+        "daily_token_cost": 135.13
+      },
+      {
+        "date": "2025-03-14",
+        "cluster": "cluster-b",
+        "daily_cost": 477.86,
+        "daily_token_cost": 135.28
+      },
+      {
+        "date": "2025-03-14",
+        "cluster": "cluster-c",
+        "daily_cost": 485.97,
+        "daily_token_cost": 130.93
+      },
+      {
+        "date": "2025-03-15",
+        "cluster": "cluster-a",
+        "daily_cost": 459.03,
+        "daily_token_cost": 124.84
+      },
+      {
+        "date": "2025-03-15",
+        "cluster": "cluster-b",
+        "daily_cost": 450.75,
+        "daily_token_cost": 114.61
+      },
+      {
+        "date": "2025-03-15",
+        "cluster": "cluster-c",
+        "daily_cost": 457.24,
+        "daily_token_cost": 113.91
+      },
+      {
+        "date": "2025-03-16",
+        "cluster": "cluster-a",
+        "daily_cost": 479.32,
+        "daily_token_cost": 120.49
+      },
+      {
+        "date": "2025-03-16",
+        "cluster": "cluster-b",
+        "daily_cost": 486.04,
+        "daily_token_cost": 122.78
+      },
+      {
+        "date": "2025-03-16",
+        "cluster": "cluster-c",
+        "daily_cost": 458.42,
+        "daily_token_cost": 122.32
+      },
+      {
+        "date": "2025-03-17",
+        "cluster": "cluster-a",
+        "daily_cost": 522.37,
+        "daily_token_cost": 126.45
+      },
+      {
+        "date": "2025-03-17",
+        "cluster": "cluster-b",
+        "daily_cost": 444.23,
+        "daily_token_cost": 117.52
+      },
+      {
+        "date": "2025-03-17",
+        "cluster": "cluster-c",
+        "daily_cost": 530.5,
+        "daily_token_cost": 133.02
+      },
+      {
+        "date": "2025-03-18",
+        "cluster": "cluster-a",
+        "daily_cost": 467.15,
+        "daily_token_cost": 108.64
+      },
+      {
+        "date": "2025-03-18",
+        "cluster": "cluster-b",
+        "daily_cost": 502.86,
+        "daily_token_cost": 120.51
+      },
+      {
+        "date": "2025-03-18",
+        "cluster": "cluster-c",
+        "daily_cost": 444.91,
+        "daily_token_cost": 124.77
+      },
+      {
+        "date": "2025-03-19",
+        "cluster": "cluster-a",
+        "daily_cost": 525.35,
+        "daily_token_cost": 138.5
+      },
+      {
+        "date": "2025-03-19",
+        "cluster": "cluster-b",
+        "daily_cost": 476.9,
+        "daily_token_cost": 129.98
+      },
+      {
+        "date": "2025-03-19",
+        "cluster": "cluster-c",
+        "daily_cost": 461.55,
+        "daily_token_cost": 129.79
+      },
+      {
+        "date": "2025-03-20",
+        "cluster": "cluster-a",
+        "daily_cost": 469.17,
+        "daily_token_cost": 110.83
+      },
+      {
+        "date": "2025-03-20",
+        "cluster": "cluster-b",
+        "daily_cost": 484.19,
+        "daily_token_cost": 131.85
+      },
+      {
+        "date": "2025-03-20",
+        "cluster": "cluster-c",
+        "daily_cost": 458.11,
+        "daily_token_cost": 119.38
+      },
+      {
+        "date": "2025-03-21",
+        "cluster": "cluster-a",
+        "daily_cost": 477.59,
+        "daily_token_cost": 115.04
+      },
+      {
+        "date": "2025-03-21",
+        "cluster": "cluster-b",
+        "daily_cost": 437.84,
+        "daily_token_cost": 123.96
+      },
+      {
+        "date": "2025-03-21",
+        "cluster": "cluster-c",
+        "daily_cost": 483.1,
+        "daily_token_cost": 125.87
+      },
+      {
+        "date": "2025-03-22",
+        "cluster": "cluster-a",
+        "daily_cost": 460.19,
+        "daily_token_cost": 118.17
+      },
+      {
+        "date": "2025-03-22",
+        "cluster": "cluster-b",
+        "daily_cost": 471.1,
+        "daily_token_cost": 120.99
+      },
+      {
+        "date": "2025-03-22",
+        "cluster": "cluster-c",
+        "daily_cost": 483.52,
+        "daily_token_cost": 113.71
+      },
+      {
+        "date": "2025-03-23",
+        "cluster": "cluster-a",
+        "daily_cost": 444.9,
+        "daily_token_cost": 109.68
+      },
+      {
+        "date": "2025-03-23",
+        "cluster": "cluster-b",
+        "daily_cost": 469.29,
+        "daily_token_cost": 118.98
+      },
+      {
+        "date": "2025-03-23",
+        "cluster": "cluster-c",
+        "daily_cost": 505.65,
+        "daily_token_cost": 115.15
+      },
+      {
+        "date": "2025-03-24",
+        "cluster": "cluster-a",
+        "daily_cost": 511.56,
+        "daily_token_cost": 121.84
+      },
+      {
+        "date": "2025-03-24",
+        "cluster": "cluster-b",
+        "daily_cost": 479.44,
+        "daily_token_cost": 102.83
+      },
+      {
+        "date": "2025-03-24",
+        "cluster": "cluster-c",
+        "daily_cost": 526.36,
+        "daily_token_cost": 119.05
+      },
+      {
+        "date": "2025-03-25",
+        "cluster": "cluster-a",
+        "daily_cost": 486.91,
+        "daily_token_cost": 108.81
+      },
+      {
+        "date": "2025-03-25",
+        "cluster": "cluster-b",
+        "daily_cost": 438.67,
+        "daily_token_cost": 117.92
+      },
+      {
+        "date": "2025-03-25",
+        "cluster": "cluster-c",
+        "daily_cost": 537.41,
+        "daily_token_cost": 104.37
+      },
+      {
+        "date": "2025-03-26",
+        "cluster": "cluster-a",
+        "daily_cost": 3967.54,
+        "daily_token_cost": 1340.52
+      },
+      {
+        "date": "2025-03-26",
+        "cluster": "cluster-b",
+        "daily_cost": 481.19,
+        "daily_token_cost": 108.62
+      },
+      {
+        "date": "2025-03-26",
+        "cluster": "cluster-c",
+        "daily_cost": 484.86,
+        "daily_token_cost": 118.8
+      },
+      {
+        "date": "2025-03-27",
+        "cluster": "cluster-a",
+        "daily_cost": 539.37,
+        "daily_token_cost": 129.64
+      },
+      {
+        "date": "2025-03-27",
+        "cluster": "cluster-b",
+        "daily_cost": 508.2,
+        "daily_token_cost": 118.04
+      },
+      {
+        "date": "2025-03-27",
+        "cluster": "cluster-c",
+        "daily_cost": 449.87,
+        "daily_token_cost": 137.09
+      },
+      {
+        "date": "2025-03-28",
+        "cluster": "cluster-a",
+        "daily_cost": 490.19,
+        "daily_token_cost": 138.32
+      },
+      {
+        "date": "2025-03-28",
+        "cluster": "cluster-b",
+        "daily_cost": 447.05,
+        "daily_token_cost": 125.51
+      },
+      {
+        "date": "2025-03-28",
+        "cluster": "cluster-c",
+        "daily_cost": 461.82,
+        "daily_token_cost": 116.18
+      },
+      {
+        "date": "2025-03-29",
+        "cluster": "cluster-a",
+        "daily_cost": 458.35,
+        "daily_token_cost": 103.19
+      },
+      {
+        "date": "2025-03-29",
+        "cluster": "cluster-b",
+        "daily_cost": 492.49,
+        "daily_token_cost": 124.31
+      },
+      {
+        "date": "2025-03-29",
+        "cluster": "cluster-c",
+        "daily_cost": 510.83,
+        "daily_token_cost": 106.04
+      },
+      {
+        "date": "2025-03-30",
+        "cluster": "cluster-a",
+        "daily_cost": 456.01,
+        "daily_token_cost": 131.94
+      },
+      {
+        "date": "2025-03-30",
+        "cluster": "cluster-b",
+        "daily_cost": 447.64,
+        "daily_token_cost": 125.69
+      },
+      {
+        "date": "2025-03-30",
+        "cluster": "cluster-c",
+        "daily_cost": 463.44,
+        "daily_token_cost": 101.35
+      }
+    ],
+    "anomalies": [
+      {
+        "date": "2025-03-26",
+        "cluster": "cluster-a",
+        "daily_cost": 3967.54,
+        "baseline_avg": 592.13
+      }
+    ]
+  },
+  "incidents": {
+    "summary": [
+      {
+        "severity": "P1",
+        "open": 0,
+        "resolved": 1,
+        "investigating": 0
+      },
+      {
+        "severity": "P2",
+        "open": 1,
+        "resolved": 1,
+        "investigating": 1
+      },
+      {
+        "severity": "P3",
+        "open": 0,
+        "resolved": 2,
+        "investigating": 0
+      }
+    ],
+    "list": [
+      {
+        "ts": "2025-03-29T03:00:00+00:00",
+        "service": "auth-service",
+        "symptom": "Elevated 5xx error rate (>2%) on auth endpoints",
+        "severity": "P2",
+        "status": "investigating"
+      },
+      {
+        "ts": "2025-03-26T08:00:00+00:00",
+        "service": "cost-monitor",
+        "symptom": "Unexpected cost surge: cluster-a spend 5x above baseline",
+        "severity": "P2",
+        "status": "open"
+      },
+      {
+        "ts": "2025-03-23T14:00:00+00:00",
+        "service": "api-gateway",
+        "symptom": "High latency detected on site-west (p99 > 250 ms)",
+        "severity": "P2",
+        "status": "resolved"
+      },
+      {
+        "ts": "2025-03-19T02:00:00+00:00",
+        "service": "ml-training-service",
+        "symptom": "GPU utilization collapsed to <15% on cluster-a/node-1",
+        "severity": "P1",
+        "status": "resolved"
+      },
+      {
+        "ts": "2025-03-12T16:00:00+00:00",
+        "service": "scheduler",
+        "symptom": "Job queue depth exceeded 500 for 30+ minutes",
+        "severity": "P3",
+        "status": "resolved"
+      },
+      {
+        "ts": "2025-03-06T09:00:00+00:00",
+        "service": "storage-service",
+        "symptom": "Disk I/O throttling on node-3 exceeding 90%",
+        "severity": "P3",
+        "status": "resolved"
+      }
+    ],
+    "mttr_hours": 12.0
+  },
+  "health_score": {
+    "overall": 0.8,
+    "components": {
+      "gpu": 1.0,
+      "network": 1.0,
+      "cost": 0.5,
+      "incidents": 0.6
+    }
+  },
+  "kpi_questions": [
+    {
+      "category": "GPU",
+      "question": "What is my average GPU utilization across clusters?",
+      "insight": "Are we over/under-provisioned?"
+    },
+    {
+      "category": "GPU",
+      "question": "Which nodes are running hot (>85%) or cold (<30%)?",
+      "insight": "Spot waste or capacity risk"
+    },
+    {
+      "category": "GPU",
+      "question": "When did GPU utilization anomalies occur?",
+      "insight": "Timeline view with anomaly markers"
+    },
+    {
+      "category": "Network",
+      "question": "What is my P50/P95/P99 network latency by site?",
+      "insight": "SLA compliance check"
+    },
+    {
+      "category": "Network",
+      "question": "Which sites have elevated packet loss?",
+      "insight": "Identify degraded links"
+    },
+    {
+      "category": "Network",
+      "question": "What is my throughput trend?",
+      "insight": "Capacity planning signal"
+    },
+    {
+      "category": "Cost",
+      "question": "What is my total spend by cluster?",
+      "insight": "Budget allocation view"
+    },
+    {
+      "category": "Cost",
+      "question": "Are there cost spikes vs. the baseline?",
+      "insight": "Anomaly detection for FinOps"
+    },
+    {
+      "category": "Cost",
+      "question": "What is my cost per GPU-hour?",
+      "insight": "Efficiency KPI"
+    },
+    {
+      "category": "Cost",
+      "question": "How do token costs compare to compute costs?",
+      "insight": "AI workload cost breakdown"
+    },
+    {
+      "category": "Incidents",
+      "question": "What is my Mean Time to Resolve (MTTR)?",
+      "insight": "Operational maturity signal"
+    },
+    {
+      "category": "Incidents",
+      "question": "How many open vs. resolved incidents by severity?",
+      "insight": "Current risk posture"
+    },
+    {
+      "category": "Incidents",
+      "question": "Are incidents correlated with recent changes?",
+      "insight": "Change-failure rate proxy"
+    },
+    {
+      "category": "Composite",
+      "question": "What is my overall infrastructure health score?",
+      "insight": "Weighted composite"
+    },
+    {
+      "category": "Composite",
+      "question": "What is the change-failure correlation rate?",
+      "insight": "Incidents within 24h of a change event"
+    }
+  ]
+}

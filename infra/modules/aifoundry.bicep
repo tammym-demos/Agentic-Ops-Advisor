@@ -12,6 +12,7 @@ param appInsightsId string
 param openAiAccountId string
 param openAiEndpoint string
 param managedIdentityId string
+param managedIdentityPrincipalId string = ''
 param tags object = {}
 
 // ---- Storage Account (required by AI Foundry Hub) -------------
@@ -51,6 +52,24 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     publicNetworkAccess: 'Enabled'
+  }
+}
+
+// ---- Key Vault Reader role for managed identity ---------------
+// AI Foundry project creation requires the identity to read the hub Key Vault.
+
+var keyVaultReaderRoleId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '21090545-7ca7-4776-b22c-e363652d74d2' // Key Vault Reader
+)
+
+resource kvReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(managedIdentityPrincipalId)) {
+  scope: keyVault
+  name: guid(keyVault.id, managedIdentityPrincipalId, keyVaultReaderRoleId)
+  properties: {
+    roleDefinitionId: keyVaultReaderRoleId
+    principalId: managedIdentityPrincipalId
+    principalType: 'ServicePrincipal'
   }
 }
 
@@ -101,7 +120,7 @@ resource openAiConnection 'Microsoft.MachineLearningServices/workspaces/connecti
   properties: {
     category: 'AzureOpenAI'
     target: openAiEndpoint
-    authType: 'ManagedIdentity'
+    authType: 'AAD'
     isSharedToAll: true
     metadata: {
       ApiVersion: '2025-01-01-preview'
@@ -118,6 +137,7 @@ resource aiProject 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
   location: location
   kind: 'Project'
   tags: tags
+  dependsOn: [kvReaderAssignment]
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -144,3 +164,9 @@ output projectId string = aiProject.id
 output projectConnectionString string = '${aiHub.properties.discoveryUrl};${subscriptionId};${resourceGroupName};${projectName}'
 output keyVaultId string = keyVault.id
 output storageId string = storage.id
+
+@description('Container Registry login server URL.')
+output acrLoginServer string = containerRegistry.properties.loginServer
+
+@description('Container Registry name.')
+output acrName string = containerRegistry.name
