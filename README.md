@@ -24,6 +24,35 @@ A **governed, production-style AI agent** that performs root-cause + change-cont
 
 ---
 
+## Quick Start
+
+```bash
+# 1. Clone and enter the repo
+git clone https://github.com/tammym-demos/Agentic-Ops-Advisor.git
+cd Agentic-Ops-Advisor
+
+# 2. Create virtual environment
+python -m venv .venv
+source .venv/bin/activate        # Linux / macOS
+# .venv\Scripts\activate         # Windows (PowerShell)
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Seed the local SQLite database (12,966 rows of synthetic telemetry)
+python scripts/setup_local_db.py
+
+# 5. Run the advisor (Demo mode — no Azure credentials needed)
+python scripts/run_local.py
+
+# 6. Run the test suite (346 tests)
+python -m pytest tests/ -q
+```
+
+> **Demo mode** runs without Azure OpenAI — queries hit the local tools directly. Set `AZURE_OPENAI_ENDPOINT` in `.env` to enable full **Agent mode** with LLM-powered reasoning.
+
+---
+
 ## 1. Project Overview & Architecture
 
 The **Agentic Ops Advisor** is an AI agent that helps ops engineers diagnose infrastructure issues by combining two signals: **telemetry** (GPU utilization, network latency, cost, incidents) and **operator intent** (change events, decisions, runbooks, ownership). Instead of manually cross-referencing dashboards and change logs, you ask the agent a natural-language question and it does the correlation work for you—citing evidence at every step.
@@ -109,10 +138,12 @@ Before you begin, ensure you have the following installed and configured:
 **Required Azure resource providers** (register once per subscription):
 
 ```bash
+az provider register --namespace Microsoft.Sql
 az provider register --namespace Microsoft.CognitiveServices
 az provider register --namespace Microsoft.MachineLearningServices
-az provider register --namespace Microsoft.Sql
-az provider register --namespace Microsoft.Insights
+az provider register --namespace Microsoft.OperationalInsights
+az provider register --namespace Microsoft.KeyVault
+az provider register --namespace Microsoft.ContainerRegistry
 ```
 
 **Required Azure resources** (provisioned via `infra/deploy.sh` — see [Deploying to Azure](#6-deploying-to-azure)):
@@ -154,34 +185,73 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Open `.env` in your editor and fill in the required values. At minimum for local dev:
+Open `.env` in your editor and fill in the required values. For local dev in **Demo mode** (no LLM), you only need:
+
+```dotenv
+DB_MODE=sqlite
+ENABLE_WORK_IQ=true
+ENABLE_MCP=false
+```
+
+To enable **Agent mode** (LLM-powered reasoning), also add:
 
 ```dotenv
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
 AZURE_OPENAI_DEPLOYMENT=gpt-4.1
-DB_MODE=sqlite
-ENABLE_WORK_IQ=true
-ENABLE_MCP=false
+AZURE_AI_PROJECT_CONNECTION_STRING=your-project-connection-string
 ```
 
 > See [Environment Variables Reference](#8-environment-variables-reference) for the full table.
 
 ### Step 5 — Seed the local database
 
-This generates 30 days of synthetic telemetry with planted anomalies:
+This generates 30 days of synthetic telemetry with planted anomalies (12,966 rows total):
 
 ```bash
 python scripts/setup_local_db.py
 ```
 
+The script supports optional flags:
+- `--db PATH` — custom database path (default: `data/telemetry.db`)
+- `--days N` — number of days of synthetic history (default: 30)
+- `--force` — delete and recreate the database if it already exists
+
 Expected output:
 ```
-✅ Created telemetry_gpu (720 rows)
-✅ Created telemetry_net (720 rows)
-✅ Created telemetry_cost (720 rows)
-✅ Created incidents (12 rows)
-✅ Database seeded at data/local.db
+============================================================
+  Agentic Ops Advisor — Local DB Setup
+============================================================
+  Database : data/telemetry.db
+  History  : 30 days of synthetic data
+
+  ✓ Data directory ready: data
+  ✓ Schema created / verified (4 tables)
+  ✓ telemetry_gpu: 8,640 rows inserted
+  ✓ telemetry_net: 2,160 rows inserted
+  ✓ telemetry_cost: 2,160 rows inserted
+  ✓ incidents: 6 rows inserted
+
+  Setup complete ✓
+
+  Run `python scripts/run_local.py` to start the agent.
 ```
+
+#### Telemetry Schema
+
+| Table | Columns | Description |
+|---|---|---|
+| `telemetry_gpu` | `ts`, `cluster`, `node`, `utilization_pct`, `mem_pct` | Hourly GPU metrics per cluster/node |
+| `telemetry_net` | `ts`, `site`, `latency_ms`, `loss_pct`, `throughput_gbps` | Hourly network metrics per site |
+| `telemetry_cost` | `ts`, `cluster`, `cost_usd`, `token_cost_usd` | Hourly cost samples per cluster |
+| `incidents` | `ts`, `service`, `symptom`, `severity`, `status` | Infrastructure incident log |
+
+#### Planted Anomalies
+
+| Day | Anomaly | Details |
+|---|---|---|
+| 18 | GPU utilization drop | `cluster-a` / `node-1` collapses to < 15% |
+| 22 | Network latency spike | `site-west` latency exceeds 180 ms, packet loss spikes |
+| 25 | Cost surge | `cluster-a` spend jumps 5–7× baseline |
 
 ### Step 6 — Run the agent
 
@@ -189,16 +259,31 @@ Expected output:
 python scripts/run_local.py
 ```
 
-The agent will start an interactive session. Try one of the core queries:
+The runner detects your environment and starts in one of two modes:
+
+| Mode | When | Description |
+|---|---|---|
+| **Agent mode** | `AZURE_OPENAI_ENDPOINT` is set | Full reasoning loop powered by GPT-4.1 with function-calling against the local SQLite database. Requires Azure OpenAI credentials. |
+| **Demo mode** | No Azure credentials | Tool-only mode — queries are executed directly against the local database and results are printed as JSON. No LLM required; useful for validating the data layer. |
+
+The 4 core demo queries are presented as numbered suggestions at startup:
 
 ```
-> Why did GPU utilization drop in the last 24h?
-> What changed right before the latency spike?
-> Is this a known issue or a change-caused incident?
-> What's the safest remediation plan?
+  [1] Why did GPU utilization drop in the last 24h?
+  [2] What changed right before the latency spike?
+  [3] Is this a known issue or a change-caused incident?
+  [4] What's the safest remediation plan? Provide options and tradeoffs.
 ```
 
-Type `exit` or press `Ctrl+C` to quit.
+Type a number (1–4) to run that query, or type your own question. Type `quit` or press `Ctrl+C` to exit.
+
+### Step 7 — Run the test suite
+
+```bash
+python -m pytest tests/ -q
+```
+
+All **346 tests** should pass with 0 failures.
 
 ---
 
@@ -299,15 +384,18 @@ After `deploy.sh` completes, it prints the connection strings. Copy them to `.en
 ```dotenv
 AZURE_AI_PROJECT_CONNECTION_STRING=<from Bicep output>
 AZURE_OPENAI_ENDPOINT=<from Bicep output>
-DB_MODE=<Azure SQL connection string>
+DB_MODE=azure_sql
+DB_CONNECTION_STRING=<from Bicep output>
 APPLICATIONINSIGHTS_CONNECTION_STRING=<from Bicep output>
 ```
 
 ### Step 4 — Seed the Azure SQL database
 
 ```bash
-python scripts/setup_local_db.py --azure
+python scripts/setup_local_db.py --db "<your-azure-sql-connection-string>" --force
 ```
+
+> **Note:** For Azure SQL production deployments, you may need to use a separate migration script or apply the DDL from `data/seed_telemetry.py` directly. The `setup_local_db.py` script is optimized for SQLite.
 
 ### Step 5 — Deploy the agent to Foundry Agent Service
 
@@ -331,7 +419,9 @@ This is the canonical 7-step demo script. Run it in order to show the full build
 
 **Command:**
 ```bash
-python scripts/run_local.py --query "Why did GPU utilization drop in the last 24h?"
+python scripts/run_local.py
+# Then type: Why did GPU utilization drop in the last 24h?
+# Or just type: 1  (to select the first suggested query)
 ```
 
 **What to show the audience:**
@@ -447,8 +537,9 @@ Copy `.env.example` to `.env` and fill in these values. Variables marked **Requi
 | `AZURE_OPENAI_ENDPOINT` | _(empty)_ | Both | Azure OpenAI endpoint URL (e.g. `https://your-resource.openai.azure.com/`) |
 | `AZURE_OPENAI_DEPLOYMENT` | `gpt-4.1` | Both | Azure OpenAI model deployment name |
 | `AZURE_OPENAI_API_VERSION` | `2025-01-01-preview` | Both | Azure OpenAI API version |
-| `DB_MODE` | `sqlite` | Both | `sqlite` for local dev, or an Azure SQL connection string for production |
-| `DB_CONNECTION_STRING` | _(empty)_ | Azure | Full ODBC connection string for Azure SQL (used when `DB_MODE` is not `sqlite`) |
+| `DB_MODE` | `sqlite` | Both | `sqlite` for local dev, `azure_sql` for production |
+| `DB_CONNECTION_STRING` | _(empty)_ | Azure | Full ODBC connection string for Azure SQL (used when `DB_MODE=azure_sql`) |
+| `SQLITE_DB_PATH` | `data/telemetry.db` | Local | Path to the local SQLite database file (used when `DB_MODE=sqlite`) |
 | `ENABLE_WORK_IQ` | `true` | Both | Enable the Work IQ context tool (`true`/`false`) |
 | `ENABLE_MCP` | `false` | Both | Enable the MCP server wrapper (`true`/`false`) |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | _(empty)_ | Azure | Application Insights connection string for telemetry export |
@@ -520,7 +611,7 @@ For a production integration, replace `tools/work_context_stub.py` with a live W
 **Fix:**
 1. Check that `tools/sql_telemetry.py`, `tools/work_context_stub.py`, and `tools/action_stub.py` are all importable: `python -c "import tools.sql_telemetry"`
 2. Check that `ENABLE_WORK_IQ=true` in `.env` if you expect the Work IQ tool to be called
-3. Re-run `python scripts/run_local.py` with `--verbose` to see tool registration output
+3. Re-run `python scripts/run_local.py` and check the startup banner for mode and tool info
 
 ---
 
@@ -547,10 +638,12 @@ python eval/run_eval.py
 **Fix:**
 1. Register providers (see [Prerequisites](#2-prerequisites)):
    ```bash
+   az provider register --namespace Microsoft.Sql
    az provider register --namespace Microsoft.CognitiveServices
    az provider register --namespace Microsoft.MachineLearningServices
-   az provider register --namespace Microsoft.Sql
-   az provider register --namespace Microsoft.Insights
+   az provider register --namespace Microsoft.OperationalInsights
+   az provider register --namespace Microsoft.KeyVault
+   az provider register --namespace Microsoft.ContainerRegistry
    ```
 2. Confirm you have Contributor or Owner role:
    ```bash
