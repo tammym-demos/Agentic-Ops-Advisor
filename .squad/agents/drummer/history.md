@@ -27,3 +27,14 @@
   - Deployment checklist: `deploy-list.json` (updated with feature tracking)
 
 ## Learnings
+
+### 2026-04-05: Container Deployment Feature GitHub Issues Created
+- **Main Issue:** #59 Container Deployment Support (now closed)
+- **Follow-up Issues:** 
+  - #60 Implement /health endpoint in run_local.py (Medium priority)
+  - #61 Optimize Docker image size (Low priority)
+  - #62 Integration testing against real ACR (High priority)
+- **Pattern:** When features are fully implemented but lack GitHub issue documentation, create issue retroactively as PM audit trail. Always close completed features immediately with summary comment.
+- **PM Gap Identified:** No GitHub issue had been created for the Container Deployment feature despite completion. This is a PM accountability gap — all features should have tracking issues from start.
+- **Updated:** deploy-list.json with GitHub issue numbers for both the main feature and follow-up items
+- **Decision file created:** `.squad/decisions/inbox/drummer-container-github-issues.md` documenting the issues and pattern

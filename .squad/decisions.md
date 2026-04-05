@@ -269,6 +269,83 @@ These are wiring issues in **source code** (not tests) that should be addressed:
 
 `TestSetupLocalDb` (3 tests) — skipped because `setup_local_db.py` has ImportError at module level due to source bug #2 above.
 
+## Decision: drummer-container-github-issues
+# Container Deployment Feature — GitHub Issue Audit
+
+**Date:** 2026-04-05  
+**Author:** Drummer (Program Manager)  
+**Status:** Resolved  
+**Scope:** PM accountability, issue tracking
+
+---
+
+## Problem
+
+The Container Deployment feature was fully implemented, verified, and documented (346 tests pass, 0 fail, linting clean). However, **no GitHub issue had been created** for this feature. This represents a PM gap: features should have GitHub issue tracking from inception through completion.
+
+## Decision
+
+**Create retroactive GitHub issue documentation for the completed Container Deployment feature**, then immediately close it to establish audit trail and mark completion in GitHub.
+
+### Issues Created
+
+| Issue | Title | Status | Scope |
+|-------|-------|--------|-------|
+| #59 | Container Deployment Support | ✅ CLOSED | Main feature documentation |
+| #60 | Implement /health endpoint in run_local.py | OPEN | Medium-priority follow-up |
+| #61 | Optimize Docker image size | OPEN | Low-priority follow-up |
+| #62 | Integration testing against real ACR | OPEN | High-priority post-deployment follow-up |
+
+### Issue Details
+
+**#59 — Main Feature (Closed)**
+- Comprehensive documentation of all deliverables (Dockerfile, agent.yaml, CI/CD, Bicep, docs)
+- Quality metrics (346 tests, 0 violations, 100% acceptance criteria)
+- Acceptance criteria confirmation (all met ✅)
+- References to specs and decision docs
+- Closed with comment: "Feature fully implemented and verified..."
+
+**#60, #61, #62 — Follow-Ups (Open)**
+- Created from 3 non-blocking items identified in completion summary
+- Labeled `squad` for team visibility
+- Each includes acceptance criteria, context, and effort estimates
+
+### Deploy-List Updated
+
+Updated `deploy-list.json`:
+- Added `github_issue: 59` and `github_issue_status: "closed"` to feature-001
+- Added `github_issue` fields to all follow_up_items (60, 61, 62)
+- Maintains single source of truth for feature tracking
+
+## Pattern
+
+**PM Accountability Pattern:**
+1. When a feature is completed but lacks a GitHub issue, create the issue retroactively
+2. Ensure issue body documents all deliverables, metrics, and success criteria
+3. Close immediately with summary comment (never leave as open)
+4. Link follow-up items as separate issues
+5. Update tracking files (deploy-list.json) with issue numbers
+
+This ensures GitHub issue history is complete even when a feature was implemented before issue creation.
+
+## Coordination
+
+- **Tammy (Human PM):** Aware of follow-up priorities (health check, ACR test are on roadmap)
+- **Squad Team:** All follow-up issues labeled and available for backlog planning
+
+## Artifacts
+
+- **Main Issue:** https://github.com/tammym-demos/Agentic-Ops-Advisor/issues/59 (closed)
+- **Follow-ups:** #60, #61, #62 (open)
+- **Updated:** `deploy-list.json` (issue numbers added)
+- **Documented:** `.squad/agents/drummer/history.md` (learnings section)
+
+---
+
+**Signed:** Drummer, Program Manager  
+**Date:** 2026-04-05
+
+
 ## Decision: drummer-container-feature-complete
 # Decision: Container Deployment Feature Completion
 
