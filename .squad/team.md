@@ -16,6 +16,7 @@
 | Naomi | Backend Dev | [charter](agents/naomi/charter.md) | 🟢 Active |
 | Amos | DevOps | [charter](agents/amos/charter.md) | 🟢 Active |
 | Alex | Tester | [charter](agents/alex/charter.md) | 🟢 Active |
+| Drummer | Program Manager | [charter](agents/drummer/charter.md) | 🟢 Active |
 | Scribe | Session Logger | [charter](agents/scribe/charter.md) | 🟢 Active |
 | Ralph | Work Monitor | — | 🔄 Monitor |
 | Tammy | Human (PM & Demo Lead) | — | 👤 Human |
