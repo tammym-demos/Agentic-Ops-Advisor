@@ -173,10 +173,43 @@ jobs:
                   python-version: "3.11"
                   cache: "pip"
 
+            # pyodbc (in requirements.txt) requires unixodbc-dev/msodbcsql18 to build,
+            # even when DB_MODE=sqlite is used at runtime.
+            - name: Install ODBC Driver for SQL Server
+              run: |
+                  curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+                  curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+                  sudo apt-get update
+                  sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
             - name: Install Python dependencies
               run: |
                   python -m pip install --upgrade pip
                   pip install -r requirements.txt
+
+            # ------------------------------------------------------------------
+            # Step 3b — Pre-deploy tests (gate: untested code never deploys)
+            # ------------------------------------------------------------------
+            - name: Set up local SQLite DB
+              run: python scripts/setup_local_db.py
+
+            - name: Run tests
+              run: |
+                  pip install pytest pytest-asyncio
+                  python -m pytest tests/ -x --tb=short
+
+            # ------------------------------------------------------------------
+            # Step 3c — Validate Bicep templates (always runs, catches syntax
+            # errors early — does NOT deploy, just validates)
+            # ------------------------------------------------------------------
+            - name: Validate Bicep templates
+              run: |
+                  az deployment sub validate \
+                      --location "$AZURE_LOCATION" \
+                      --template-file infra/main.bicep \
+                      --parameters @infra/parameters.json \
+                      --output none
+                  echo "✅ Bicep template validation passed"
 
             # ------------------------------------------------------------------
             # Step 4 — Deploy Bicep infrastructure (conditional)
@@ -378,10 +411,13 @@ jobs:
               run: |
                   echo "::group::Data-plane RBAC check"
 
-                  # --- Config ---
-                  AI_HUB_NAME="hub-agentops-prod"
+                  # --- Config (derived from parameters.json, matching Step 4b) ---
+                  PARAMS_FILE="infra/parameters.json"
+                  PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
+                  ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
+                  AI_HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
                   AI_DEVELOPER_ROLE_ID="64702f94-c441-49e6-a78b-ef80e0188fee"
-                  MANAGED_IDENTITY_NAME="id-agentops-prod"
+                  MANAGED_IDENTITY_NAME="id-${PROJECT_NAME}-${ENV_NAME}"
 
                   # Resolve the AI Hub resource ID
                   HUB_RESOURCE_ID=$(az cognitiveservices account show \
