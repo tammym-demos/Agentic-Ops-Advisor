@@ -123,3 +123,15 @@
 - **@copilot kept on roster:** Still useful for manual assignment if org enables coding agents later
 - **Tests:** 348 passed, 0 failed
 
+### 2026-04-07: RBAC Fix — Azure AI Developer for Foundry Data-Plane (Deploy Failure Run #34)
+- **Problem:** Deploy workflow Run #34 failed at "Deploy container agent" step with `PermissionDenied`. The SP (`d30fcff3-...`) had Contributor (management-plane) but lacked data-plane access to CognitiveServices/accounts Hub (`hub-agentops-prod`). The `client.list_agents()` call requires `Microsoft.CognitiveServices/accounts/AIServices/agents/read`, granted by Azure AI Developer role.
+- **Root cause:** Contributor grants ARM control-plane only. Foundry Agent Service APIs are data-plane operations requiring Azure AI Developer (role ID: `64702f94-c441-49e6-a78b-ef80e0188fee`) scoped to the Hub resource.
+- **Architecture note:** The Hub is `Microsoft.CognitiveServices/accounts` (kind: AIServices), created manually — NOT the `MachineLearningServices/workspaces` in `aifoundry.bicep`. RBAC must be assigned imperatively, not via Bicep.
+- **Changes made:**
+  1. **deploy.yml header comments:** Added "Required Azure RBAC roles" section documenting both Contributor and Azure AI Developer requirements, with one-liner setup command.
+  2. **deploy.yml Step 5c (new):** "Ensure data-plane RBAC on AI Hub" step before agent deploy. Discovers Hub resource ID, resolves SP object ID, attempts role assignment with `continue-on-error: true`. Also assigns to managed identity.
+  3. **deploy.sh pre-flight step 6 (new):** Equivalent RBAC for local execution. Checks AZURE_CLIENT_ID — if set, grants to SP. Also grants to managed identity. Succeeds when run by Owner.
+  4. **Managed identity:** `id-agentops-prod` also needs Azure AI Developer on the Hub for runtime. Added to both files.
+  5. **Bicep not modified:** Actual Hub is CognitiveServices-based, not the MachineLearningServices in aifoundry.bicep. RBAC kept imperative.
+- **Immediate action:** Admin must run the one-liner in deploy.yml header to pre-assign Azure AI Developer to the SP.
+- **Files modified:** `.github/workflows/deploy.yml`, `infra/deploy.sh`

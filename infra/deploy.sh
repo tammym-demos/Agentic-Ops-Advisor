@@ -190,7 +190,80 @@ else
   success "Secret '${KV_SECRET_NAME}' already present in ${KV_NAME}."
 fi
 
-# 6. Validate Bicep template (--what-if exits after this step)
+# 6. Data-plane RBAC — Ensure Azure AI Developer on the AI Hub
+#    The Hub (hub-agentops-prod) is a CognitiveServices/accounts resource
+#    created manually. The deploy SP and managed identity both need the
+#    Azure AI Developer role (64702f94-c441-49e6-a78b-ef80e0188fee) for
+#    Foundry Agent Service data-plane operations (create/list agents, etc.).
+#    When running locally as Owner, these assignments will succeed.
+#    In CI (Contributor-only SP), they will fail gracefully — an admin
+#    must pre-assign the roles.
+
+AI_HUB_NAME="hub-agentops-prod"
+AI_DEVELOPER_ROLE_ID="64702f94-c441-49e6-a78b-ef80e0188fee"
+MANAGED_IDENTITY_NAME="id-agentops-prod"
+RG_NAME_RBAC="rg-agentic-ops-advisor"
+
+info "Checking data-plane RBAC on AI Hub (${AI_HUB_NAME})…"
+
+HUB_RESOURCE_ID=$(az cognitiveservices account show \
+  --name "${AI_HUB_NAME}" \
+  --resource-group "${RG_NAME_RBAC}" \
+  --query id -o tsv 2>/dev/null || echo "")
+
+if [[ -n "${HUB_RESOURCE_ID}" ]]; then
+  success "AI Hub found: ${HUB_RESOURCE_ID}"
+
+  # 6a. Grant Azure AI Developer to the deploy service principal
+  if [[ -n "${AZURE_CLIENT_ID:-}" ]]; then
+    SP_OBJECT_ID=$(az ad sp show --id "${AZURE_CLIENT_ID}" --query id -o tsv 2>/dev/null || echo "")
+    if [[ -n "${SP_OBJECT_ID}" ]]; then
+      info "Assigning Azure AI Developer to deploy SP (${SP_OBJECT_ID})…"
+      if az role assignment create \
+          --assignee-object-id "${SP_OBJECT_ID}" \
+          --assignee-principal-type ServicePrincipal \
+          --role "${AI_DEVELOPER_ROLE_ID}" \
+          --scope "${HUB_RESOURCE_ID}" \
+          --output none 2>/dev/null; then
+        success "Azure AI Developer assigned to deploy SP."
+      else
+        warn "Could not assign role to SP — you may lack Microsoft.Authorization/roleAssignments/write. An admin (Owner) must pre-assign this role."
+      fi
+    else
+      warn "Could not resolve SP object ID from AZURE_CLIENT_ID — skipping SP RBAC."
+    fi
+  else
+    info "AZURE_CLIENT_ID not set — skipping deploy SP data-plane role assignment."
+    info "  (Set AZURE_CLIENT_ID to the App Registration client ID if you want to grant the SP access.)"
+  fi
+
+  # 6b. Grant Azure AI Developer to the managed identity (runtime)
+  MI_PRINCIPAL_ID=$(az identity show \
+    --name "${MANAGED_IDENTITY_NAME}" \
+    --resource-group "${RG_NAME_RBAC}" \
+    --query principalId -o tsv 2>/dev/null || echo "")
+
+  if [[ -n "${MI_PRINCIPAL_ID}" ]]; then
+    info "Assigning Azure AI Developer to managed identity (${MI_PRINCIPAL_ID})…"
+    if az role assignment create \
+        --assignee-object-id "${MI_PRINCIPAL_ID}" \
+        --assignee-principal-type ServicePrincipal \
+        --role "${AI_DEVELOPER_ROLE_ID}" \
+        --scope "${HUB_RESOURCE_ID}" \
+        --output none 2>/dev/null; then
+      success "Azure AI Developer assigned to managed identity."
+    else
+      warn "Could not assign role to managed identity — admin must pre-assign."
+    fi
+  else
+    warn "Managed identity '${MANAGED_IDENTITY_NAME}' not found in ${RG_NAME_RBAC} — skipping MI RBAC."
+  fi
+else
+  warn "AI Hub '${AI_HUB_NAME}' not found in ${RG_NAME_RBAC} — skipping data-plane RBAC."
+  info "  (Hub will be available after first Bicep deployment or manual creation.)"
+fi
+
+# 7. Validate Bicep template (--what-if exits after this step)
 info "Validating Bicep template…"
 if [[ "${WHAT_IF}" == "true" ]]; then
   info "Running what-if analysis (no resources will be created)…"

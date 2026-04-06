@@ -23,6 +23,24 @@
 #     AZURE_OPENAI_DEPLOYMENT              — Model deployment name (e.g. gpt-4.1)
 #     APPLICATIONINSIGHTS_CONNECTION_STRING — App Insights (optional)
 #
+# Required Azure RBAC roles for the service principal:
+#
+#   1. Contributor (management-plane) — scoped to the resource group:
+#      Grants Bicep deployment, ACR operations, resource management.
+#
+#   2. Azure AI Developer (data-plane) — scoped to the AI Hub resource:
+#      Role ID: 64702f94-c441-49e6-a78b-ef80e0188fee
+#      Grants data-plane access to Foundry Agent Service (create/list/update
+#      agents, threads, runs). Without this role, agent deploy will fail with
+#      PermissionDenied on Microsoft.CognitiveServices data actions.
+#      The Hub is a CognitiveServices/accounts resource (hub-agentops-prod),
+#      NOT a MachineLearningServices workspace.
+#
+#   One-time setup (run as Owner or User Access Administrator):
+#     az role assignment create --assignee <SP_OBJECT_ID> \
+#       --role "Azure AI Developer" \
+#       --scope /subscriptions/<sub>/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
+#
 # OIDC setup (one-time, run locally):
 #   az ad app create --display-name "agentic-ops-advisor-deploy"
 #   az ad sp create --id <appId>
@@ -222,7 +240,88 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 5c — Deploy container agent to Foundry Agent Service
+            # Step 5c — Ensure data-plane RBAC on AI Hub
+            # ------------------------------------------------------------------
+            # WHY: The deploy SP has Contributor (management-plane) but needs
+            # Azure AI Developer (data-plane) to call Foundry Agent APIs like
+            # list_agents / create_agent. The Hub is a CognitiveServices/accounts
+            # resource created manually — not managed by Bicep — so we assign
+            # the role imperatively here.
+            #
+            # Role: Azure AI Developer (64702f94-c441-49e6-a78b-ef80e0188fee)
+            # Scope: Microsoft.CognitiveServices/accounts/hub-agentops-prod
+            #
+            # This step is best-effort: the SP (Contributor) usually cannot
+            # self-assign roles (needs Owner or User Access Administrator).
+            # If it fails, we log a warning and continue — an admin must
+            # pre-assign the role using the one-liner in the header comments.
+            - name: Ensure data-plane RBAC on AI Hub
+              continue-on-error: true
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+              run: |
+                  echo "::group::Data-plane RBAC check"
+
+                  # --- Config ---
+                  AI_HUB_NAME="hub-agentops-prod"
+                  AI_DEVELOPER_ROLE_ID="64702f94-c441-49e6-a78b-ef80e0188fee"
+                  MANAGED_IDENTITY_NAME="id-agentops-prod"
+
+                  # Resolve the AI Hub resource ID
+                  HUB_RESOURCE_ID=$(az cognitiveservices account show \
+                      --name "$AI_HUB_NAME" \
+                      --resource-group "$AZURE_RESOURCE_GROUP" \
+                      --query id -o tsv 2>/dev/null || echo "")
+
+                  if [ -z "$HUB_RESOURCE_ID" ]; then
+                      echo "⚠️  Could not find AI Hub '$AI_HUB_NAME' in $AZURE_RESOURCE_GROUP — skipping RBAC."
+                      echo "::endgroup::"
+                      exit 0
+                  fi
+                  echo "✅ AI Hub: $HUB_RESOURCE_ID"
+
+                  # --- 1. Grant Azure AI Developer to the deploy SP ---
+                  if [ -n "${AZURE_CLIENT_ID:-}" ]; then
+                      SP_OBJECT_ID=$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv 2>/dev/null || echo "")
+                      if [ -n "$SP_OBJECT_ID" ]; then
+                          echo "Assigning Azure AI Developer to SP $SP_OBJECT_ID on Hub..."
+                          az role assignment create \
+                              --assignee-object-id "$SP_OBJECT_ID" \
+                              --assignee-principal-type ServicePrincipal \
+                              --role "$AI_DEVELOPER_ROLE_ID" \
+                              --scope "$HUB_RESOURCE_ID" \
+                              --output none 2>&1 || echo "⚠️  Could not assign role (SP likely lacks Microsoft.Authorization/roleAssignments/write). An admin must pre-assign Azure AI Developer — see workflow header comments."
+                          echo "✅ Azure AI Developer role assignment attempted for deploy SP."
+                      else
+                          echo "⚠️  Could not resolve SP object ID from AZURE_CLIENT_ID — skipping SP RBAC."
+                      fi
+                  fi
+
+                  # --- 2. Grant Azure AI Developer to the managed identity ---
+                  # The managed identity (id-agentops-prod) is used at runtime by
+                  # the container agent and also needs data-plane access to the Hub.
+                  MI_PRINCIPAL_ID=$(az identity show \
+                      --name "$MANAGED_IDENTITY_NAME" \
+                      --resource-group "$AZURE_RESOURCE_GROUP" \
+                      --query principalId -o tsv 2>/dev/null || echo "")
+
+                  if [ -n "$MI_PRINCIPAL_ID" ]; then
+                      echo "Assigning Azure AI Developer to managed identity $MI_PRINCIPAL_ID on Hub..."
+                      az role assignment create \
+                          --assignee-object-id "$MI_PRINCIPAL_ID" \
+                          --assignee-principal-type ServicePrincipal \
+                          --role "$AI_DEVELOPER_ROLE_ID" \
+                          --scope "$HUB_RESOURCE_ID" \
+                          --output none 2>&1 || echo "⚠️  Could not assign MI role — admin must pre-assign."
+                      echo "✅ Azure AI Developer role assignment attempted for managed identity."
+                  else
+                      echo "⚠️  Could not find managed identity '$MANAGED_IDENTITY_NAME' — skipping MI RBAC."
+                  fi
+
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 5d — Deploy container agent to Foundry Agent Service
             # ------------------------------------------------------------------
             - name: Deploy container agent to Foundry Agent Service
               run: |
