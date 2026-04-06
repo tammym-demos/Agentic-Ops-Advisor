@@ -12,7 +12,7 @@
   <meta property="og:type" content="website" />
 
   <!-- Favicon (emoji fallback) -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>" />
 
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -35,16 +35,17 @@
   <nav class="site-nav" aria-label="Main navigation">
     <div class="container">
       <a href="#" class="nav-brand">
-        <span class="brand-icon" aria-hidden="true">🤖</span>
+        <span class="brand-icon" aria-hidden="true">⚙️</span>
         Agentic Ops Advisor
       </a>
       <ul class="nav-links" role="list">
         <li><a href="#github-products">GitHub</a></li>
         <li><a href="#features">Capabilities</a></li>
+        <li><a href="#workiq">Work IQ</a></li>
         <li><a href="#architecture">Architecture</a></li>
         <li><a href="#techstack">Tech Stack</a></li>
         <li><a href="pages/dashboard.html">📊 Dashboard</a></li>
-        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener" style="color: var(--accent-blue); font-weight: 600;">⭐ GitHub</a></li>
+        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub</a></li>
       </ul>
     </div>
   </nav>
@@ -66,18 +67,23 @@
       </h1>
 
       <p class="hero-tagline">
-        An AI ops agent born on GitHub — coded with <strong>GitHub Copilot</strong>,
-        tested and deployed through <strong>GitHub Actions</strong> CI/CD,
-        hosted on <strong>GitHub Pages</strong>, and tracked with <strong>GitHub Issues</strong>.
-        Every commit, every pull request, every release — the GitHub platform at work.
+        A production-style AI agent that helps ops teams diagnose infrastructure issues faster.
+        Ask about GPU drops, network spikes, or cost anomalies — it queries telemetry,
+        correlates recent changes and decisions, and delivers root-cause diagnoses
+        with confidence levels and governed remediation plans.
+      </p>
+      <p class="hero-tagline" style="font-size: 0.95em; opacity: 0.8; margin-top: 0.5rem;">
+        Built end-to-end on the GitHub platform — coded with <strong>GitHub Copilot</strong>,
+        tested and shipped through <strong>GitHub Actions</strong>,
+        hosted on <strong>GitHub Pages</strong>,
+        and deployed to <strong>Azure AI Foundry</strong>.
       </p>
 
       <div class="hero-ctas">
         <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
            class="btn btn-primary"
            target="_blank" rel="noopener">
-          <svg height="18" viewBox="0 0 16 16" width="18" fill="currentColor" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
-          ⭐ Star on GitHub
+          View on GitHub
         </a>
         <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions"
            class="btn btn-secondary"
@@ -96,10 +102,6 @@
   ═══════════════════════════════════════════ -->
   <section class="stats-strip" aria-label="Project highlights">
     <div class="container">
-      <div class="stat-item fade-in">
-        <span class="stat-number">100%</span>
-        <span class="stat-label">Open Source on GitHub</span>
-      </div>
       <div class="stat-item fade-in">
         <span class="stat-number">Copilot</span>
         <span class="stat-label">AI-Coded with GitHub Copilot</span>
@@ -266,6 +268,148 @@
         </article>
 
       </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       WORK IQ — DEEP DIVE
+  ═══════════════════════════════════════════ -->
+  <section class="workiq-section" id="workiq">
+    <div class="container">
+      <span class="section-label" style="color: var(--accent-purple);">Telemetry + Intent</span>
+      <h2 class="section-title">Work IQ — The missing context layer</h2>
+      <p class="section-subtitle">
+        Traditional AIOps sees metrics. <strong>Agentic ops</strong> sees metrics
+        <em>plus the human decisions that caused them</em>.
+        Work IQ is Microsoft 365 Copilot's workplace intelligence layer — and it's the
+        key to self-driving operations that actually understand <em>why</em> things changed.
+      </p>
+
+      <!-- Value proposition callout -->
+      <div class="workiq-callout fade-in">
+        <div class="workiq-callout-icon" aria-hidden="true">💡</div>
+        <div class="workiq-callout-body">
+          <h3>Why telemetry alone isn't enough</h3>
+          <p>
+            A GPU utilization drop is just a number. Was it a planned model-serving rollout?
+            An accidental config change? A cost-optimization policy kicking in?
+            Without <strong>organizational context</strong>, every anomaly is a mystery.
+            Work IQ bridges that gap — correlating infrastructure telemetry with the
+            change events, decisions, ownership, and runbooks that explain what happened
+            and who to talk to next.
+          </p>
+        </div>
+      </div>
+
+      <!-- Four context surfaces -->
+      <h3 class="workiq-grid-title fade-in">Four context surfaces the agent consults</h3>
+      <div class="workiq-grid">
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #58a6ff;">
+          <span class="workiq-card-icon" aria-hidden="true">📋</span>
+          <h4 class="workiq-card-title">Change Events</h4>
+          <p class="workiq-card-desc">
+            Recent deployments, config changes, policy updates, and rollout windows
+            that coincide with anomaly timestamps. The agent asks:
+            <em>"What changed near this incident?"</em>
+          </p>
+        </article>
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #bc8cff;">
+          <span class="workiq-card-icon" aria-hidden="true">🗳️</span>
+          <h4 class="workiq-card-title">Decisions</h4>
+          <p class="workiq-card-desc">
+            Approval records, AI Factory planning decisions, budget sign-offs,
+            and architecture choices. The agent correlates
+            <em>"who decided this"</em> with <em>"what broke."</em>
+          </p>
+        </article>
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #3fb950;">
+          <span class="workiq-card-icon" aria-hidden="true">👥</span>
+          <h4 class="workiq-card-title">Ownership</h4>
+          <p class="workiq-card-desc">
+            Service owners, on-call rosters, and escalation paths.
+            When the agent identifies a root cause, it knows exactly
+            <em>who to page</em> — no more "who owns this?" Slack threads.
+          </p>
+        </article>
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #f0883e;">
+          <span class="workiq-card-icon" aria-hidden="true">📖</span>
+          <h4 class="workiq-card-title">Runbooks</h4>
+          <p class="workiq-card-desc">
+            Documented remediation procedures linked to specific failure modes.
+            The agent surfaces the right runbook for the diagnosed issue —
+            <em>governance through institutional knowledge</em>.
+          </p>
+        </article>
+
+      </div>
+
+      <!-- MCP Pattern -->
+      <div class="workiq-mcp fade-in">
+        <div class="workiq-mcp-header">
+          <span class="workiq-mcp-icon" aria-hidden="true">🔌</span>
+          <h3>The MCP Pattern — Model Context Protocol</h3>
+        </div>
+        <p>
+          Work IQ data can be surfaced via the
+          <strong>Model Context Protocol (MCP)</strong> — an open standard for connecting
+          AI agents to external context sources. In this architecture, the agent calls an
+          MCP-wrapped endpoint to retrieve change events, decisions, and ownership context,
+          keeping the tool interface clean and the context pipeline extensible.
+          The MCP wrapper is gated behind the <code>ENABLE_MCP</code> feature flag.
+        </p>
+        <div class="workiq-mcp-flow">
+          <span class="mcp-node">Agent</span>
+          <span class="mcp-arrow" aria-hidden="true">→</span>
+          <span class="mcp-node mcp-highlight">MCP Protocol</span>
+          <span class="mcp-arrow" aria-hidden="true">→</span>
+          <span class="mcp-node">Work IQ Context</span>
+          <span class="mcp-arrow" aria-hidden="true">→</span>
+          <span class="mcp-node">Diagnosis + Action</span>
+        </div>
+      </div>
+
+      <!-- Hybrid narrative -->
+      <div class="workiq-hybrid fade-in">
+        <h3>The hybrid advantage</h3>
+        <p>
+          This is what makes agentic ops fundamentally different from traditional monitoring.
+          The agent doesn't just <em>detect</em> anomalies — it <em>explains</em> them
+          by merging two signal streams:
+        </p>
+        <div class="workiq-hybrid-cols">
+          <div class="workiq-hybrid-col">
+            <span class="workiq-hybrid-label">📊 Telemetry</span>
+            <p>GPU drops, latency spikes, cost anomalies, incidents — the <em>what</em>.</p>
+          </div>
+          <div class="workiq-hybrid-plus" aria-hidden="true">+</div>
+          <div class="workiq-hybrid-col">
+            <span class="workiq-hybrid-label">🔗 Intent</span>
+            <p>Change events, decisions, ownership, runbooks — the <em>why</em> and <em>who</em>.</p>
+          </div>
+          <div class="workiq-hybrid-equals" aria-hidden="true">=</div>
+          <div class="workiq-hybrid-col workiq-hybrid-result">
+            <span class="workiq-hybrid-label">⚙️ Governed Diagnosis</span>
+            <p>Root-cause with evidence, confidence, owner, and a safe remediation plan.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="workiq-disclaimer fade-in">
+        <span class="workiq-disclaimer-icon" aria-hidden="true">⚠️</span>
+        <p>
+          <strong>We're simulating Work IQ outputs in this demo.</strong>
+          Work IQ is in <strong>public preview</strong> and requires
+          Microsoft 365 Copilot licensing + admin consent.
+          All change events, decisions, ownership, and runbook data shown here are synthetic.
+          Work IQ is presented as a <em>pattern</em>, not a live integration.
+        </p>
+      </div>
+
     </div>
   </section>
 
@@ -659,12 +803,12 @@
   <footer class="site-footer">
     <div class="container">
       <div>
-        <div class="footer-brand">🤖 Agentic Ops Advisor</div>
+        <div class="footer-brand">⚙️ Agentic Ops Advisor</div>
         <div class="footer-note">Coded with GitHub Copilot · CI/CD via GitHub Actions · Hosted on GitHub Pages · Deployed on Azure AI Foundry</div>
       </div>
 
       <nav class="footer-links" aria-label="Footer links">
-        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener" style="color: var(--accent-green); font-weight: 600;">⭐ GitHub Repo</a>
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub Repo</a>
         <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions" target="_blank" rel="noopener">GitHub Actions</a>
         <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/security" target="_blank" rel="noopener">Security</a>
         <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/issues" target="_blank" rel="noopener">Issues</a>
@@ -672,7 +816,7 @@
       </nav>
 
       <div class="footer-note">
-        © 2025 · Open source on GitHub · Synthetic demo · No real data
+        © 2025 · Synthetic demo · No real data
       </div>
     </div>
   </footer>

@@ -86,3 +86,14 @@
 - **Service mapping:** GPU keywords → `gpu-cluster`, network/latency → `network`, cost → `cost`. Change keywords trigger `get_change_events`; incident/remediation keywords trigger `get_ownership`, `get_runbooks`, `get_decisions`. Fallback queries get `get_full_context`.
 - **Validation:** 348 tests pass, ruff lint clean.
 - **Key files:** `scripts/run_local.py` (lines 206–280).
+
+### 2025-07-27: Work IQ Coverage Enhancement — GitHub Pages
+- **Task:** Enhance Work IQ visibility on the GitHub Pages brochure site per Tammy's request.
+- **Problem:** Work IQ was scattered across the site in small mentions (disclaimer banner, one feature card, demo step, tech table row, disclaimer card) — no dedicated section explaining what it is or why it matters.
+- **Solution:** Added a full dedicated Work IQ deep-dive section between Features and Architecture.
+- **New section content:** (1) Value proposition callout: "Traditional AIOps sees metrics. Agentic ops sees metrics + the human decisions that caused them." (2) Four context surface cards: Change Events, Decisions, Ownership, Runbooks. (3) MCP Pattern explanation with visual flow diagram. (4) Hybrid advantage (Telemetry + Intent = Governed Diagnosis) visual. (5) Integrated Work IQ disclaimer with licensing info.
+- **Nav updated:** Added "Work IQ" link between Capabilities and Architecture in site navigation.
+- **CSS added:** Full responsive styles for `.workiq-section`, `.workiq-callout`, `.workiq-grid`, `.workiq-card`, `.workiq-mcp`, `.workiq-hybrid`, `.workiq-disclaimer` in `docs/style.css`.
+- **Language alignment:** Uses "agentic ops", "hybrid", "governance", "telemetry + intent", "self-driving operations" throughout.
+- **Disclaimer included:** "We're simulating Work IQ outputs in this demo. Work IQ is in public preview and requires Microsoft 365 Copilot licensing + admin consent."
+- **Key files:** `docs/index.html`, `docs/style.css`.

@@ -381,6 +381,306 @@ img { max-width: 100%; height: auto; }
 }
 
 /* ---------- Architecture ---------- */
+/* ---------- Work IQ Section ---------- */
+.workiq-section {
+  padding: var(--section-pad);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.workiq-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(188,140,255,0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.workiq-callout {
+  background: rgba(188, 140, 255, 0.06);
+  border: 1px solid rgba(188, 140, 255, 0.25);
+  border-radius: 12px;
+  padding: 1.5rem 1.75rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 2.5rem;
+}
+
+.workiq-callout-icon {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.workiq-callout-body h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent-purple);
+  margin-bottom: 0.5rem;
+}
+
+.workiq-callout-body p {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.workiq-grid-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 1.25rem;
+}
+
+.workiq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.workiq-card {
+  background: var(--gradient-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.workiq-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--wiq-accent, var(--accent-purple));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.workiq-card:hover {
+  border-color: var(--wiq-accent, var(--accent-purple));
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.workiq-card:hover::before { opacity: 1; }
+
+.workiq-card-icon {
+  font-size: 1.75rem;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.workiq-card-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.4rem;
+}
+
+.workiq-card-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.workiq-card-desc em {
+  color: var(--accent-purple);
+  font-style: italic;
+}
+
+/* MCP pattern box */
+.workiq-mcp {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.75rem;
+  margin-bottom: 2.5rem;
+}
+
+.workiq-mcp-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.workiq-mcp-icon { font-size: 1.4rem; }
+
+.workiq-mcp-header h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.workiq-mcp p {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin-bottom: 1.25rem;
+}
+
+.workiq-mcp code {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  color: var(--accent-blue);
+}
+
+.workiq-mcp-flow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.mcp-node {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.mcp-highlight {
+  border-color: var(--accent-purple);
+  color: var(--accent-purple);
+  background: rgba(188, 140, 255, 0.08);
+}
+
+.mcp-arrow {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+/* Hybrid advantage */
+.workiq-hybrid {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.75rem;
+  margin-bottom: 2.5rem;
+}
+
+.workiq-hybrid h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.6rem;
+}
+
+.workiq-hybrid > p {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  margin-bottom: 1.5rem;
+}
+
+.workiq-hybrid-cols {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.workiq-hybrid-col {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+  flex: 1;
+  min-width: 180px;
+  max-width: 260px;
+  text-align: center;
+}
+
+.workiq-hybrid-col p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.workiq-hybrid-result {
+  border-color: var(--accent-purple);
+  background: rgba(188, 140, 255, 0.05);
+}
+
+.workiq-hybrid-label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.4rem;
+}
+
+.workiq-hybrid-plus,
+.workiq-hybrid-equals {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--accent-purple);
+  flex-shrink: 0;
+}
+
+/* Work IQ disclaimer */
+.workiq-disclaimer {
+  background: rgba(240, 136, 62, 0.07);
+  border: 1px solid rgba(240, 136, 62, 0.3);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.workiq-disclaimer-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+.workiq-disclaimer p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.workiq-disclaimer strong {
+  color: var(--accent-orange);
+}
+
+@media (max-width: 768px) {
+  .workiq-hybrid-cols {
+    flex-direction: column;
+  }
+  .workiq-hybrid-col {
+    max-width: 100%;
+  }
+  .workiq-hybrid-plus,
+  .workiq-hybrid-equals {
+    font-size: 1.2rem;
+  }
+  .workiq-callout {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}
+
+/* ---------- Architecture (continued) ---------- */
 .architecture {
   padding: var(--section-pad);
   background: var(--bg-secondary);
