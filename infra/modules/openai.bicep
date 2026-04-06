@@ -9,12 +9,14 @@ param capacity int = 10
 param managedIdentityId string
 param tags object = {}
 
-// ---- Cognitive Services account (OpenAI kind) -----------------
+// ---- Cognitive Services account (AIServices kind) ---------------
+// AIServices is the superset kind required by AI Foundry Hubs.
+// It includes OpenAI, vision, speech, and other cognitive services.
 
 resource openAiAccount 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   name: name
   location: location
-  kind: 'OpenAI'
+  kind: 'AIServices'
   tags: tags
   identity: {
     type: 'UserAssigned'
