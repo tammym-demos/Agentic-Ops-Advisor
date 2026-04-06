@@ -200,15 +200,11 @@ jobs:
 
             # ------------------------------------------------------------------
             # Step 3c — Validate Bicep templates (always runs, catches syntax
-            # errors early — does NOT deploy, just validates)
+            # errors early — local build only, no Azure auth required)
             # ------------------------------------------------------------------
             - name: Validate Bicep templates
               run: |
-                  az deployment sub validate \
-                      --location "$AZURE_LOCATION" \
-                      --template-file infra/main.bicep \
-                      --parameters @infra/parameters.json \
-                      --output none
+                  az bicep build --file infra/main.bicep --stdout > /dev/null
                   echo "✅ Bicep template validation passed"
 
             # ------------------------------------------------------------------
