@@ -22,7 +22,7 @@
 | Tammy | Human (PM & Demo Lead) | — | 👤 Human |
 | @copilot | Coding Agent | [instructions](../../.github/copilot-instructions.md) | 🤖 Cloud |
 
-<!-- copilot-auto-assign: true -->
+<!-- copilot-auto-assign: false -->
 
 ### @copilot Capability Profile
 

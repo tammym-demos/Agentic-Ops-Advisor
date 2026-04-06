@@ -111,3 +111,15 @@
 - **Pushed to origin/main** — commit `04664a2`
 - **Remaining branches:** Only `main` and `origin/copilot/kill-long-running-tasks` (unrelated, not in scope)
 
+### 2026-04-07: Disable @copilot Auto-Assign (Org Policy Block)
+- **Problem:** Three workflows were triggering copilot-swe-agent[bot] assignment, which fails because the MCAPS/Contoso EMU org does not have GitHub Copilot coding agents enabled. This generated failed workflow runs on every `squad:copilot` label event.
+- **Root cause:** `.squad/team.md` had `copilot-auto-assign: true`, and `squad-issue-assign.yml` assigned copilot unconditionally on `squad:copilot` label (no flag check).
+- **Changes made:**
+  1. `.squad/team.md`: `copilot-auto-assign: true` → `false`
+  2. `.github/workflows/squad-triage.yml`: Added org-policy comment on auto-assign step (already gated by team.md flag)
+  3. `.github/workflows/squad-issue-assign.yml`: Disabled "Assign @copilot coding agent" step with `if: false` + comment (was the main offender — fired regardless of team.md)
+  4. `.github/workflows/squad-heartbeat.yml`: Added defensive comment (already gated by team.md flag)
+- **Open issues with `squad:copilot` label:** None found — no cleanup needed
+- **@copilot kept on roster:** Still useful for manual assignment if org enables coding agents later
+- **Tests:** 348 passed, 0 failed
+

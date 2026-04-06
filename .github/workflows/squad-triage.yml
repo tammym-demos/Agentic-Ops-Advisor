@@ -208,6 +208,8 @@ jobs:
             });
 
             // Auto-assign @copilot if enabled
+            // NOTE: Org policy currently blocks copilot-swe-agent[bot] assignment.
+            // Controlled by <!-- copilot-auto-assign: true/false --> in team.md.
             if (isCopilot && copilotAutoAssign) {
               try {
                 await github.rest.issues.addAssignees({
