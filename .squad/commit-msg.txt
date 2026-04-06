@@ -1,0 +1,11 @@
+docs: log docs site content cleanup session
+
+- Orchestration log: 2026-04-06T21-12-12Z-holden.md (docs cleanup spawn)
+- Session log: 2026-04-06T21-12-12Z-docs-site-cleanup.md
+- Merged decision inbox entries into decisions.md
+  - Amos's Bicep rewrite (CognitiveServices architecture)
+  - Holden's architecture review with critical fix requirement
+  - User directive for Option 1 (full IaC alignment)
+- Deleted 3 processed inbox files (holden-bicep-review, amos-bicep-rewrite, copilot-directive)
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

@@ -1,5 +1,57 @@
 # Decisions
 
+## Infrastructure Alignment — CognitiveServices-based Bicep Rewrite
+
+**Date:** 2025-06-XX  
+**Author:** Amos (DevOps)  
+**Status:** Completed; under review  
+**Reviewer:** Holden (Lead)
+
+### Context
+Live infrastructure uses CognitiveServices AIServices Hub with native GPT-4.1 deployment. Original Bicep templates used MachineLearningServices workspace model, creating a critical mismatch.
+
+### Decision
+Rewrote Bicep templates (`aifoundry.bicep`, `openai.bicep`, `main.bicep`) to match live architecture. Converts Hub from ML workspace to CognitiveServices AIServices, deploys GPT-4.1 model natively on Hub as child resource, removes standalone OpenAI module.
+
+### Impact
+- **Architecture now matches reality** — safe to redeploy
+- **Backward compatible outputs** — no CI/CD changes needed
+- **Future extensibility** — can add/modify model deployments via IaC
+
+### Review Status
+**Holden's verdict:** ✅ APPROVE WITH CRITICAL FIX (See separate Architecture Review entry below)
+
+---
+
+## Bicep Rewrite — Architecture Review (Critical Issue)
+
+**Date:** 2026-04-07  
+**Reviewer:** Holden (Lead)  
+**Context:** Amos's Bicep rewrite (Option 1) — CognitiveServices Hub with native model deployment
+
+### Verdict: ⚠️ APPROVE WITH CRITICAL FIX REQUIRED
+
+**Critical blocking issue:** Child resource `location` property on Project will cause ARM deployment failure. Bicep line 144 must remove `location: location` from `aiProject` resource. Azure does not allow child resources to declare `location` — they inherit from parent.
+
+**Secondary (non-blocking):**
+- Remove `Microsoft.MachineLearningServices` from deploy.sh provider list (cleanup)
+- Optimize `dependsOn` chain (optional performance improvement)
+
+**Fix complexity:** 1-line deletion. Straightforward.
+
+**Recommendation:** Fix blocking issue, merge, deploy to sandbox to validate.
+
+---
+
+## User Directive — Option 1 for Bicep Alignment
+
+**Date:** 2026-04-07T21:00:00Z  
+**By:** Tammy (via Copilot)  
+**Decision:** Choose Option 1 (full IaC rewrite) over quick-gate workaround  
+**Rationale:** User request for complete infrastructure alignment
+
+---
+
 ## Branch Cleanup — Merge Strategy for Stale copilot/* Branches
 
 **Date:** 2026-04-06  
