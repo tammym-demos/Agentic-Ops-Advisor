@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -334,7 +335,7 @@ class AgentOpsAdvisor:
     # Conversation
     # ------------------------------------------------------------------
 
-    def ask(self, thread_id: str, message: str) -> str:
+    def ask(self, thread_id: str, message: str, timeout_seconds: int | None = None) -> str:
         """Add a user message to the thread and run the agent to completion.
 
         Handles the full agentic loop — tool calls are dispatched automatically
@@ -343,17 +344,24 @@ class AgentOpsAdvisor:
         ``expired``).
 
         Args:
-            thread_id: ID of an existing conversation thread (from
-                       :meth:`create_thread`).
-            message:   User message text (one of the four core query types or
-                       any operator question).
+            thread_id:       ID of an existing conversation thread (from
+                             :meth:`create_thread`).
+            message:         User message text (one of the four core query types or
+                             any operator question).
+            timeout_seconds: Maximum wall-clock seconds to wait for the run to
+                             complete. When the deadline is reached the run is
+                             cancelled via the Azure AI Agent Service API and a
+                             ``TimeoutError`` is raised. ``None`` (default) means
+                             no timeout — wait indefinitely.
 
         Returns:
             The agent's final text response as a plain string.
 
         Raises:
-            RuntimeError: If the agent has not been created, the API call
-                          fails, or the run ends in a ``failed`` state.
+            RuntimeError:  If the agent has not been created, the API call
+                           fails, or the run ends in a ``failed`` state.
+            TimeoutError:  If ``timeout_seconds`` is set and the run does not
+                           complete within the allotted time.
         """
         if self._agent is None:
             raise RuntimeError(
@@ -377,15 +385,25 @@ class AgentOpsAdvisor:
             content=message,
         )
 
-        logger.debug("Starting agent run on thread %s", thread_id)
+        logger.debug("Starting agent run on thread %s (timeout=%s s)", thread_id, timeout_seconds)
         try:
-            run = client.runs.create_and_process(
-                thread_id=thread_id,
-                agent_id=self._agent.id,
-                toolset=toolset,
-            )
+            if timeout_seconds is not None:
+                run = self._ask_with_timeout(
+                    client=client,
+                    thread_id=thread_id,
+                    toolset=toolset,
+                    timeout_seconds=timeout_seconds,
+                )
+            else:
+                run = client.runs.create_and_process(
+                    thread_id=thread_id,
+                    agent_id=self._agent.id,
+                    toolset=toolset,
+                )
+        except TimeoutError:
+            raise
         except Exception as exc:
-            logger.error("create_and_process_run failed for thread %s: %s", thread_id, exc)
+            logger.error("Agent run failed for thread %s: %s", thread_id, exc)
             raise RuntimeError(f"Agent run failed: {exc}") from exc
 
         logger.debug("Run %s completed with status '%s'", run.id, run.status)
@@ -396,6 +414,87 @@ class AgentOpsAdvisor:
             raise RuntimeError(f"Agent run ended in failed state: {error_detail}")
 
         return self._extract_last_assistant_message(thread_id)
+
+    def _ask_with_timeout(
+        self,
+        *,
+        client: Any,
+        thread_id: str,
+        toolset: Any,
+        timeout_seconds: int,
+        polling_interval: float = 1.0,
+    ) -> Any:
+        """Create a run and poll it to completion, cancelling if the deadline passes.
+
+        This replicates the core behaviour of ``client.runs.create_and_process``
+        while adding a hard wall-clock deadline.  When the deadline is reached the
+        run is cancelled via the service API and a ``TimeoutError`` is raised so
+        the caller can surface a clear error rather than hanging indefinitely.
+
+        Args:
+            client:           The active ``AgentsClient`` instance.
+            thread_id:        Conversation thread ID.
+            toolset:          Populated ``ToolSet`` used to dispatch tool calls.
+            timeout_seconds:  Maximum seconds to wait before cancelling.
+            polling_interval: Seconds to sleep between status polls (default 1).
+
+        Returns:
+            The completed (or cancelled/expired) ``ThreadRun`` object.
+
+        Raises:
+            TimeoutError: If the run is still active after ``timeout_seconds``.
+        """
+        from azure.ai.agents.models import RunStatus, SubmitToolOutputsAction
+
+        run = client.runs.create(
+            thread_id=thread_id,
+            agent_id=self._agent.id,
+            tools=toolset.definitions if toolset else None,
+            tool_resources=toolset.resources if toolset else None,
+        )
+        logger.debug("Run %s created on thread %s (timeout=%s s)", run.id, thread_id, timeout_seconds)
+
+        deadline = time.monotonic() + timeout_seconds
+
+        while run.status in (RunStatus.QUEUED, RunStatus.IN_PROGRESS, RunStatus.REQUIRES_ACTION):
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "Run %s on thread %s exceeded timeout of %s s — cancelling",
+                    run.id,
+                    thread_id,
+                    timeout_seconds,
+                )
+                try:
+                    client.runs.cancel(thread_id=thread_id, run_id=run.id)
+                except Exception:  # noqa: BLE001
+                    logger.error("Failed to cancel run %s — service may still be running it", run.id, exc_info=True)
+                raise TimeoutError(
+                    f"Agent run {run.id} cancelled after exceeding timeout of {timeout_seconds} s."
+                )
+
+            time.sleep(polling_interval)
+            run = client.runs.get(thread_id=thread_id, run_id=run.id)
+
+            if run.status == RunStatus.REQUIRES_ACTION and isinstance(
+                run.required_action, SubmitToolOutputsAction
+            ):
+                tool_calls = run.required_action.submit_tool_outputs.tool_calls
+                if not tool_calls:
+                    logger.warning("Run %s: no tool calls in REQUIRES_ACTION — cancelling", run.id)
+                    client.runs.cancel(thread_id=thread_id, run_id=run.id)
+                    break
+
+                tool_outputs = toolset.execute_tool_calls(tool_calls)
+                if tool_outputs:
+                    client.runs.submit_tool_outputs(
+                        thread_id=thread_id,
+                        run_id=run.id,
+                        tool_outputs=tool_outputs,
+                    )
+
+            logger.debug("Run %s status: %s", run.id, run.status)
+
+        return run
 
     def _extract_last_assistant_message(self, thread_id: str) -> str:
         """Return the text of the most-recent assistant message in the thread.

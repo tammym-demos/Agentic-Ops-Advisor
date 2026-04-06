@@ -6,6 +6,7 @@ no live Azure credentials are required.
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -92,6 +93,17 @@ def _make_mock_client(*, run_status: str = "completed", assistant_reply: str = "
     mock_run.status = run_status
     mock_run.last_error = None
     client.runs.create_and_process.return_value = mock_run
+
+    # client.runs.create (used by _ask_with_timeout)
+    mock_created_run = MagicMock()
+    mock_created_run.id = "run-789"
+    mock_created_run.status = run_status
+    mock_created_run.last_error = None
+    mock_created_run.required_action = None
+    client.runs.create.return_value = mock_created_run
+
+    # client.runs.get (polling — returns completed run immediately)
+    client.runs.get.return_value = mock_created_run
 
     # client.messages.get_last_message_text_by_role
     client.messages.get_last_message_text_by_role.return_value = assistant_reply
@@ -566,3 +578,102 @@ class TestCoreQueryTypes:
             result = advisor.ask("thread-test", query)
 
         assert isinstance(result, str)
+
+
+# ---------------------------------------------------------------------------
+# Tests: ask() timeout / _ask_with_timeout
+# ---------------------------------------------------------------------------
+
+
+def _deadline_exceeded_after_first_call():
+    """Return a side_effect iterator for time.monotonic that returns 0.0 on the
+    first call (used to set the deadline) and 999.0 on all subsequent calls
+    (simulating that the deadline has been exceeded)."""
+    return itertools.chain([0.0], itertools.repeat(999.0))
+
+
+class TestAskTimeout:
+    """Tests for the timeout_seconds parameter on ask() and _ask_with_timeout."""
+
+    def _make_advisor(self, mock_client: MagicMock) -> "AgentOpsAdvisor":
+        from agent.agent import AgentOpsAdvisor
+
+        advisor = AgentOpsAdvisor(_make_settings())
+        advisor._client = mock_client
+        advisor._agent = mock_client.create_agent.return_value
+        return advisor
+
+    def test_ask_without_timeout_uses_create_and_process(self) -> None:
+        """With no timeout, ask() uses the SDK's create_and_process path."""
+        mock_client = _make_mock_client()
+
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
+            advisor = self._make_advisor(mock_client)
+            advisor.ask("thread-t1", "Hello")
+
+        mock_client.runs.create_and_process.assert_called_once()
+        mock_client.runs.create.assert_not_called()
+
+    def test_ask_with_timeout_uses_polling_path(self) -> None:
+        """With timeout_seconds set, ask() uses the create+poll path."""
+        mock_client = _make_mock_client(run_status="completed")
+
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
+            with patch("agent.agent.time.sleep"):  # skip real sleeps
+                advisor = self._make_advisor(mock_client)
+                result = advisor.ask("thread-t2", "Hello", timeout_seconds=30)
+
+        mock_client.runs.create.assert_called_once()
+        mock_client.runs.create_and_process.assert_not_called()
+        assert isinstance(result, str)
+
+    def test_ask_with_timeout_raises_timeout_error_when_run_stuck(self) -> None:
+        """TimeoutError is raised when the run stays in_progress past the deadline."""
+        mock_client = _make_mock_client()
+
+        # Make runs.create return an in_progress run that never finishes
+        stuck_run = MagicMock()
+        stuck_run.id = "run-stuck"
+        stuck_run.status = "in_progress"
+        stuck_run.required_action = None
+        mock_client.runs.create.return_value = stuck_run
+        mock_client.runs.get.return_value = stuck_run
+
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
+            advisor = self._make_advisor(mock_client)
+            with patch("agent.agent.time.monotonic", side_effect=_deadline_exceeded_after_first_call()):
+                with patch("agent.agent.time.sleep"):
+                    with pytest.raises(TimeoutError, match="cancelled after exceeding timeout"):
+                        advisor.ask("thread-t3", "Stuck query", timeout_seconds=1)
+
+        mock_client.runs.cancel.assert_called_once_with(thread_id="thread-t3", run_id="run-stuck")
+
+    def test_ask_with_timeout_cancel_failure_still_raises_timeout(self) -> None:
+        """TimeoutError is raised even when the cancel API call itself fails."""
+        mock_client = _make_mock_client()
+
+        stuck_run = MagicMock()
+        stuck_run.id = "run-stuck2"
+        stuck_run.status = "in_progress"
+        stuck_run.required_action = None
+        mock_client.runs.create.return_value = stuck_run
+        mock_client.runs.get.return_value = stuck_run
+        mock_client.runs.cancel.side_effect = Exception("cancel API error")
+
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
+            advisor = self._make_advisor(mock_client)
+            with patch("agent.agent.time.monotonic", side_effect=_deadline_exceeded_after_first_call()):
+                with patch("agent.agent.time.sleep"):
+                    with pytest.raises(TimeoutError):
+                        advisor.ask("thread-t4", "Stuck query 2", timeout_seconds=1)
+
+    def test_ask_with_timeout_completes_within_deadline(self) -> None:
+        """A run that finishes before the deadline returns the assistant reply."""
+        mock_client = _make_mock_client(run_status="completed", assistant_reply="Done!")
+
+        with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
+            with patch("agent.agent.time.sleep"):
+                advisor = self._make_advisor(mock_client)
+                result = advisor.ask("thread-t5", "Quick query", timeout_seconds=300)
+
+        assert result == "Done!"
