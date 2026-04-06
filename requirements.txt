@@ -1,5 +1,6 @@
 # Core agent dependencies
-azure-ai-projects>=1.0.0b7
+azure-ai-projects>=2.0.0
+azure-ai-agents>=1.0.0
 mcp>=1.23.0
 azure-ai-evaluation>=1.5.0
 azure-identity>=1.19.0
