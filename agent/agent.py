@@ -1,6 +1,6 @@
 """Agentic Ops Advisor — agent definition and orchestration.
 
-Uses the Azure AI Agent Service SDK (azure-ai-projects) to create a governed,
+Uses the Azure AI Agent Service SDK (azure-ai-agents) to create a governed,
 production-style AI agent for root-cause + change-context reasoning over
 infrastructure telemetry and operator intent.
 
@@ -49,22 +49,22 @@ def _load_system_prompt() -> str:
 
 
 def _import_agent_sdk() -> tuple[Any, Any]:
-    """Import and return (FunctionTool, ToolSet) from the azure-ai-projects SDK.
+    """Import and return (FunctionTool, ToolSet) from the azure-ai-agents SDK.
 
     Centralises the import so both create_agent() and ask() share the same
     error message and import path.
 
     Raises:
-        RuntimeError: If azure-ai-projects is not installed.
+        RuntimeError: If azure-ai-agents is not installed.
     """
     try:
-        from azure.ai.projects.models import FunctionTool, ToolSet
+        from azure.ai.agents.models import FunctionTool, ToolSet
 
         return FunctionTool, ToolSet
     except ImportError as exc:
         raise RuntimeError(
-            "azure-ai-projects is required. "
-            "Install it with: pip install 'azure-ai-projects>=1.0.0b7,<2.0.0'"
+            "azure-ai-agents is required. "
+            "Install it with: pip install 'azure-ai-agents>=1.0.0'"
         ) from exc
 
 
@@ -205,32 +205,32 @@ class AgentOpsAdvisor:
     # ------------------------------------------------------------------
 
     def _get_client(self) -> Any:
-        """Lazily create and return the AIProjectClient.
+        """Lazily create and return the AgentsClient.
 
         Raises:
             RuntimeError: If the SDK packages are not installed.
-            ValueError:   If the connection string is not configured.
+            ValueError:   If the endpoint is not configured.
         """
         if self._client is None:
             try:
-                from azure.ai.projects import AIProjectClient
+                from azure.ai.agents import AgentsClient
                 from azure.identity import DefaultAzureCredential
             except ImportError as exc:
                 raise RuntimeError(
-                    "azure-ai-projects and azure-identity are required. "
-                    "Install them with: pip install azure-ai-projects azure-identity"
+                    "azure-ai-agents and azure-identity are required. "
+                    "Install them with: pip install azure-ai-agents azure-identity"
                 ) from exc
 
-            conn_str = self._settings.azure_ai_project_connection_string
-            if not conn_str:
+            endpoint = self._settings.azure_ai_agents_endpoint
+            if not endpoint:
                 raise ValueError(
-                    "AZURE_AI_PROJECT_CONNECTION_STRING is not set. "
+                    "AZURE_AI_AGENTS_ENDPOINT is not set. "
                     "Set it in your environment or .env file (see .env.example)."
                 )
 
-            logger.debug("Initializing AIProjectClient from connection string")
-            self._client = AIProjectClient.from_connection_string(
-                conn_str=conn_str,
+            logger.debug("Initializing AgentsClient with endpoint: %s", endpoint)
+            self._client = AgentsClient(
+                endpoint=endpoint,
                 credential=DefaultAzureCredential(),
             )
         return self._client
@@ -240,9 +240,9 @@ class AgentOpsAdvisor:
         if self._client is not None:
             try:
                 self._client.close()
-                logger.debug("AIProjectClient closed")
+                logger.debug("AgentsClient closed")
             except Exception:  # noqa: BLE001
-                logger.warning("Error closing AIProjectClient", exc_info=True)
+                logger.warning("Error closing AgentsClient", exc_info=True)
             finally:
                 self._client = None
 
@@ -284,7 +284,7 @@ class AgentOpsAdvisor:
         )
 
         try:
-            self._agent = client.agents.create_agent(
+            self._agent = client.create_agent(
                 model=self._settings.azure_openai_deployment,
                 name=name,
                 instructions=system_prompt,
@@ -303,7 +303,7 @@ class AgentOpsAdvisor:
             agent_id = self._agent.id
             try:
                 client = self._get_client()
-                client.agents.delete_agent(agent_id)
+                client.delete_agent(agent_id)
                 logger.info("Agent deleted: id=%s", agent_id)
             except Exception:  # noqa: BLE001
                 logger.warning("Error deleting agent id=%s", agent_id, exc_info=True)
@@ -326,7 +326,7 @@ class AgentOpsAdvisor:
             The thread object returned by the SDK (has ``.id`` attribute).
         """
         client = self._get_client()
-        thread = client.agents.create_thread()
+        thread = client.threads.create()
         logger.debug("Thread created: id=%s", thread.id)
         return thread
 
@@ -371,7 +371,7 @@ class AgentOpsAdvisor:
         toolset.add(FunctionTool(functions=function_set))
 
         logger.debug("Adding user message to thread %s: %.80r", thread_id, message)
-        client.agents.create_message(
+        client.messages.create(
             thread_id=thread_id,
             role="user",
             content=message,
@@ -379,9 +379,9 @@ class AgentOpsAdvisor:
 
         logger.debug("Starting agent run on thread %s", thread_id)
         try:
-            run = client.agents.create_and_process_run(
+            run = client.runs.create_and_process(
                 thread_id=thread_id,
-                assistant_id=self._agent.id,
+                agent_id=self._agent.id,
                 toolset=toolset,
             )
         except Exception as exc:
@@ -407,15 +407,14 @@ class AgentOpsAdvisor:
             The text content of the latest assistant message, or an empty
             string if no assistant message is found.
         """
-        from azure.ai.projects.models import MessageRole
+        from azure.ai.agents.models import MessageRole
 
         client = self._get_client()
-        messages = client.agents.list_messages(thread_id=thread_id)
-
-        msg = messages.get_last_message_by_role(MessageRole.AGENT)
-        if msg is not None and msg.text_messages:
-            return msg.text_messages[0].text.value
-        return ""
+        last_msg = client.messages.get_last_message_text_by_role(
+            thread_id=thread_id,
+            role=MessageRole.AGENT,
+        )
+        return last_msg if last_msg else ""
 
     # ------------------------------------------------------------------
     # Context manager

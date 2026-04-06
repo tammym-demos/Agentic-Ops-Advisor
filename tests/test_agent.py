@@ -1,6 +1,6 @@
 """Unit tests for agent/agent.py.
 
-Tests are fully offline — all Azure AI Projects client calls are mocked so
+Tests are fully offline — all Azure AI Agents client calls are mocked so
 no live Azure credentials are required.
 """
 
@@ -29,13 +29,13 @@ if not hasattr(_wcs_mod, "get_work_context"):
     _wcs_mod.get_work_context = get_work_context
 
 # ---------------------------------------------------------------------------
-# Shim: agent.py imports MessageRole from azure.ai.projects.models which may
+# Shim: agent.py imports MessageRole from azure.ai.agents.models which may
 # not exist in the installed SDK version.  Add a compatible shim.
 # ---------------------------------------------------------------------------
 try:
-    from azure.ai.projects.models import MessageRole as _MR  # noqa: F401
+    from azure.ai.agents.models import MessageRole as _MR  # noqa: F401
 except ImportError:
-    import azure.ai.projects.models as _models_mod
+    import azure.ai.agents.models as _models_mod
     from enum import Enum
 
     class _MessageRole(str, Enum):
@@ -56,14 +56,16 @@ if TYPE_CHECKING:
 
 def _make_settings(
     *,
-    azure_ai_project_connection_string: str = "endpoint=https://example.com;subscription=sub;resource_group=rg;project=proj",
+    azure_ai_agents_endpoint: str = "https://example.services.ai.azure.com/api/projects/test-project",
+    azure_openai_endpoint: str = "https://example.openai.azure.com/",
     azure_openai_deployment: str = "gpt-4.1",
     enable_work_iq: bool = True,
     enable_mcp: bool = False,
 ) -> SimpleNamespace:
     """Build a minimal settings-like namespace for tests (no .env required)."""
     return SimpleNamespace(
-        azure_ai_project_connection_string=azure_ai_project_connection_string,
+        azure_ai_agents_endpoint=azure_ai_agents_endpoint,
+        azure_openai_endpoint=azure_openai_endpoint,
         azure_openai_deployment=azure_openai_deployment,
         enable_work_iq=enable_work_iq,
         enable_mcp=enable_mcp,
@@ -71,36 +73,28 @@ def _make_settings(
 
 
 def _make_mock_client(*, run_status: str = "completed", assistant_reply: str = "Test reply") -> MagicMock:
-    """Return a MagicMock that mimics an AIProjectClient."""
+    """Return a MagicMock that mimics an AgentsClient (v2 SDK)."""
     client = MagicMock()
 
-    # agents.create_agent
+    # client.create_agent
     mock_agent = MagicMock()
     mock_agent.id = "agent-123"
-    client.agents.create_agent.return_value = mock_agent
+    client.create_agent.return_value = mock_agent
 
-    # agents.create_thread
+    # client.threads.create
     mock_thread = MagicMock()
     mock_thread.id = "thread-456"
-    client.agents.create_thread.return_value = mock_thread
+    client.threads.create.return_value = mock_thread
 
-    # agents.create_and_process_run
+    # client.runs.create_and_process
     mock_run = MagicMock()
     mock_run.id = "run-789"
     mock_run.status = run_status
     mock_run.last_error = None
-    client.agents.create_and_process_run.return_value = mock_run
+    client.runs.create_and_process.return_value = mock_run
 
-    # agents.list_messages — return one assistant message via get_last_message_by_role
-    text_content = MagicMock()
-    text_content.text.value = assistant_reply
-    mock_msg = MagicMock()
-    mock_msg.role = "assistant"
-    mock_msg.text_messages = [text_content]
-    mock_messages = MagicMock()
-    mock_messages.data = [mock_msg]
-    mock_messages.get_last_message_by_role.return_value = mock_msg
-    client.agents.list_messages.return_value = mock_messages
+    # client.messages.get_last_message_text_by_role
+    client.messages.get_last_message_text_by_role.return_value = assistant_reply
 
     return client
 
@@ -255,6 +249,7 @@ class TestAgentOpsAdvisorInit:
             # Ensure the required vars are absent
             import os
 
+            os.environ.pop("AZURE_AI_AGENTS_ENDPOINT", None)
             os.environ.pop("AZURE_AI_PROJECT_CONNECTION_STRING", None)
             os.environ.pop("AZURE_OPENAI_ENDPOINT", None)
             with pytest.raises((ValueError, RuntimeError)):
@@ -274,14 +269,14 @@ class TestAgentOpsAdvisorInit:
 
 
 class TestAgentOpsAdvisorClient:
-    def test_get_client_raises_without_connection_string(self) -> None:
-        """_get_client raises ValueError when connection string is empty."""
+    def test_get_client_raises_without_endpoint(self) -> None:
+        """_get_client raises ValueError when endpoint is empty."""
         from agent.agent import AgentOpsAdvisor
 
-        settings = _make_settings(azure_ai_project_connection_string="")
+        settings = _make_settings(azure_ai_agents_endpoint="")
         advisor = AgentOpsAdvisor(settings)
 
-        with pytest.raises(ValueError, match="AZURE_AI_PROJECT_CONNECTION_STRING"):
+        with pytest.raises(ValueError, match="AZURE_AI_AGENTS_ENDPOINT"):
             advisor._get_client()
 
     def test_close_is_idempotent(self) -> None:
@@ -323,7 +318,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
 
         assert agent.id == "agent-123"
         assert advisor.agent_id == "agent-123"
-        mock_client.agents.create_agent.assert_called_once()
+        mock_client.create_agent.assert_called_once()
 
     def test_create_agent_passes_model_name(self) -> None:
         """create_agent() forwards the deployment name to the SDK."""
@@ -339,7 +334,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
             advisor._client = mock_client
             advisor.create_agent()
 
-        call_kwargs = mock_client.agents.create_agent.call_args.kwargs
+        call_kwargs = mock_client.create_agent.call_args.kwargs
         assert call_kwargs.get("model") == "gpt-4.1"
 
     def test_create_agent_passes_instructions(self) -> None:
@@ -357,7 +352,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
             advisor._client = mock_client
             advisor.create_agent()
 
-        call_kwargs = mock_client.agents.create_agent.call_args.kwargs
+        call_kwargs = mock_client.create_agent.call_args.kwargs
         assert call_kwargs.get("instructions") == expected_prompt
 
     def test_delete_agent_clears_reference(self) -> None:
@@ -377,7 +372,7 @@ class TestAgentOpsAdvisorAgentLifecycle:
 
         assert advisor._agent is None
         assert advisor.agent_id is None
-        mock_client.agents.delete_agent.assert_called_once_with("agent-123")
+        mock_client.delete_agent.assert_called_once_with("agent-123")
 
     def test_delete_agent_noop_when_no_agent(self) -> None:
         """delete_agent() is a no-op when no agent has been created."""
@@ -404,7 +399,7 @@ class TestAgentOpsAdvisorThreads:
         thread = advisor.create_thread()
 
         assert thread.id == "thread-456"
-        mock_client.agents.create_thread.assert_called_once()
+        mock_client.threads.create.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +414,7 @@ class TestAgentOpsAdvisorAsk:
         advisor = AgentOpsAdvisor(_make_settings(**kwargs))
         advisor._client = mock_client
         # Pre-set the agent so we skip create_agent() in ask tests
-        advisor._agent = mock_client.agents.create_agent.return_value
+        advisor._agent = mock_client.create_agent.return_value
         return advisor
 
     def test_ask_raises_without_agent(self) -> None:
@@ -441,22 +436,22 @@ class TestAgentOpsAdvisorAsk:
         assert "GPU utilization" in result or result == "GPU utilization dropped due to scheduler issue."
 
     def test_ask_sends_user_message(self) -> None:
-        """ask() calls create_message with the user's text."""
+        """ask() calls messages.create with the user's text."""
         mock_client = _make_mock_client()
 
         with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             advisor = self._make_advisor(mock_client)
             advisor.ask("thread-456", "What changed before the latency spike?")
 
-        mock_client.agents.create_message.assert_called_once()
-        call_kwargs = mock_client.agents.create_message.call_args.kwargs
+        mock_client.messages.create.assert_called_once()
+        call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs.get("role") == "user"
         assert "latency" in call_kwargs.get("content", "")
 
     def test_ask_raises_on_failed_run(self) -> None:
         """ask() raises RuntimeError when the run status is 'failed'."""
         mock_client = _make_mock_client(run_status="failed")
-        mock_client.agents.create_and_process_run.return_value.last_error = "Model overloaded"
+        mock_client.runs.create_and_process.return_value.last_error = "Model overloaded"
 
         with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             advisor = self._make_advisor(mock_client)
@@ -466,10 +461,8 @@ class TestAgentOpsAdvisorAsk:
     def test_ask_empty_when_no_assistant_message(self) -> None:
         """ask() returns empty string when no assistant message is found."""
         mock_client = _make_mock_client()
-        # Override list_messages so get_last_message_by_role returns None
-        mock_messages = MagicMock()
-        mock_messages.get_last_message_by_role.return_value = None
-        mock_client.agents.list_messages.return_value = mock_messages
+        # Override so get_last_message_text_by_role returns None
+        mock_client.messages.get_last_message_text_by_role.return_value = None
 
         with patch("agent.agent._import_agent_sdk", return_value=(MagicMock(), MagicMock())):
             advisor = self._make_advisor(mock_client)
@@ -568,7 +561,7 @@ class TestCoreQueryTypes:
 
             advisor = AgentOpsAdvisor(_make_settings())
             advisor._client = mock_client
-            advisor._agent = mock_client.agents.create_agent.return_value
+            advisor._agent = mock_client.create_agent.return_value
 
             result = advisor.ask("thread-test", query)
 

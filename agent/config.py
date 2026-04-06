@@ -40,8 +40,18 @@ class Settings:
     # ------------------------------------------------------------------
     # Azure AI / OpenAI
     # ------------------------------------------------------------------
+    azure_ai_agents_endpoint: Optional[str] = None
+    """Azure AI Foundry project endpoint URL (v2 SDK).
+
+    Example: https://hub-agentops-prod.services.ai.azure.com/api/projects/proj-agentops-prod
+    """
+
     azure_ai_project_connection_string: Optional[str] = None
-    """Azure AI Foundry project connection string."""
+    """Legacy Azure AI Foundry project connection string (v1 SDK, deprecated).
+
+    Kept for backward compatibility. If set and azure_ai_agents_endpoint is not,
+    the connection string is parsed to construct the endpoint.
+    """
 
     azure_openai_endpoint: Optional[str] = None
     """Azure OpenAI service endpoint URL."""
@@ -100,8 +110,15 @@ class Settings:
             return value if value else None
 
         # Required fields — must be present for the agent to function
-        azure_ai_project_connection_string = _require("AZURE_AI_PROJECT_CONNECTION_STRING")
-        azure_openai_endpoint = _require("AZURE_OPENAI_ENDPOINT")
+        azure_ai_agents_endpoint = _optional("AZURE_AI_AGENTS_ENDPOINT") or ""
+        azure_ai_project_connection_string = _optional("AZURE_AI_PROJECT_CONNECTION_STRING") or ""
+        azure_openai_endpoint = _optional("AZURE_OPENAI_ENDPOINT") or ""
+
+        # Require at least one of endpoint or connection string
+        if not azure_ai_agents_endpoint and not azure_ai_project_connection_string:
+            missing.append("AZURE_AI_AGENTS_ENDPOINT (or AZURE_AI_PROJECT_CONNECTION_STRING)")
+        if not azure_openai_endpoint:
+            missing.append("AZURE_OPENAI_ENDPOINT")
 
         if missing:
             raise ValueError(
@@ -116,8 +133,9 @@ class Settings:
             db_mode=os.getenv("DB_MODE", "sqlite").strip() or "sqlite",
             db_connection_string=_optional("DB_CONNECTION_STRING"),
             # Azure AI
-            azure_ai_project_connection_string=azure_ai_project_connection_string,
-            azure_openai_endpoint=azure_openai_endpoint,
+            azure_ai_agents_endpoint=azure_ai_agents_endpoint or None,
+            azure_ai_project_connection_string=azure_ai_project_connection_string or None,
+            azure_openai_endpoint=azure_openai_endpoint or None,
             azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1").strip() or "gpt-4.1",
             azure_openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview").strip()
             or "2025-01-01-preview",
