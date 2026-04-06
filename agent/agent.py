@@ -414,7 +414,7 @@ class AgentOpsAdvisor:
             thread_id=thread_id,
             role=MessageRole.AGENT,
         )
-        return last_msg if last_msg else ""
+        return last_msg.text.value if last_msg else ""
 
     # ------------------------------------------------------------------
     # Context manager

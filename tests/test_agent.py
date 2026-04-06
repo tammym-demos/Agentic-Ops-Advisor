@@ -94,7 +94,9 @@ def _make_mock_client(*, run_status: str = "completed", assistant_reply: str = "
     client.runs.create_and_process.return_value = mock_run
 
     # client.messages.get_last_message_text_by_role
-    client.messages.get_last_message_text_by_role.return_value = assistant_reply
+    mock_message = MagicMock()
+    mock_message.text.value = assistant_reply
+    client.messages.get_last_message_text_by_role.return_value = mock_message
 
     return client
 
