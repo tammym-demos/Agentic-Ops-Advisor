@@ -299,6 +299,56 @@ DEPLOY_OUTPUT=$(az deployment sub create \
 
 success "Deployment complete!"
 
+# ---- Ensure Azure AI Developer role on AI hub --------------------------------
+# The Foundry Agent Service APIs are data-plane operations that require the
+# Azure AI Developer role on the CognitiveServices hub (Contributor alone is
+# insufficient).  This assignment is idempotent — safe to run on every deploy.
+
+PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
+ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
+HUB_RG=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['resourceGroupName']['value'])" 2>/dev/null || echo "rg-agentic-ops-advisor")
+HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
+HUB_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${HUB_RG}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}"
+
+info "Ensuring Azure AI Developer role on AI hub: ${HUB_NAME}…"
+
+ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
+if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
+  SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+  if [[ -n "${SP_NAME}" ]]; then
+    DEPLOYER_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
+  else
+    DEPLOYER_ID=""
+  fi
+  DEPLOYER_PRINCIPAL_TYPE="ServicePrincipal"
+else
+  DEPLOYER_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+  DEPLOYER_PRINCIPAL_TYPE="User"
+fi
+
+if [[ -z "${DEPLOYER_ID}" ]]; then
+  warn "Could not determine deployer object ID — skipping Azure AI Developer role assignment."
+else
+  ROLE_EXISTS=$(az role assignment list \
+    --assignee "${DEPLOYER_ID}" \
+    --role "Azure AI Developer" \
+    --scope "${HUB_SCOPE}" \
+    --query "[].id" -o tsv 2>/dev/null || echo "")
+
+  if [[ -z "${ROLE_EXISTS}" ]]; then
+    info "Assigning Azure AI Developer role to ${DEPLOYER_ID} (${DEPLOYER_PRINCIPAL_TYPE})…"
+    az role assignment create \
+      --assignee-object-id "${DEPLOYER_ID}" \
+      --assignee-principal-type "${DEPLOYER_PRINCIPAL_TYPE}" \
+      --role "Azure AI Developer" \
+      --scope "${HUB_SCOPE}" \
+      --output none
+    success "Azure AI Developer role assigned on ${HUB_NAME}."
+  else
+    success "Azure AI Developer role already present on ${HUB_NAME}."
+  fi
+fi
+
 # ---- Extract outputs --------------------------------------------------
 
 get_output() {

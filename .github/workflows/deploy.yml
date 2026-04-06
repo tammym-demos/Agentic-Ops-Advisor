@@ -47,6 +47,12 @@
 #   az role assignment create --assignee <appId> \
 #       --role contributor \
 #       --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor
+#   # Grant data-plane access to the AI hub (required for Foundry Agent Service APIs):
+#   az role assignment create \
+#       --assignee-object-id <spObjectId> \
+#       --assignee-principal-type ServicePrincipal \
+#       --role "Azure AI Developer" \
+#       --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
 #   # Add federated credential for this repo + branch:
 #   az ad app federated-credential create --id <appId> --parameters '{
 #     "name": "agentic-ops-main",
@@ -95,7 +101,7 @@ jobs:
             infra_changed: ${{ steps.filter.outputs.infra }}
         steps:
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
               with:
                   fetch-depth: 2  # need previous commit to diff against
 
@@ -135,14 +141,14 @@ jobs:
             # Step 1 — Checkout
             # ------------------------------------------------------------------
             - name: Checkout code
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             # ------------------------------------------------------------------
             # Step 2 — Azure login (OIDC preferred; falls back to SP secret)
             # ------------------------------------------------------------------
             - name: Azure login (OIDC)
               if: ${{ env.AZURE_CLIENT_ID != '' }}
-              uses: azure/login@v2
+              uses: azure/login@v3
               with:
                   client-id: ${{ secrets.AZURE_CLIENT_ID }}
                   tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -152,7 +158,7 @@ jobs:
 
             - name: Azure login (service principal secret fallback)
               if: ${{ env.AZURE_CLIENT_ID == '' }}
-              uses: azure/login@v2
+              uses: azure/login@v3
               with:
                   creds: ${{ secrets.AZURE_CREDENTIALS }}
               env:
@@ -188,6 +194,61 @@ jobs:
                       --parameters @infra/parameters.json \
                       --output table
                   echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 4b — Ensure Azure AI Developer role on the AI hub
+            # (data-plane access required by Foundry Agent Service APIs)
+            # ------------------------------------------------------------------
+            - name: Ensure Azure AI Developer role on AI hub
+              run: |
+                  PARAMS_FILE="infra/parameters.json"
+                  PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
+                  ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
+                  RG_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['resourceGroupName']['value'])" 2>/dev/null || echo "rg-agentic-ops-advisor")
+                  HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
+                  # Use the authenticated subscription ID from az CLI to avoid leading/trailing
+                  # whitespace in the AZURE_SUBSCRIPTION_ID secret causing scope lookup errors.
+                  SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                  HUB_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}"
+
+                  # Resolve the object ID of the currently authenticated principal
+                  ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
+                  if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
+                      SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="ServicePrincipal"
+                  else
+                      PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="User"
+                  fi
+
+                  if [[ -z "${PRINCIPAL_ID}" ]]; then
+                      echo "⚠️  Could not determine principal object ID — skipping Azure AI Developer role assignment."
+                      exit 0
+                  fi
+
+                  echo "Principal: ${PRINCIPAL_ID} (${PRINCIPAL_TYPE})"
+                  echo "Hub scope: ${HUB_SCOPE}"
+
+                  # Idempotent: only assign if not already present
+                  ROLE_EXISTS=$(az role assignment list \
+                      --assignee "${PRINCIPAL_ID}" \
+                      --role "Azure AI Developer" \
+                      --scope "${HUB_SCOPE}" \
+                      --query "[].id" -o tsv 2>/dev/null || echo "")
+
+                  if [[ -z "${ROLE_EXISTS}" ]]; then
+                      echo "Assigning Azure AI Developer role to ${PRINCIPAL_ID}..."
+                      az role assignment create \
+                          --assignee-object-id "${PRINCIPAL_ID}" \
+                          --assignee-principal-type "${PRINCIPAL_TYPE}" \
+                          --role "Azure AI Developer" \
+                          --scope "${HUB_SCOPE}" \
+                          --output none
+                      echo "✅ Azure AI Developer role assigned on ${HUB_NAME}."
+                  else
+                      echo "✅ Azure AI Developer role already present on ${HUB_NAME}."
+                  fi
 
             # ------------------------------------------------------------------
             # Step 5a — Resolve ACR login server
@@ -328,7 +389,9 @@ jobs:
                   echo "::group::Agent deployment"
                   python - <<'EOF'
                   import os, sys
+                  sys.path.insert(0, os.getcwd())
                   from azure.ai.agents import AgentsClient
+                  from azure.ai.agents.models import FunctionTool, ToolSet
                   from azure.identity import DefaultAzureCredential
 
                   endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
@@ -351,6 +414,14 @@ jobs:
                   deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
                   container_image = os.environ.get("CONTAINER_IMAGE", "")
 
+                  # Build toolset so tool schemas are registered with the agent definition.
+                  # This ensures the LLM knows which tools it can call at runtime.
+                  from agent.agent import _build_function_set
+                  enable_work_iq = os.environ.get("ENABLE_WORK_IQ", "true").lower() not in ("false", "0", "no")
+                  function_set = _build_function_set(enable_work_iq)
+                  agent_toolset = ToolSet()
+                  agent_toolset.add(FunctionTool(functions=function_set))
+
                   # Upsert agent: list existing, update if found, create if not
                   agents = client.list_agents()
                   existing = next((a for a in agents if a.name == "agentic-ops-advisor"), None)
@@ -359,12 +430,13 @@ jobs:
                       model=deployment_name,
                       name="agentic-ops-advisor",
                       instructions=system_prompt,
+                      toolset=agent_toolset,
                       description="Agentic Ops Advisor — containerised agent for infrastructure telemetry & change-context reasoning",
                       metadata={"container_image": container_image} if container_image else {},
                   )
 
                   if existing:
-                      agent_obj = client.update_agent(assistant_id=existing.id, **agent_kwargs)
+                      agent_obj = client.update_agent(agent_id=existing.id, **agent_kwargs)
                       print(f"✅ Updated agent: {agent_obj.id}")
                   else:
                       agent_obj = client.create_agent(**agent_kwargs)
@@ -380,15 +452,21 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
+            # Step 5d — Seed local SQLite DB (required for smoke-test tool calls)
+            # ------------------------------------------------------------------
+            - name: Set up local SQLite DB for smoke test
+              run: python scripts/setup_local_db.py
+
+            # ------------------------------------------------------------------
             # Step 6 — Smoke test: send one query, verify response
             # ------------------------------------------------------------------
             - name: Smoke test
               run: |
                   echo "::group::Smoke test"
                   python - <<'EOF'
-                  import os, sys, time
+                  import os, sys
+                  sys.path.insert(0, os.getcwd())
 
-                  _SMOKE_TEST_TIMEOUT_SECONDS = 120
                   endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
                   agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
 
@@ -399,11 +477,20 @@ jobs:
                   from azure.ai.agents import AgentsClient
                   from azure.ai.agents.models import MessageRole
                   from azure.identity import DefaultAzureCredential
+                  from agent.agent import _build_function_set
 
                   client = AgentsClient(
                       endpoint=endpoint,
                       credential=DefaultAzureCredential(),
                   )
+
+                  # Register function implementations so create_and_process can dispatch
+                  # tool calls automatically during the run. enable_auto_function_calls
+                  # sets client.runs._function_tool, which create_and_process uses for
+                  # dispatching — passing toolset only to create_and_process is NOT enough.
+                  enable_work_iq = os.environ.get("ENABLE_WORK_IQ", "true").lower() not in ("false", "0", "no")
+                  function_set = _build_function_set(enable_work_iq)
+                  client.enable_auto_function_calls(tools=function_set)
 
                   probe = "What is the GPU utilization trend for the last 24 hours?"
                   print(f"Probe query: {probe}")
@@ -417,19 +504,18 @@ jobs:
 
                   run = client.runs.create_and_process(
                       thread_id=thread.id,
-                      assistant_id=agent_id,
+                      agent_id=agent_id,
                   )
 
-                  deadline = time.time() + _SMOKE_TEST_TIMEOUT_SECONDS
-                  while run.status in ("queued", "in_progress") and time.time() < deadline:
-                      time.sleep(3)
-                      run = client.runs.get(thread_id=thread.id, run_id=run.id)
-
                   if run.status != "completed":
-                      print(f"❌ Smoke test FAILED — run status: {run.status}")
+                      error_detail = getattr(run, "last_error", None)
+                      error_msg = f"run status: {run.status}"
+                      if error_detail:
+                          error_msg += f" — {error_detail}"
+                      print(f"❌ Smoke test FAILED — {error_msg}")
                       sys.exit(1)
 
-                  response_text = client.get_last_message_text_by_role(
+                  response_text = client.messages.get_last_message_text_by_role(
                       thread_id=thread.id,
                       role=MessageRole.AGENT,
                   )
@@ -437,7 +523,7 @@ jobs:
                       print("❌ Smoke test FAILED — no agent response received.")
                       sys.exit(1)
 
-                  print(f"✅ Smoke test PASSED\nResponse preview: {response_text[:300]}")
+                  print(f"✅ Smoke test PASSED\nResponse preview: {response_text.text.value[:300]}")
                   EOF
                   echo "::endgroup::"
 

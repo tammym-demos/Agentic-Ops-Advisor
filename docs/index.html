@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agentic Ops Advisor — Self-Driving Operations with AI Agents</title>
-  <meta name="description" content="Governed, production-style AI agent for root-cause reasoning over infrastructure telemetry and operator intent. Powered by Azure AI Foundry." />
+  <title>Agentic Ops Advisor — Built with GitHub, Deployed to Azure AI Foundry</title>
+  <meta name="description" content="A production-style AI agent built with GitHub Copilot, shipped via GitHub Actions, hosted on GitHub Pages, and deployed to Azure AI Foundry." />
 
   <!-- Open Graph -->
-  <meta property="og:title" content="Agentic Ops Advisor" />
-  <meta property="og:description" content="Self-driving operations with AI agents. Powered by Azure AI Foundry." />
+  <meta property="og:title" content="Agentic Ops Advisor — Built with GitHub" />
+  <meta property="og:description" content="Self-driving ops with AI agents. Coded with GitHub Copilot · CI/CD via GitHub Actions · Hosted on GitHub Pages." />
   <meta property="og:type" content="website" />
 
   <!-- Favicon (emoji fallback) -->
@@ -39,12 +39,12 @@
         Agentic Ops Advisor
       </a>
       <ul class="nav-links" role="list">
-        <li><a href="#features">Features</a></li>
+        <li><a href="#github-products">GitHub</a></li>
+        <li><a href="#features">Capabilities</a></li>
         <li><a href="#architecture">Architecture</a></li>
-        <li><a href="#demo">Demo</a></li>
         <li><a href="#techstack">Tech Stack</a></li>
         <li><a href="pages/dashboard.html">📊 Dashboard</a></li>
-        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub ↗</a></li>
+        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener" style="color: var(--accent-blue); font-weight: 600;">⭐ GitHub</a></li>
       </ul>
     </div>
   </nav>
@@ -55,8 +55,10 @@
   <header class="hero" id="top">
     <div class="container">
       <div class="hero-eyebrow">
-        <span aria-hidden="true">🚀</span>
-        Azure AI Foundry Agent Service
+        <span aria-hidden="true">
+          <svg height="16" viewBox="0 0 16 16" width="16" fill="currentColor" style="vertical-align:middle;margin-right:4px;" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+        </span>
+        Built with GitHub Copilot · Shipped via GitHub Actions
       </div>
 
       <h1 class="hero-title">
@@ -64,18 +66,26 @@
       </h1>
 
       <p class="hero-tagline">
-        Self-driving operations with AI agents — root-cause reasoning, change correlation,
-        and governed remediation over your infrastructure telemetry and operator intent.
+        An AI ops agent born on GitHub — coded with <strong>GitHub Copilot</strong>,
+        tested and deployed through <strong>GitHub Actions</strong> CI/CD,
+        hosted on <strong>GitHub Pages</strong>, and tracked with <strong>GitHub Issues</strong>.
+        Every commit, every pull request, every release — the GitHub platform at work.
       </p>
 
       <div class="hero-ctas">
         <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
            class="btn btn-primary"
            target="_blank" rel="noopener">
-          <span aria-hidden="true">⭐</span> View on GitHub
+          <svg height="18" viewBox="0 0 16 16" width="18" fill="currentColor" aria-hidden="true"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>
+          ⭐ Star on GitHub
         </a>
-        <a href="#architecture" class="btn btn-secondary">
-          <span aria-hidden="true">🔍</span> Explore Architecture
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions"
+           class="btn btn-secondary"
+           target="_blank" rel="noopener">
+          <span aria-hidden="true">⚙️</span> View GitHub Actions
+        </a>
+        <a href="#github-products" class="btn btn-secondary">
+          <span aria-hidden="true">🔍</span> Explore GitHub Features
         </a>
       </div>
     </div>
@@ -87,20 +97,102 @@
   <section class="stats-strip" aria-label="Project highlights">
     <div class="container">
       <div class="stat-item fade-in">
-        <span class="stat-number">3</span>
-        <span class="stat-label">Tool Surfaces</span>
+        <span class="stat-number">100%</span>
+        <span class="stat-label">Open Source on GitHub</span>
       </div>
       <div class="stat-item fade-in">
-        <span class="stat-number">4</span>
-        <span class="stat-label">Custom Evaluators</span>
+        <span class="stat-number">Copilot</span>
+        <span class="stat-label">AI-Coded with GitHub Copilot</span>
       </div>
       <div class="stat-item fade-in">
-        <span class="stat-number">30+</span>
-        <span class="stat-label">Days Synthetic Data</span>
+        <span class="stat-number">Actions</span>
+        <span class="stat-label">CI/CD via GitHub Actions</span>
       </div>
       <div class="stat-item fade-in">
-        <span class="stat-number">GPT-4.1</span>
-        <span class="stat-label">Powered by</span>
+        <span class="stat-number">Issues</span>
+        <span class="stat-label">Automated via GitHub Issues</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       GITHUB PRODUCTS — HERO FEATURES
+  ═══════════════════════════════════════════ -->
+  <section class="github-products" id="github-products">
+    <div class="container">
+      <span class="section-label" style="color: var(--accent-green);">GitHub Products</span>
+      <h2 class="section-title">The GitHub platform — front and center</h2>
+      <p class="section-subtitle">
+        Every layer of this project is powered by a GitHub product. From the first line of code
+        to the live deployment, GitHub is the hero of this story.
+      </p>
+
+      <div class="github-products-grid">
+
+        <article class="github-product-card fade-in" style="--gh-accent: #3fb950;">
+          <div class="gh-product-header">
+            <span class="gh-product-icon" aria-hidden="true">🤖</span>
+            <span class="gh-product-badge">GitHub Copilot</span>
+          </div>
+          <h3 class="gh-product-title">GitHub Copilot</h3>
+          <p class="gh-product-desc">
+            Every Python file, every tool, every evaluator — written with GitHub Copilot's
+            AI pair programming. Copilot accelerated development from scaffolding to production-ready
+            agent code in record time.
+          </p>
+          <a href="https://github.com/features/copilot" target="_blank" rel="noopener" class="gh-product-link">
+            Learn about Copilot ↗
+          </a>
+        </article>
+
+        <article class="github-product-card fade-in" style="--gh-accent: #bc8cff;">
+          <div class="gh-product-header">
+            <span class="gh-product-icon" aria-hidden="true">⚙️</span>
+            <span class="gh-product-badge">GitHub Actions</span>
+          </div>
+          <h3 class="gh-product-title">GitHub Actions</h3>
+          <p class="gh-product-desc">
+            The full CI/CD pipeline runs on GitHub Actions: lint → test → eval gates →
+            Docker build → Azure deployment. Every pull request triggers automated quality
+            and regression checks before anything ships.
+          </p>
+          <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions" target="_blank" rel="noopener" class="gh-product-link">
+            View Workflows ↗
+          </a>
+        </article>
+
+        <article class="github-product-card fade-in" style="--gh-accent: #39d353;">
+          <div class="gh-product-header">
+            <span class="gh-product-icon" aria-hidden="true">📄</span>
+            <span class="gh-product-badge">GitHub Pages</span>
+          </div>
+          <h3 class="gh-product-title">GitHub Pages</h3>
+          <p class="gh-product-desc">
+            This very site is hosted on GitHub Pages — deployed automatically from the
+            <code>docs/</code> folder on every merge to main. Zero infrastructure, zero
+            cost, zero ops burden. The demo site ships with the code.
+          </p>
+          <a href="https://pages.github.com/" target="_blank" rel="noopener" class="gh-product-link">
+            Learn about Pages ↗
+          </a>
+        </article>
+
+        <article class="github-product-card fade-in" style="--gh-accent: #f0883e;">
+          <div class="gh-product-header">
+            <span class="gh-product-icon" aria-hidden="true">🐛</span>
+            <span class="gh-product-badge">GitHub Issues</span>
+          </div>
+          <h3 class="gh-product-title">GitHub Issues</h3>
+          <p class="gh-product-desc">
+            Squad automation workflows automatically triage, label, and assign incoming
+            issues. Pull request CI results are posted back as issue comments — issue
+            tracking is fully integrated into the delivery pipeline.
+          </p>
+          <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/issues" target="_blank" rel="noopener" class="gh-product-link">
+            View Issues ↗
+          </a>
+        </article>
+
       </div>
     </div>
   </section>
@@ -110,11 +202,11 @@
   ═══════════════════════════════════════════ -->
   <section class="features" id="features">
     <div class="container">
-      <span class="section-label">Capabilities</span>
-      <h2 class="section-title">Everything you need for agentic ops</h2>
+      <span class="section-label">Agentic Capabilities</span>
+      <h2 class="section-title">What the agent can do</h2>
       <p class="section-subtitle">
-        A governed, production-style AI agent that combines telemetry data, change context,
-        and operator intent to deliver fast, evidence-backed incident response.
+        Built and deployed via GitHub, the agent delivers governed AI ops capabilities —
+        root-cause diagnosis, change correlation, safe remediation, and continuous evaluation.
       </p>
 
       <div class="features-grid">
@@ -151,13 +243,13 @@
           <h3 class="feature-title">Continuous Evaluation</h3>
           <p class="feature-desc">
             Four custom evaluators — diagnosis accuracy, evidence grounding, action safety,
-            and hallucination detection — run offline and in CI for regression detection.
+            and hallucination detection — run offline and in GitHub Actions CI for regression detection.
           </p>
         </article>
 
         <article class="feature-card fade-in" style="--card-accent: #39d353;">
           <span class="feature-icon" aria-hidden="true">📡</span>
-          <h3 class="feature-title">Observability & Monitoring</h3>
+          <h3 class="feature-title">Observability &amp; Monitoring</h3>
           <p class="feature-desc">
             OpenTelemetry traces for every agent invocation, tool call, and LLM request.
             Exports to Application Insights with Azure Monitor Workbook dashboards.
@@ -168,8 +260,8 @@
           <span class="feature-icon" aria-hidden="true">🐳</span>
           <h3 class="feature-title">Container Deployment</h3>
           <p class="feature-desc">
-            Containerized agent deployed to Azure AI Foundry Agent Service via Docker + ACR.
-            Bicep IaC, GitHub Actions CI/CD with automated build, push, and evaluation gates.
+            Containerized agent built by GitHub Actions and deployed to Azure Container Registry (ACR),
+            then served via Azure AI Foundry Agent Service using Bicep IaC.
           </p>
         </article>
 
@@ -183,22 +275,26 @@
   <section class="architecture" id="architecture">
     <div class="container">
       <span class="section-label">Architecture</span>
-      <h2 class="section-title">How it works</h2>
+      <h2 class="section-title">GitHub builds it · Azure runs it</h2>
       <p class="section-subtitle">
-        Three tool surfaces connected to the agent through Azure AI Foundry,
-        with OpenTelemetry observability flowing to Azure Monitor.
+        The GitHub platform owns the entire build pipeline — code, CI/CD, security, packaging.
+        Azure AI Foundry provides the production runtime for the agent.
       </p>
 
       <div class="arch-diagram fade-in">
-        <!-- Inline architecture SVG diagram -->
-        <svg viewBox="0 0 900 500" xmlns="http://www.w3.org/2000/svg"
-             role="img" aria-label="Agentic Ops Advisor architecture diagram"
-             style="width:100%; max-width:900px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+        <!-- Inline architecture SVG diagram — GitHub (build) → Azure (runtime) -->
+        <svg viewBox="0 0 960 520" xmlns="http://www.w3.org/2000/svg"
+             role="img" aria-label="Agentic Ops Advisor architecture diagram showing GitHub build pipeline and Azure runtime"
+             style="width:100%; max-width:960px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
 
           <defs>
             <marker id="arrowhead" markerWidth="10" markerHeight="7"
                     refX="9" refY="3.5" orient="auto">
               <polygon points="0 0, 10 3.5, 0 7" fill="#30363d" />
+            </marker>
+            <marker id="arrowhead-green" markerWidth="10" markerHeight="7"
+                    refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="#3fb950" />
             </marker>
             <marker id="arrowhead-blue" markerWidth="10" markerHeight="7"
                     refX="9" refY="3.5" orient="auto">
@@ -211,89 +307,121 @@
           </defs>
 
           <!-- Background -->
-          <rect width="900" height="500" fill="#161b22" rx="12"/>
+          <rect width="960" height="520" fill="#161b22" rx="12"/>
 
-          <!-- ── OPERATOR (left) ── -->
-          <rect x="30" y="190" width="130" height="80" rx="10" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
-          <text x="95" y="220" text-anchor="middle" fill="#8b949e" font-size="20">👤</text>
-          <text x="95" y="243" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">Ops Engineer</text>
-          <text x="95" y="259" text-anchor="middle" fill="#6e7681" font-size="10">Natural language query</text>
+          <!-- ══ GITHUB BUILD LAYER (left panel) ══ -->
+          <rect x="20" y="30" width="400" height="460" rx="14"
+                fill="rgba(63,185,80,0.04)" stroke="rgba(63,185,80,0.35)" stroke-width="1.5" stroke-dasharray="8 4"/>
+          <text x="220" y="58" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="700" letter-spacing="0.1em">⬡  GITHUB PLATFORM  —  BUILD LAYER</text>
+
+          <!-- GitHub Copilot -->
+          <rect x="40" y="75" width="170" height="75" rx="10" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+          <text x="125" y="103" text-anchor="middle" fill="#3fb950" font-size="16">🤖</text>
+          <text x="125" y="122" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">GitHub Copilot</text>
+          <text x="125" y="139" text-anchor="middle" fill="#8b949e" font-size="9">AI pair programmer</text>
+
+          <!-- GitHub Issues -->
+          <rect x="230" y="75" width="170" height="75" rx="10" fill="#1c2330" stroke="#f0883e" stroke-width="1.5"/>
+          <text x="315" y="103" text-anchor="middle" fill="#f0883e" font-size="16">🐛</text>
+          <text x="315" y="122" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">GitHub Issues</text>
+          <text x="315" y="139" text-anchor="middle" fill="#8b949e" font-size="9">Squad triage · auto-assign</text>
+
+          <!-- GitHub Pages -->
+          <rect x="40" y="170" width="170" height="75" rx="10" fill="#1c2330" stroke="#39d353" stroke-width="1.5"/>
+          <text x="125" y="198" text-anchor="middle" fill="#39d353" font-size="16">📄</text>
+          <text x="125" y="218" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">GitHub Pages</text>
+          <text x="125" y="234" text-anchor="middle" fill="#8b949e" font-size="9">This site · docs/ folder</text>
+
+          <!-- GitHub Actions -->
+          <rect x="230" y="170" width="170" height="75" rx="10" fill="#1c2330" stroke="#bc8cff" stroke-width="2" filter="url(#glow)"/>
+          <text x="315" y="198" text-anchor="middle" fill="#bc8cff" font-size="16">⚙️</text>
+          <text x="315" y="218" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">GitHub Actions</text>
+          <text x="315" y="234" text-anchor="middle" fill="#bc8cff" font-size="9" font-weight="600">Lint · Test · Eval · Deploy</text>
+
+          <!-- GitHub Pull Requests -->
+          <rect x="40" y="265" width="170" height="75" rx="10" fill="#1c2330" stroke="#58a6ff" stroke-width="1.5"/>
+          <text x="125" y="293" text-anchor="middle" fill="#58a6ff" font-size="16">🔀</text>
+          <text x="125" y="313" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">Pull Requests</text>
+          <text x="125" y="329" text-anchor="middle" fill="#8b949e" font-size="9">CI checks · eval gates</text>
+
+          <!-- GitHub Repository -->
+          <rect x="230" y="265" width="170" height="75" rx="10" fill="#1c2330" stroke="#79b8ff" stroke-width="1.5"/>
+          <text x="315" y="293" text-anchor="middle" fill="#79b8ff" font-size="16">📁</text>
+          <text x="315" y="313" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">GitHub Repository</text>
+          <text x="315" y="329" text-anchor="middle" fill="#8b949e" font-size="9">Branch protection · CODEOWNERS</text>
+
+          <!-- Squad Automation -->
+          <rect x="40" y="360" width="360" height="55" rx="10" fill="rgba(63,185,80,0.07)" stroke="rgba(63,185,80,0.25)" stroke-width="1"/>
+          <text x="220" y="382" text-anchor="middle" fill="#3fb950" font-size="11" font-weight="600">Squad Automation · Issue Triage · Label Sync</text>
+          <text x="220" y="400" text-anchor="middle" fill="#6e7681" font-size="9">squad-triage · squad-issue-assign · sync-squad-labels workflows</text>
+
+          <!-- ══ DEPLOY ARROW ══ -->
+          <line x1="420" y1="270" x2="490" y2="270" stroke="#3fb950" stroke-width="2.5"
+                marker-end="url(#arrowhead-green)"/>
+          <text x="455" y="263" text-anchor="middle" fill="#3fb950" font-size="9" font-weight="700">deploy</text>
+
+          <!-- ══ AZURE RUNTIME LAYER (right panel) ══ -->
+          <rect x="495" y="30" width="445" height="460" rx="14"
+                fill="rgba(88,166,255,0.03)" stroke="rgba(88,166,255,0.25)" stroke-width="1.5" stroke-dasharray="8 4"/>
+          <text x="717" y="58" text-anchor="middle" fill="#58a6ff" font-size="11" font-weight="700" letter-spacing="0.1em">☁  AZURE  —  RUNTIME LAYER</text>
+
+          <!-- Operator -->
+          <rect x="515" y="75" width="130" height="75" rx="10" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
+          <text x="580" y="103" text-anchor="middle" fill="#8b949e" font-size="18">👤</text>
+          <text x="580" y="123" text-anchor="middle" fill="#e6edf3" font-size="11" font-weight="600">Ops Engineer</text>
+          <text x="580" y="139" text-anchor="middle" fill="#6e7681" font-size="9">Natural language query</text>
 
           <!-- Arrow: operator → agent -->
-          <line x1="160" y1="230" x2="235" y2="230" stroke="#30363d" stroke-width="1.5"
+          <line x1="645" y1="112" x2="695" y2="112" stroke="#30363d" stroke-width="1.5"
                 marker-end="url(#arrowhead)" stroke-dasharray="6 3"/>
 
-          <!-- ── AGENT CORE (center) ── -->
-          <rect x="240" y="150" width="200" height="160" rx="12" fill="#1c2330"
+          <!-- Agent Core -->
+          <rect x="700" y="75" width="200" height="130" rx="12" fill="#1c2330"
                 stroke="#58a6ff" stroke-width="2" filter="url(#glow)"/>
-          <text x="340" y="188" text-anchor="middle" fill="#58a6ff" font-size="22">🤖</text>
-          <text x="340" y="213" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="700">Agentic Ops Advisor</text>
-          <text x="340" y="231" text-anchor="middle" fill="#8b949e" font-size="10">Azure AI Foundry Agent Service</text>
-          <rect x="265" y="242" width="150" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="rgba(88,166,255,0.3)" stroke-width="1"/>
-          <text x="340" y="257" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="600">GPT-4.1 · System Prompt · Tools</text>
-          <rect x="265" y="270" width="150" height="22" rx="5" fill="rgba(63,185,80,0.08)" stroke="rgba(63,185,80,0.25)" stroke-width="1"/>
-          <text x="340" y="285" text-anchor="middle" fill="#3fb950" font-size="10" font-weight="600">OpenTelemetry Traces</text>
+          <text x="800" y="108" text-anchor="middle" fill="#58a6ff" font-size="20">🤖</text>
+          <text x="800" y="130" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="700">Agentic Ops Advisor</text>
+          <text x="800" y="148" text-anchor="middle" fill="#8b949e" font-size="9">Azure AI Foundry Agent Service</text>
+          <rect x="720" y="157" width="160" height="20" rx="5" fill="rgba(88,166,255,0.12)" stroke="rgba(88,166,255,0.3)" stroke-width="1"/>
+          <text x="800" y="171" text-anchor="middle" fill="#58a6ff" font-size="9.5" font-weight="600">GPT-4.1 · System Prompt · Tools</text>
+          <!-- Docker label -->
+          <rect x="695" y="62" width="210" height="150" rx="14" fill="none"
+                stroke="#79b8ff" stroke-width="1" stroke-dasharray="5 3" opacity="0.4"/>
+          <text x="800" y="75" text-anchor="middle" fill="#79b8ff" font-size="8.5" font-weight="600" opacity="0.6">🐳 Docker · GitHub Actions → ACR</text>
 
-          <!-- Container runtime label -->
-          <rect x="235" y="135" width="210" height="185" rx="14" fill="none"
-                stroke="#79b8ff" stroke-width="1" stroke-dasharray="6 3" opacity="0.5"/>
-          <text x="340" y="148" text-anchor="middle" fill="#79b8ff" font-size="9" font-weight="600" opacity="0.7">🐳 Docker Container (ACR)</text>
+          <!-- Tool: SQL Telemetry -->
+          <rect x="515" y="245" width="165" height="75" rx="10" fill="#1c2330" stroke="#f0883e" stroke-width="1.5"/>
+          <text x="597" y="271" text-anchor="middle" fill="#f0883e" font-size="15">📊</text>
+          <text x="597" y="291" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="600">SQL Telemetry Tool</text>
+          <text x="597" y="307" text-anchor="middle" fill="#8b949e" font-size="8.5">GPU · Network · Cost · Incidents</text>
 
-          <!-- ── TOOL SURFACES (right column) ── -->
-          <!-- SQL Telemetry Tool -->
-          <rect x="520" y="60" width="180" height="95" rx="10" fill="#1c2330" stroke="#f0883e" stroke-width="1.5"/>
-          <text x="610" y="93" text-anchor="middle" fill="#f0883e" font-size="18">📊</text>
-          <text x="610" y="113" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">SQL Telemetry Tool</text>
-          <text x="610" y="128" text-anchor="middle" fill="#8b949e" font-size="9.5">GPU · Network · Cost · Incidents</text>
-          <text x="610" y="143" text-anchor="middle" fill="#6e7681" font-size="9">SQLite (local) / Azure SQL (prod)</text>
+          <!-- Tool: Work IQ -->
+          <rect x="700" y="245" width="165" height="75" rx="10" fill="#1c2330" stroke="#bc8cff" stroke-width="1.5"/>
+          <text x="782" y="271" text-anchor="middle" fill="#bc8cff" font-size="15">🔗</text>
+          <text x="782" y="291" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="600">Work IQ Context Tool</text>
+          <text x="782" y="307" text-anchor="middle" fill="#bc8cff" font-size="8.5" font-style="italic">⚠️ Simulated</text>
 
-          <!-- Work IQ Context Tool -->
-          <rect x="520" y="195" width="180" height="95" rx="10" fill="#1c2330" stroke="#bc8cff" stroke-width="1.5"/>
-          <text x="610" y="228" text-anchor="middle" fill="#bc8cff" font-size="18">🔗</text>
-          <text x="610" y="248" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">Work IQ Context Tool</text>
-          <text x="610" y="263" text-anchor="middle" fill="#8b949e" font-size="9.5">Change Events · Decisions · Runbooks</text>
-          <text x="610" y="278" text-anchor="middle" fill="#bc8cff" font-size="9" font-style="italic">⚠️ Simulated — not live Work IQ</text>
-
-          <!-- Action Stub Tool -->
-          <rect x="520" y="330" width="180" height="95" rx="10" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
-          <text x="610" y="363" text-anchor="middle" fill="#3fb950" font-size="18">🛡️</text>
-          <text x="610" y="383" text-anchor="middle" fill="#e6edf3" font-size="12" font-weight="600">Action Stub Tool</text>
-          <text x="610" y="398" text-anchor="middle" fill="#8b949e" font-size="9.5">Propose · Approval Gate · Safe</text>
-          <text x="610" y="413" text-anchor="middle" fill="#6e7681" font-size="9">No real external system changes</text>
+          <!-- Tool: Action Stub -->
+          <rect x="608" y="340" width="165" height="75" rx="10" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+          <text x="690" y="367" text-anchor="middle" fill="#3fb950" font-size="15">🛡️</text>
+          <text x="690" y="387" text-anchor="middle" fill="#e6edf3" font-size="10.5" font-weight="600">Action Stub Tool</text>
+          <text x="690" y="402" text-anchor="middle" fill="#8b949e" font-size="8.5">Propose · Approve · Simulate</text>
 
           <!-- Arrows: agent → tools -->
-          <line x1="440" y1="205" x2="515" y2="120" stroke="#f0883e" stroke-width="1.5"
+          <line x1="750" y1="205" x2="650" y2="243" stroke="#f0883e" stroke-width="1.5"
                 marker-end="url(#arrowhead)" opacity="0.6"/>
-          <line x1="440" y1="230" x2="515" y2="242" stroke="#bc8cff" stroke-width="1.5"
+          <line x1="800" y1="205" x2="800" y2="243" stroke="#bc8cff" stroke-width="1.5"
                 marker-end="url(#arrowhead)" opacity="0.6"/>
-          <line x1="440" y1="270" x2="515" y2="358" stroke="#3fb950" stroke-width="1.5"
+          <line x1="800" y1="205" x2="730" y2="338" stroke="#3fb950" stroke-width="1.5"
                 marker-end="url(#arrowhead)" opacity="0.6"/>
 
-          <!-- ── AZURE SERVICES (bottom) ── -->
-          <rect x="240" y="365" width="90" height="70" rx="8" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
-          <text x="285" y="393" text-anchor="middle" fill="#58a6ff" font-size="16">🏢</text>
-          <text x="285" y="411" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="600">Azure AI</text>
-          <text x="285" y="424" text-anchor="middle" fill="#6e7681" font-size="9">Foundry</text>
-
-          <rect x="345" y="365" width="90" height="70" rx="8" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
-          <text x="390" y="393" text-anchor="middle" fill="#3fb950" font-size="16">📡</text>
-          <text x="390" y="411" text-anchor="middle" fill="#e6edf3" font-size="10" font-weight="600">App Insights</text>
-          <text x="390" y="424" text-anchor="middle" fill="#6e7681" font-size="9">/ Az Monitor</text>
-
-          <!-- Arrows: agent → azure services -->
-          <line x1="300" y1="310" x2="300" y2="362" stroke="#58a6ff" stroke-width="1.5"
-                marker-end="url(#arrowhead)" opacity="0.5" stroke-dasharray="5 3"/>
-          <line x1="360" y1="310" x2="375" y2="362" stroke="#3fb950" stroke-width="1.5"
-                marker-end="url(#arrowhead)" opacity="0.5" stroke-dasharray="5 3"/>
-
-          <!-- ── CI/CD LABEL ── -->
-          <rect x="700" y="430" width="160" height="40" rx="8" fill="rgba(188,140,255,0.08)" stroke="rgba(188,140,255,0.3)" stroke-width="1"/>
-          <text x="780" y="447" text-anchor="middle" fill="#bc8cff" font-size="10" font-weight="600">⚙️  GitHub Actions CI/CD</text>
-          <text x="780" y="462" text-anchor="middle" fill="#6e7681" font-size="9">Eval gates · Bicep deploy · Regression</text>
+          <!-- Azure Monitor -->
+          <rect x="515" y="435" width="405" height="42" rx="8" fill="rgba(88,166,255,0.06)" stroke="rgba(88,166,255,0.2)" stroke-width="1"/>
+          <text x="717" y="452" text-anchor="middle" fill="#58a6ff" font-size="10" font-weight="600">📡  OpenTelemetry → Azure Application Insights / Azure Monitor</text>
+          <text x="717" y="468" text-anchor="middle" fill="#6e7681" font-size="8.5">Every agent, tool, and LLM call traced end-to-end</text>
 
           <!-- Title label -->
-          <text x="450" y="490" text-anchor="middle" fill="#30363d" font-size="10">
-            Agentic Ops Advisor — Architecture Overview (Synthetic Demo)
+          <text x="480" y="510" text-anchor="middle" fill="#30363d" font-size="10">
+            Agentic Ops Advisor — GitHub Build Layer + Azure Runtime (Synthetic Demo)
           </text>
         </svg>
       </div>
@@ -308,8 +436,8 @@
       <span class="section-label">Demo Walkthrough</span>
       <h2 class="section-title">From question to governed action</h2>
       <p class="section-subtitle">
-        See how the agent takes an ops engineer from an ambiguous alert to an evidence-backed,
-        approved remediation plan in four steps.
+        Developed with GitHub Copilot, validated on every PR by
+        GitHub Actions — here's what the agent actually does at runtime.
       </p>
 
       <div class="demo-steps">
@@ -384,13 +512,17 @@
   <section class="techstack" id="techstack">
     <div class="container">
       <span class="section-label">Tech Stack</span>
-      <h2 class="section-title">Built on Azure-native, open standards</h2>
+      <h2 class="section-title">GitHub-first, Azure-powered</h2>
       <p class="section-subtitle">
-        Every component chosen for production readiness, observability, and
-        compatibility with enterprise hybrid deployments.
+        The GitHub platform is the build and delivery backbone. Azure provides the production
+        runtime for the AI agent.
       </p>
 
       <div class="badges" role="list" aria-label="Technology badges">
+        <span class="badge badge-actions" role="listitem">🤖 GitHub Copilot</span>
+        <span class="badge badge-actions" role="listitem">⚙️ GitHub Actions</span>
+        <span class="badge badge-actions" role="listitem">📄 GitHub Pages</span>
+        <span class="badge badge-actions" role="listitem">🐛 GitHub Issues</span>
         <span class="badge badge-python" role="listitem">🐍 Python 3.11+</span>
         <span class="badge badge-gpt" role="listitem">🧠 GPT-4.1</span>
         <span class="badge badge-azure" role="listitem">☁️ Azure AI Foundry</span>
@@ -398,10 +530,7 @@
         <span class="badge badge-otel" role="listitem">📡 OpenTelemetry</span>
         <span class="badge badge-azure" role="listitem">📊 Application Insights</span>
         <span class="badge badge-sqlite" role="listitem">🗄️ SQLite / Azure SQL</span>
-        <span class="badge badge-actions" role="listitem">⚙️ GitHub Actions</span>
         <span class="badge badge-azure" role="listitem">🏗️ Bicep IaC</span>
-        <span class="badge badge-actions" role="listitem">🐳 Docker</span>
-        <span class="badge badge-azure" role="listitem">📦 Azure Container Registry</span>
         <span class="badge badge-python" role="listitem">🧪 Pytest + azure-ai-evaluation</span>
       </div>
 
@@ -414,6 +543,26 @@
           </tr>
         </thead>
         <tbody>
+          <tr>
+            <td>AI Coding</td>
+            <td>GitHub Copilot</td>
+            <td>AI pair programmer — authored all Python, Bicep, and workflow files</td>
+          </tr>
+          <tr>
+            <td>CI/CD</td>
+            <td>GitHub Actions</td>
+            <td>Lint, test, eval regression gates, Docker build, Azure deployment</td>
+          </tr>
+          <tr>
+            <td>Site Hosting</td>
+            <td>GitHub Pages</td>
+            <td>This brochure site — deployed from docs/ on every merge to main</td>
+          </tr>
+          <tr>
+            <td>Issue Tracking</td>
+            <td>GitHub Issues</td>
+            <td>Squad workflows auto-triage, label, and assign issues; CI results posted as PR comments</td>
+          </tr>
           <tr>
             <td>Agent Framework</td>
             <td>azure-ai-projects (Foundry SDK)</td>
@@ -440,19 +589,9 @@
             <td>Diagnosis accuracy, grounding, safety, hallucination</td>
           </tr>
           <tr>
-            <td>CI/CD</td>
-            <td>GitHub Actions</td>
-            <td>Lint, test, eval gates, Bicep deploy</td>
-          </tr>
-          <tr>
             <td>IaC</td>
             <td>Bicep</td>
             <td>Foundry project, Azure SQL, App Insights provisioning</td>
-          </tr>
-          <tr>
-            <td>Container</td>
-            <td>Docker → Azure Container Registry</td>
-            <td>Reproducible packaging and deployment of agent + tools</td>
           </tr>
           <tr>
             <td>Context (simulated)</td>
@@ -521,17 +660,19 @@
     <div class="container">
       <div>
         <div class="footer-brand">🤖 Agentic Ops Advisor</div>
-        <div class="footer-note">Built with GitHub Copilot · Deployed on Azure AI Foundry</div>
+        <div class="footer-note">Coded with GitHub Copilot · CI/CD via GitHub Actions · Hosted on GitHub Pages · Deployed on Azure AI Foundry</div>
       </div>
 
       <nav class="footer-links" aria-label="Footer links">
-        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener" style="color: var(--accent-green); font-weight: 600;">⭐ GitHub Repo</a>
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions" target="_blank" rel="noopener">GitHub Actions</a>
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/security" target="_blank" rel="noopener">Security</a>
         <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/issues" target="_blank" rel="noopener">Issues</a>
         <a href="https://learn.microsoft.com/azure/ai-studio/" target="_blank" rel="noopener">Azure AI Foundry Docs</a>
       </nav>
 
       <div class="footer-note">
-        © 2025 · Synthetic demo · No real data
+        © 2025 · Open source on GitHub · Synthetic demo · No real data
       </div>
     </div>
   </footer>

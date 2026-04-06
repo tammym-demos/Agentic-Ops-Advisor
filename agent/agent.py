@@ -11,13 +11,11 @@ Core queries handled:
   4. "What's the safest remediation plan? Provide options and tradeoffs."
 """
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -77,11 +75,11 @@ def _import_agent_sdk() -> tuple[Any, Any]:
 
 
 def query_telemetry(
-    table: str | None = None,
-    aggregate: str | None = None,
-    sql: str | None = None,
+    table: Optional[str] = None,
+    aggregate: Optional[str] = None,
+    sql: Optional[str] = None,
     limit: int = 100,
-    filters: dict[str, Any] | None = None,
+    filters: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Query synthetic infrastructure telemetry data stored in SQL.
 
@@ -370,6 +368,10 @@ class AgentOpsAdvisor:
         toolset = ToolSet()
         toolset.add(FunctionTool(functions=function_set))
 
+        # Register function implementations so create_and_process can dispatch
+        # tool calls automatically during the run.
+        client.enable_auto_function_calls(tools=toolset)
+
         logger.debug("Adding user message to thread %s: %.80r", thread_id, message)
         client.messages.create(
             thread_id=thread_id,
@@ -414,7 +416,7 @@ class AgentOpsAdvisor:
             thread_id=thread_id,
             role=MessageRole.AGENT,
         )
-        return last_msg if last_msg else ""
+        return last_msg.text.value if last_msg else ""
 
     # ------------------------------------------------------------------
     # Context manager
