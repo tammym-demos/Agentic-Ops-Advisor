@@ -7,7 +7,8 @@ Usage:
 What it does:
     1. Sets DB_MODE=sqlite automatically.
     2. Seeds the database if it doesn't exist.
-    3. Starts an interactive terminal chat loop in one of two modes:
+    3. Starts a health check server on port 8080 (GET /health).
+    4. Starts an interactive terminal chat loop in one of two modes:
 
        Agent mode (Azure OpenAI configured):
            Full reasoning loop powered by GPT-4.1 with function-calling
@@ -18,19 +19,22 @@ What it does:
            database and results are printed in a structured format.  No LLM
            required; useful for validating the data layer without Azure.
 
-    4. Suggests the 4 core demo queries on start-up.
-    5. Handles Ctrl+C / EOF gracefully.
+    5. Suggests the 4 core demo queries on start-up.
+    6. Handles Ctrl+C / EOF gracefully.
 
 NOTE: All data is synthetic.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sqlite3
 import sys
 import textwrap
+import threading
+from datetime import datetime, timezone
 
 # ---------------------------------------------------------------------------
 # Bootstrap: add repo root to sys.path before any local imports
@@ -81,6 +85,58 @@ _SYSTEM_PROMPT = textwrap.dedent("""\
     Available tools query a local SQLite database populated with synthetic
     infrastructure telemetry (GPU, network, cost, incidents).
 """)
+
+
+# ---------------------------------------------------------------------------
+# Health check server
+# ---------------------------------------------------------------------------
+
+async def _health_handler(request) -> object:
+    """Handle GET /health requests."""
+    try:
+        import tomllib  # Python 3.11+
+    except ImportError:
+        import tomli as tomllib  # fallback for Python 3.10
+
+    # Read version from pyproject.toml
+    version = "unknown"
+    try:
+        pyproject_path = os.path.join(_REPO_ROOT, "pyproject.toml")
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+            version = data.get("project", {}).get("version", "unknown")
+    except (FileNotFoundError, KeyError):
+        pass
+
+    from aiohttp import web  # noqa: PLC0415
+
+    return web.json_response({
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": version,
+    })
+
+
+async def _start_health_server(port: int = 8080) -> None:
+    """Start the health check HTTP server on the specified port."""
+    from aiohttp import web  # noqa: PLC0415
+
+    app = web.Application()
+    app.router.add_get("/health", _health_handler)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    print(f"  [health] Health server started on http://0.0.0.0:{port}/health\n")
+
+
+def _run_health_server_thread(port: int = 8080) -> None:
+    """Run the health server in a background thread."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(_start_health_server(port))
+    loop.run_forever()
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +382,20 @@ def main() -> None:
     except (OSError, sqlite3.Error, ImportError) as exc:
         print(f"  ✗ Failed to set up database: {exc}", file=sys.stderr)
         sys.exit(1)
+
+    # Start health check server in background thread
+    health_port = int(os.environ.get("HEALTH_PORT", "8080"))
+    health_thread = threading.Thread(
+        target=_run_health_server_thread,
+        args=(health_port,),
+        daemon=True,
+        name="health-server"
+    )
+    health_thread.start()
+
+    # Small delay to let health server start
+    import time
+    time.sleep(0.5)
 
     # Determine operating mode
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()

@@ -282,6 +282,15 @@ The 4 core demo queries are presented as numbered suggestions at startup:
 
 Type a number (1–4) to run that query, or type your own question. Type `quit` or press `Ctrl+C` to exit.
 
+**Health endpoint:** The runner also starts a health check server on port 8080. You can verify it's running:
+
+```bash
+curl http://localhost:8080/health
+# Response: {"status": "healthy", "timestamp": "2024-...", "version": "0.1.0"}
+```
+
+This endpoint is used by the Docker HEALTHCHECK and doesn't require Azure credentials.
+
 ### Step 7 — Run the test suite
 
 ```bash
@@ -631,6 +640,7 @@ Copy `.env.example` to `.env` and fill in these values. Variables marked **Requi
 | `AZURE_SUBSCRIPTION_ID` | `e0b48569-71a2-40fe-9b7a-2fb859f31288` | Azure | Azure subscription ID (used by `infra/deploy.sh`) |
 | `AZURE_RESOURCE_GROUP` | `rg-agentic-ops-advisor` | Azure | Azure resource group name |
 | `AZURE_LOCATION` | `eastus2` | Azure | Azure region for resource deployment |
+| `HEALTH_PORT` | `8080` | Both | Port for health check endpoint (used by Docker HEALTHCHECK and k8s probes) |
 
 ---
 

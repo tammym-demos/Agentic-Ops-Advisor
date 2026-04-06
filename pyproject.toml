@@ -19,6 +19,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "pyodbc>=5.2.0",
     "aiosqlite>=0.20.0",
+    "aiohttp>=3.9.0",
 ]
 
 [project.optional-dependencies]
@@ -43,3 +44,6 @@ line-length = 120
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (require running server)",
+]
