@@ -62,6 +62,10 @@ eval/results/
 eval/*_results.json
 !eval/baseline_results.json
 
+# Bicep compiled ARM templates (generated)
+infra/**/*.json
+!infra/parameters.json
+
 # Node (for GitHub Pages tooling if any)
 node_modules/
 

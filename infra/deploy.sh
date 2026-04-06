@@ -91,7 +91,6 @@ PROVIDERS=(
   "Microsoft.Resources"
   "Microsoft.Sql"
   "Microsoft.CognitiveServices"
-  "Microsoft.MachineLearningServices"
   "Microsoft.Insights"
   "Microsoft.OperationalInsights"
   "Microsoft.ManagedIdentity"

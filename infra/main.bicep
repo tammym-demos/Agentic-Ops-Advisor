@@ -40,6 +40,12 @@ param sqlLocation string = location
 @description('Azure OpenAI GPT-4.1 model deployment capacity (1 000 TPM units).')
 param openAiCapacity int = 10
 
+@description('GPT-4.1 model name.')
+param modelName string = 'gpt-4.1'
+
+@description('GPT-4.1 model version.')
+param modelVersion string = '2025-04-14'
+
 @description('Tags applied to every resource.')
 param tags object = {
   project: 'agentic-ops-advisor'
@@ -54,7 +60,6 @@ var identityName = 'id-${suffix}'
 var logAnalyticsName = 'log-${suffix}'
 var appInsightsName = 'appi-${suffix}'
 var sqlServerName = 'sql-${suffix}'
-var openAiName = 'oai-${suffix}'
 var aiHubName = 'hub-${suffix}'
 var aiProjectName = 'proj-${suffix}'
 var openAiDeploymentName = 'gpt-4.1'
@@ -121,36 +126,23 @@ module sql 'modules/sql.bicep' = {
   }
 }
 
-// ---- Azure OpenAI ---------------------------------------------
-
-module openAi 'modules/openai.bicep' = {
-  name: 'openai'
-  scope: rg
-  params: {
-    name: openAiName
-    location: location
-    deploymentName: openAiDeploymentName
-    capacity: openAiCapacity
-    managedIdentityId: identity.outputs.resourceId
-    tags: tags
-  }
-}
-
-// ---- Azure AI Foundry Hub + Project ---------------------------
+// ---- Azure AI Foundry Hub + Project + Model -------------------
+// The Hub is a CognitiveServices AIServices account that hosts the
+// GPT-4.1 deployment directly. No separate OpenAI module needed.
 
 module aiFoundry 'modules/aifoundry.bicep' = {
   name: 'aifoundry'
   scope: rg
-  dependsOn: [logAnalytics, appInsights, openAi]
   params: {
     hubName: aiHubName
     projectName: aiProjectName
     location: location
-    appInsightsId: appInsights.outputs.resourceId
-    openAiAccountId: openAi.outputs.resourceId
-    openAiEndpoint: openAi.outputs.endpoint
     managedIdentityId: identity.outputs.resourceId
     managedIdentityPrincipalId: identity.outputs.principalId
+    deploymentName: openAiDeploymentName
+    modelName: modelName
+    modelVersion: modelVersion
+    capacity: openAiCapacity
     tags: tags
   }
 }
@@ -160,11 +152,11 @@ module aiFoundry 'modules/aifoundry.bicep' = {
 @description('Azure AI Foundry project connection string.')
 output aiProjectConnectionString string = aiFoundry.outputs.projectConnectionString
 
-@description('Azure OpenAI endpoint URL.')
-output openAiEndpoint string = openAi.outputs.endpoint
+@description('Azure OpenAI endpoint URL (from AI Hub).')
+output openAiEndpoint string = aiFoundry.outputs.hubEndpoint
 
 @description('Azure OpenAI GPT-4.1 deployment name.')
-output openAiDeployment string = openAiDeploymentName
+output openAiDeployment string = aiFoundry.outputs.modelDeploymentName
 
 @description('Application Insights connection string.')
 output appInsightsConnectionString string = appInsights.outputs.connectionString

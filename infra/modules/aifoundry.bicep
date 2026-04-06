@@ -1,18 +1,23 @@
-// Azure AI Foundry — Hub + Project
+// Azure AI Foundry — Hub + Project (CognitiveServices architecture)
 //
-// The Hub is the top-level Azure AI resource that groups projects together.
-// The Project is where the agent is deployed and conversations are tracked.
-// Both are represented as Microsoft.MachineLearningServices/workspaces,
-// differentiated by the `kind` property ('Hub' vs 'Project').
+// The Hub is a CognitiveServices/accounts resource (kind: AIServices) that
+// hosts the GPT-4.1 deployment directly. The Project is a child resource
+// (CognitiveServices/accounts/projects) that provides the agent runtime.
+//
+// This architecture matches the live Azure infrastructure:
+//   Hub: Microsoft.CognitiveServices/accounts (kind: AIServices)
+//   Model: Microsoft.CognitiveServices/accounts/deployments (child of Hub)
+//   Project: Microsoft.CognitiveServices/accounts/projects (child of Hub)
 
 param hubName string
 param projectName string
 param location string
-param appInsightsId string
-param openAiAccountId string
-param openAiEndpoint string
 param managedIdentityId string
 param managedIdentityPrincipalId string = ''
+param deploymentName string = 'gpt-4.1'
+param modelName string = 'gpt-4.1'
+param modelVersion string = '2025-04-14'
+param capacity int = 10
 param tags object = {}
 
 // ---- Storage Account (required by AI Foundry Hub) -------------
@@ -88,12 +93,12 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-11-01-pr
   }
 }
 
-// ---- AI Foundry Hub -------------------------------------------
+// ---- AI Foundry Hub (CognitiveServices AIServices) ------------
 
-resource aiHub 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
+resource aiHub 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   name: hubName
   location: location
-  kind: 'Hub'
+  kind: 'AIServices'
   tags: tags
   identity: {
     type: 'UserAssigned'
@@ -101,41 +106,41 @@ resource aiHub 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
       '${managedIdentityId}': {}
     }
   }
-  properties: {
-    friendlyName: hubName
-    description: 'Agentic Ops Advisor — AI Foundry Hub'
-    storageAccount: storage.id
-    keyVault: keyVault.id
-    applicationInsights: appInsightsId
-    containerRegistry: containerRegistry.id
-    primaryUserAssignedIdentity: managedIdentityId
+  sku: {
+    name: 'S0'
   }
-}
-
-// ---- OpenAI connection on the Hub ----------------------------
-
-resource openAiConnection 'Microsoft.MachineLearningServices/workspaces/connections@2024-10-01' = {
-  parent: aiHub
-  name: 'azure-openai'
   properties: {
-    category: 'AzureOpenAI'
-    target: openAiEndpoint
-    authType: 'AAD'
-    isSharedToAll: true
-    metadata: {
-      ApiVersion: '2025-01-01-preview'
-      ApiType: 'azure'
-      ResourceId: openAiAccountId
+    customSubDomainName: hubName
+    publicNetworkAccess: 'Enabled'
+    networkAcls: {
+      defaultAction: 'Allow'
     }
   }
 }
 
-// ---- AI Foundry Project ---------------------------------------
+// ---- GPT-4.1 deployment (native to Hub) -----------------------
 
-resource aiProject 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
+resource gpt41Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: aiHub
+  name: deploymentName
+  sku: {
+    name: 'GlobalStandard'
+    capacity: capacity
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: modelName
+      version: modelVersion
+    }
+  }
+}
+
+// ---- AI Foundry Project (CognitiveServices project) -----------
+
+resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2024-10-01' = {
+  parent: aiHub
   name: projectName
-  location: location
-  kind: 'Project'
   tags: tags
   dependsOn: [kvReaderAssignment]
   identity: {
@@ -147,8 +152,6 @@ resource aiProject 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
   properties: {
     friendlyName: projectName
     description: 'Agentic Ops Advisor — AI Foundry Project'
-    hubResourceId: aiHub.id
-    primaryUserAssignedIdentity: managedIdentityId
   }
 }
 
@@ -158,10 +161,13 @@ resource aiProject 'Microsoft.MachineLearningServices/workspaces@2024-10-01' = {
 //   <endpoint>;<subscription>;<resource-group>;<project-name>
 var subscriptionId = subscription().subscriptionId
 var resourceGroupName = resourceGroup().name
+var hubEndpoint = aiHub.properties.endpoint
 
 output hubId string = aiHub.id
+output hubEndpoint string = hubEndpoint
 output projectId string = aiProject.id
-output projectConnectionString string = '${aiHub.properties.discoveryUrl};${subscriptionId};${resourceGroupName};${projectName}'
+output projectConnectionString string = '${hubEndpoint};${subscriptionId};${resourceGroupName};${projectName}'
+output modelDeploymentName string = gpt41Deployment.name
 output keyVaultId string = keyVault.id
 output storageId string = storage.id
 

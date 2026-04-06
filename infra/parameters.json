@@ -23,6 +23,12 @@
     "openAiCapacity": {
       "value": 10
     },
+    "modelName": {
+      "value": "gpt-4.1"
+    },
+    "modelVersion": {
+      "value": "2025-04-14"
+    },
     "tags": {
       "value": {
         "project": "agentic-ops-advisor",
