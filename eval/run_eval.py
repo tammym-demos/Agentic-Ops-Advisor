@@ -75,7 +75,7 @@ def _stub_agent(query: str) -> str:
         return (
             "Work IQ context: node gpu-03 is owned by team-infra (service: ml-serving). "
             "GPU anomaly record cross-referenced with ownership data. "
-            "Change context: contact infra-oncall@contoso.com. Confidence: Med."
+            "Change context: escalation path via infra-oncall team. Confidence: Med."
         )
     if "owner" in q or ("team" in q and "gpu" in q):
         return (
@@ -207,9 +207,12 @@ def run_case(agent_fn: Any, evaluators: dict, case: dict) -> dict:
     """
     query: str = case["query"]
     expected_signals: list[str] = case.get("expected_signals", [])
-    # Join expected_signals into a human-readable cause label for the
-    # CorrectnessEvaluator which takes a single ``expected_cause`` string.
-    expected_cause: str = "; ".join(expected_signals) if expected_signals else query
+    # Use an explicit expected_cause field when provided (precise root-cause label).
+    # Fall back to joining expected_signals for backwards compatibility.
+    expected_cause: str = (
+        case.get("expected_cause")
+        or ("; ".join(expected_signals) if expected_signals else query)
+    )
 
     response: str = agent_fn(query)
 

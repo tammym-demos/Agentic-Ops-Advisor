@@ -29,6 +29,12 @@
 #   az role assignment create --assignee <appId> \
 #       --role contributor \
 #       --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor
+#   # Grant data-plane access to the AI hub (required for Foundry Agent Service APIs):
+#   az role assignment create \
+#       --assignee-object-id <spObjectId> \
+#       --assignee-principal-type ServicePrincipal \
+#       --role "Azure AI Developer" \
+#       --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
 #   # Add federated credential for this repo + branch:
 #   az ad app federated-credential create --id <appId> --parameters '{
 #     "name": "agentic-ops-main",
@@ -170,6 +176,58 @@ jobs:
                       --parameters @infra/parameters.json \
                       --output table
                   echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 4b — Ensure Azure AI Developer role on the AI hub
+            # (data-plane access required by Foundry Agent Service APIs)
+            # ------------------------------------------------------------------
+            - name: Ensure Azure AI Developer role on AI hub
+              run: |
+                  PARAMS_FILE="infra/parameters.json"
+                  PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
+                  ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
+                  RG_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['resourceGroupName']['value'])" 2>/dev/null || echo "rg-agentic-ops-advisor")
+                  HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
+                  HUB_SCOPE="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}"
+
+                  # Resolve the object ID of the currently authenticated principal
+                  ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
+                  if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
+                      SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="ServicePrincipal"
+                  else
+                      PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="User"
+                  fi
+
+                  if [[ -z "${PRINCIPAL_ID}" ]]; then
+                      echo "⚠️  Could not determine principal object ID — skipping Azure AI Developer role assignment."
+                      exit 0
+                  fi
+
+                  echo "Principal: ${PRINCIPAL_ID} (${PRINCIPAL_TYPE})"
+                  echo "Hub scope: ${HUB_SCOPE}"
+
+                  # Idempotent: only assign if not already present
+                  ROLE_EXISTS=$(az role assignment list \
+                      --assignee "${PRINCIPAL_ID}" \
+                      --role "Azure AI Developer" \
+                      --scope "${HUB_SCOPE}" \
+                      --query "[].id" -o tsv 2>/dev/null || echo "")
+
+                  if [[ -z "${ROLE_EXISTS}" ]]; then
+                      echo "Assigning Azure AI Developer role to ${PRINCIPAL_ID}..."
+                      az role assignment create \
+                          --assignee-object-id "${PRINCIPAL_ID}" \
+                          --assignee-principal-type "${PRINCIPAL_TYPE}" \
+                          --role "Azure AI Developer" \
+                          --scope "${HUB_SCOPE}" \
+                          --output none
+                      echo "✅ Azure AI Developer role assigned on ${HUB_NAME}."
+                  else
+                      echo "✅ Azure AI Developer role already present on ${HUB_NAME}."
+                  fi
 
             # ------------------------------------------------------------------
             # Step 5a — Resolve ACR login server
