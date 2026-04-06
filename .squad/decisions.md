@@ -17,6 +17,22 @@
 
 ## Recent Decisions
 
+### 2026-04-06T21:30:00Z: Deploy Pipeline Hardening
+**By:** Amos (DevOps)
+**What:** Hardened `.github/workflows/deploy.yml` with four changes: (1) ODBC driver + unixodbc-dev installed before pip install (matches ci-eval.yml pattern); (2) Pre-deploy test gate with `pytest tests/ -x --tb=short` to block untested code; (3) Always-run Bicep validation with `az deployment sub validate` (catches syntax errors on every deploy, not just on infra changes); (4) Parameterized RBAC step to derive `AI_HUB_NAME` and `MANAGED_IDENTITY_NAME` from `parameters.json` instead of hardcoding resource names.
+**Why:** Need consistent safety gates to prevent untested code and template syntax errors from reaching production. Hardcoded resource names don't track infrastructure config changes.
+**Outcome:** ✅ Merged commits `b59a791`, `7ec1c4d` (.github/workflows/deploy.yml +42/-3). Deploy runs will be ~1-2 min longer due to ODBC install, tests, and Bicep validation, but broken tests and template errors will be caught early.
+**Risk:** Low — all steps additive, existing step logic unchanged. ODBC and test patterns proven in ci-eval.yml.
+**Impact:** Green pipeline = safe deployment. Test failures block deployment (intentional). Resource name changes in parameters.json automatically propagate to all deploy steps.
+
+### 2026-04-06T21:30:00Z: Remove Dead Infra Modules + Add Bicep CI Validation
+**By:** Amos (DevOps)
+**What:** Deleted two dead infrastructure files and added Bicep validation to CI: (1) Removed `infra/modules/openai.bicep` (deprecated stub after Bicep architecture rewrite to CognitiveServices Hub); (2) Removed `infra/modules/keyvault.json` (compiled ARM template, never referenced; keyvault.bicep is the active module); (3) Added new step to `ci-eval.yml` that runs `az bicep build` on all PRs (offline validation, no Azure login required).
+**Why:** Dead modules accumulate technical debt and confuse infrastructure intent. Bicep syntax errors were only caught at deploy time, causing failed runs.
+**Outcome:** ✅ Merged commit `50c2486` (.github/workflows/ci-eval.yml +6, deleted 2 files with ~80 lines). Verified zero references to deleted files across .bicep, .yml, .sh, .py, .md code. Bicep validation now runs on PR, catching syntax errors before deploy.
+**Risk:** Low — no impact to existing deployments. Deleted files confirmed unused via grep.
+**Note:** `infra/main.json` (compiled ARM output of main.bicep) also appears unused but was not in scope; recommend future cleanup pass.
+
 ### 2026-04-07T20:45:00Z: Deploy Pipeline Non-Fatal Smoke Test + Model Diagnostics
 **By:** Amos (DevOps)
 **What:** Fixed deploy.yml (commit `8ea32f7`): (1) Added Step 5c model deployment diagnostics listing available deployments and validating `AZURE_OPENAI_DEPLOYMENT` secret match; (2) Made smoke test non-fatal with `continue-on-error: true`; (3) Hardened agent deployment error handling with try-except + specific error messages for model resolution failures; (4) Separated deployment success from smoke test status in summary.
