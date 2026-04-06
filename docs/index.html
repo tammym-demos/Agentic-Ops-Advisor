@@ -39,10 +39,12 @@
         Agentic Ops Advisor
       </a>
       <ul class="nav-links" role="list">
+        <li><a href="#the-problem">The Problem</a></li>
         <li><a href="#github-products">GitHub</a></li>
-        <li><a href="#features">Capabilities</a></li>
+        <li><a href="#architecture">Azure</a></li>
         <li><a href="#workiq">Work IQ</a></li>
-        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#monitoring">Monitoring</a></li>
+        <li><a href="#evaluations">Evaluations</a></li>
         <li><a href="#demo">Demo</a></li>
         <li><a href="#getting-started">Get Started</a></li>
         <li><a href="pages/dashboard.html">📊 Dashboard</a></li>
@@ -52,7 +54,7 @@
   </nav>
 
   <!-- ═══════════════════════════════════════════
-       HERO
+       1. HERO — What the solution does
   ═══════════════════════════════════════════ -->
   <header class="hero" id="top">
     <div class="container">
@@ -68,10 +70,10 @@
       </h1>
 
       <p class="hero-tagline">
-        A production-style AI agent that helps ops teams diagnose infrastructure issues faster.
-        Ask about GPU drops, network spikes, or cost anomalies — it queries telemetry,
-        correlates recent changes and decisions, and delivers root-cause diagnoses
-        with confidence levels and governed remediation plans.
+        Ops teams drown in alerts — but alerts don't explain <em>why</em>.
+        The Agentic Ops Advisor is an AI agent that merges infrastructure telemetry
+        with human intent — change events, decisions, and ownership — to deliver
+        root-cause diagnoses with confidence levels and governed remediation plans.
       </p>
       <p class="hero-tagline" style="font-size: 0.95em; opacity: 0.8; margin-top: 0.5rem;">
         Built end-to-end on the GitHub platform — coded with <strong>GitHub Copilot</strong>,
@@ -118,15 +120,45 @@
   </section>
 
   <!-- ═══════════════════════════════════════════
-       GITHUB PRODUCTS — HERO FEATURES
+       2. THE PROBLEM — Why this matters
+  ═══════════════════════════════════════════ -->
+  <section class="features" id="the-problem">
+    <div class="container">
+      <span class="section-label" style="color: #f85149;">The Problem</span>
+      <h2 class="section-title">Traditional monitoring sees metrics — not meaning</h2>
+      <p class="section-subtitle">
+        Your dashboards show <em>what</em> happened.
+        But nobody can tell you <em>why</em> — until someone manually pieces it together.
+      </p>
+
+      <div class="workiq-callout fade-in" style="border-left-color: #f85149;">
+        <div class="workiq-callout-icon" aria-hidden="true">🚨</div>
+        <div class="workiq-callout-body">
+          <h3>Sound familiar?</h3>
+          <ul style="list-style: none; padding: 0; margin: 0.75rem 0 0 0; line-height: 2;">
+            <li>📉 <strong>Alert fatigue</strong> — hundreds of alerts, no prioritization, same noise every day</li>
+            <li>🔍 <strong>Manual log trawling</strong> — hours digging through logs, metrics, and dashboards to find root cause</li>
+            <li>💬 <strong>"Who owns this?"</strong> — Slack threads spiraling while the incident burns</li>
+          </ul>
+          <p style="margin-top: 0.75rem; opacity: 0.85;">
+            The Agentic Ops Advisor was built to close this gap — an AI agent that doesn't just see the metrics,
+            it understands the <em>organizational context</em> behind them.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       3. BUILT WITH GITHUB — How it's built
   ═══════════════════════════════════════════ -->
   <section class="github-products" id="github-products">
     <div class="container">
-      <span class="section-label" style="color: var(--accent-green);">GitHub Products</span>
-      <h2 class="section-title">The GitHub platform — front and center</h2>
+      <span class="section-label" style="color: var(--accent-green);">Built with GitHub</span>
+      <h2 class="section-title">Every layer of this project runs on GitHub</h2>
       <p class="section-subtitle">
-        Every layer of this project is powered by a GitHub product. From the first line of code
-        to the live deployment, GitHub is the hero of this story.
+        From the first line of code to the live deployment,
+        GitHub is the hero of this story. Four products power the entire lifecycle.
       </p>
 
       <div class="github-products-grid">
@@ -200,226 +232,12 @@
   </section>
 
   <!-- ═══════════════════════════════════════════
-       FEATURES
-  ═══════════════════════════════════════════ -->
-  <section class="features" id="features">
-    <div class="container">
-      <span class="section-label">Agentic Capabilities</span>
-      <h2 class="section-title">What the agent can do</h2>
-      <p class="section-subtitle">
-        Built and deployed via GitHub, the agent delivers governed AI ops capabilities —
-        root-cause diagnosis, change correlation, safe remediation, and continuous evaluation.
-      </p>
-
-      <div class="features-grid">
-
-        <article class="feature-card fade-in" style="--card-accent: #58a6ff;">
-          <span class="feature-icon" aria-hidden="true">📊</span>
-          <h3 class="feature-title">Telemetry Analysis</h3>
-          <p class="feature-desc">
-            Queries synthetic GPU utilization, network latency, cost, and incident data via SQL.
-            Surfaces anomalies, trends, and root-cause signals in seconds.
-          </p>
-        </article>
-
-        <article class="feature-card fade-in" style="--card-accent: #bc8cff;">
-          <span class="feature-icon" aria-hidden="true">🔗</span>
-          <h3 class="feature-title">Change Correlation</h3>
-          <p class="feature-desc">
-            Connects infrastructure events to change context — approvals, policy updates,
-            rollout windows, and AI Factory planning decisions — using the Work IQ pattern.
-          </p>
-        </article>
-
-        <article class="feature-card fade-in" style="--card-accent: #3fb950;">
-          <span class="feature-icon" aria-hidden="true">🛡️</span>
-          <h3 class="feature-title">Safe Remediation</h3>
-          <p class="feature-desc">
-            Proposes change plans with risk levels and tradeoffs. Human-in-the-loop approval
-            gates ensure no action is taken without explicit authorization.
-          </p>
-        </article>
-
-        <article class="feature-card fade-in" style="--card-accent: #f0883e;">
-          <span class="feature-icon" aria-hidden="true">🧪</span>
-          <h3 class="feature-title">Continuous Evaluation</h3>
-          <p class="feature-desc">
-            Four custom evaluators — diagnosis accuracy, evidence grounding, action safety,
-            and hallucination detection — run offline and in GitHub Actions CI for regression detection.
-          </p>
-        </article>
-
-        <article class="feature-card fade-in" style="--card-accent: #39d353;">
-          <span class="feature-icon" aria-hidden="true">📡</span>
-          <h3 class="feature-title">Observability &amp; Monitoring</h3>
-          <p class="feature-desc">
-            OpenTelemetry traces for every agent invocation, tool call, and LLM request.
-            Exports to Application Insights with Azure Monitor Workbook dashboards.
-          </p>
-        </article>
-
-        <article class="feature-card fade-in" style="--card-accent: #79b8ff;">
-          <span class="feature-icon" aria-hidden="true">🐳</span>
-          <h3 class="feature-title">Container Deployment</h3>
-          <p class="feature-desc">
-            Containerized agent built by GitHub Actions and deployed to Azure Container Registry (ACR),
-            then served via Azure AI Foundry Agent Service using Bicep IaC.
-          </p>
-        </article>
-
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════════════════════════════
-       WORK IQ — DEEP DIVE
-  ═══════════════════════════════════════════ -->
-  <section class="workiq-section" id="workiq">
-    <div class="container">
-      <span class="section-label" style="color: var(--accent-purple);">Telemetry + Intent</span>
-      <h2 class="section-title">Work IQ — The missing context layer</h2>
-      <p class="section-subtitle">
-        Traditional AIOps sees metrics. <strong>Agentic ops</strong> sees metrics
-        <em>plus the human decisions that caused them</em>.
-        Work IQ is Microsoft 365 Copilot's workplace intelligence layer — and it's the
-        key to self-driving operations that actually understand <em>why</em> things changed.
-      </p>
-
-      <!-- Value proposition callout -->
-      <div class="workiq-callout fade-in">
-        <div class="workiq-callout-icon" aria-hidden="true">💡</div>
-        <div class="workiq-callout-body">
-          <h3>Why telemetry alone isn't enough</h3>
-          <p>
-            A GPU utilization drop is just a number. Was it a planned model-serving rollout?
-            An accidental config change? A cost-optimization policy kicking in?
-            Without <strong>organizational context</strong>, every anomaly is a mystery.
-            Work IQ bridges that gap — correlating infrastructure telemetry with the
-            change events, decisions, ownership, and runbooks that explain what happened
-            and who to talk to next.
-          </p>
-        </div>
-      </div>
-
-      <!-- Four context surfaces -->
-      <h3 class="workiq-grid-title fade-in">Four context surfaces the agent consults</h3>
-      <div class="workiq-grid">
-
-        <article class="workiq-card fade-in" style="--wiq-accent: #58a6ff;">
-          <span class="workiq-card-icon" aria-hidden="true">📋</span>
-          <h4 class="workiq-card-title">Change Events</h4>
-          <p class="workiq-card-desc">
-            Recent deployments, config changes, policy updates, and rollout windows
-            that coincide with anomaly timestamps. The agent asks:
-            <em>"What changed near this incident?"</em>
-          </p>
-        </article>
-
-        <article class="workiq-card fade-in" style="--wiq-accent: #bc8cff;">
-          <span class="workiq-card-icon" aria-hidden="true">🗳️</span>
-          <h4 class="workiq-card-title">Decisions</h4>
-          <p class="workiq-card-desc">
-            Approval records, AI Factory planning decisions, budget sign-offs,
-            and architecture choices. The agent correlates
-            <em>"who decided this"</em> with <em>"what broke."</em>
-          </p>
-        </article>
-
-        <article class="workiq-card fade-in" style="--wiq-accent: #3fb950;">
-          <span class="workiq-card-icon" aria-hidden="true">👥</span>
-          <h4 class="workiq-card-title">Ownership</h4>
-          <p class="workiq-card-desc">
-            Service owners, on-call rosters, and escalation paths.
-            When the agent identifies a root cause, it knows exactly
-            <em>who to page</em> — no more "who owns this?" Slack threads.
-          </p>
-        </article>
-
-        <article class="workiq-card fade-in" style="--wiq-accent: #f0883e;">
-          <span class="workiq-card-icon" aria-hidden="true">📖</span>
-          <h4 class="workiq-card-title">Runbooks</h4>
-          <p class="workiq-card-desc">
-            Documented remediation procedures linked to specific failure modes.
-            The agent surfaces the right runbook for the diagnosed issue —
-            <em>governance through institutional knowledge</em>.
-          </p>
-        </article>
-
-      </div>
-
-      <!-- MCP Pattern -->
-      <div class="workiq-mcp fade-in">
-        <div class="workiq-mcp-header">
-          <span class="workiq-mcp-icon" aria-hidden="true">🔌</span>
-          <h3>The MCP Pattern — Model Context Protocol</h3>
-        </div>
-        <p>
-          Work IQ data can be surfaced via the
-          <strong>Model Context Protocol (MCP)</strong> — an open standard for connecting
-          AI agents to external context sources. In this architecture, the agent calls an
-          MCP-wrapped endpoint to retrieve change events, decisions, and ownership context,
-          keeping the tool interface clean and the context pipeline extensible.
-          The MCP wrapper is gated behind the <code>ENABLE_MCP</code> feature flag.
-        </p>
-        <div class="workiq-mcp-flow">
-          <span class="mcp-node">Agent</span>
-          <span class="mcp-arrow" aria-hidden="true">→</span>
-          <span class="mcp-node mcp-highlight">MCP Protocol</span>
-          <span class="mcp-arrow" aria-hidden="true">→</span>
-          <span class="mcp-node">Work IQ Context</span>
-          <span class="mcp-arrow" aria-hidden="true">→</span>
-          <span class="mcp-node">Diagnosis + Action</span>
-        </div>
-      </div>
-
-      <!-- Hybrid narrative -->
-      <div class="workiq-hybrid fade-in">
-        <h3>The hybrid advantage</h3>
-        <p>
-          This is what makes agentic ops fundamentally different from traditional monitoring.
-          The agent doesn't just <em>detect</em> anomalies — it <em>explains</em> them
-          by merging two signal streams:
-        </p>
-        <div class="workiq-hybrid-cols">
-          <div class="workiq-hybrid-col">
-            <span class="workiq-hybrid-label">📊 Telemetry</span>
-            <p>GPU drops, latency spikes, cost anomalies, incidents — the <em>what</em>.</p>
-          </div>
-          <div class="workiq-hybrid-plus" aria-hidden="true">+</div>
-          <div class="workiq-hybrid-col">
-            <span class="workiq-hybrid-label">🔗 Intent</span>
-            <p>Change events, decisions, ownership, runbooks — the <em>why</em> and <em>who</em>.</p>
-          </div>
-          <div class="workiq-hybrid-equals" aria-hidden="true">=</div>
-          <div class="workiq-hybrid-col workiq-hybrid-result">
-            <span class="workiq-hybrid-label">⚙️ Governed Diagnosis</span>
-            <p>Root-cause with evidence, confidence, owner, and a safe remediation plan.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Disclaimer -->
-      <div class="workiq-disclaimer fade-in">
-        <span class="workiq-disclaimer-icon" aria-hidden="true">⚠️</span>
-        <p>
-          <strong>We're simulating Work IQ outputs in this demo.</strong>
-          Work IQ is in <strong>public preview</strong> and requires
-          Microsoft 365 Copilot licensing + admin consent.
-          All change events, decisions, ownership, and runbook data shown here are synthetic.
-          Work IQ is presented as a <em>pattern</em>, not a live integration.
-        </p>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- ═══════════════════════════════════════════
-       ARCHITECTURE
+       4. DEPLOYED TO AZURE — Where it runs
   ═══════════════════════════════════════════ -->
   <section class="architecture" id="architecture">
     <div class="container">
-      <span class="section-label">Architecture</span>
-      <h2 class="section-title">GitHub builds it · Azure runs it</h2>
+      <span class="section-label" style="color: #58a6ff;">Deployed to Azure</span>
+      <h2 class="section-title">GitHub builds it · Azure AI Foundry runs it</h2>
       <p class="section-subtitle">
         The GitHub platform owns the entire build pipeline — code, CI/CD, security, packaging.
         Azure AI Foundry provides the production runtime for the agent.
@@ -569,11 +387,385 @@
           </text>
         </svg>
       </div>
+
+      <!-- Deploy pipeline story -->
+      <div class="workiq-callout fade-in" style="border-left-color: #58a6ff; margin-top: 2rem;">
+        <div class="workiq-callout-icon" aria-hidden="true">🚀</div>
+        <div class="workiq-callout-body">
+          <h3>The deploy pipeline story</h3>
+          <div class="workiq-mcp-flow" style="margin: 1rem 0;">
+            <span class="mcp-node">git push</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">GitHub Actions</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">Lint + Test + Eval</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node mcp-highlight">Docker Build → ACR</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">Foundry Agent Service</span>
+          </div>
+          <p>
+            Every push triggers the full pipeline: code quality checks, 346 unit tests, evaluation regression gates,
+            then a Docker container build pushed to Azure Container Registry (ACR).
+            The containerized agent is deployed to <strong>Azure AI Foundry Agent Service</strong> using
+            <strong>Bicep IaC templates</strong> — infrastructure as code, fully reproducible.
+          </p>
+        </div>
+      </div>
+
+      <!-- Azure deployment cards -->
+      <div class="features-grid" style="margin-top: 2rem;">
+        <article class="feature-card fade-in" style="--card-accent: #79b8ff;">
+          <span class="feature-icon" aria-hidden="true">🐳</span>
+          <h3 class="feature-title">Container Deployment</h3>
+          <p class="feature-desc">
+            Containerized agent built by GitHub Actions and deployed to Azure Container Registry (ACR),
+            then served via Azure AI Foundry Agent Service using Bicep IaC.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #58a6ff;">
+          <span class="feature-icon" aria-hidden="true">🏗️</span>
+          <h3 class="feature-title">Bicep Infrastructure as Code</h3>
+          <p class="feature-desc">
+            All Azure resources — Foundry project, AI Hub, Application Insights, Azure SQL —
+            are defined in Bicep templates. One deployment, fully reproducible.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #bc8cff;">
+          <span class="feature-icon" aria-hidden="true">🎮</span>
+          <h3 class="feature-title">Foundry Playground</h3>
+          <p class="feature-desc">
+            Once deployed, the agent is accessible through the Azure AI Foundry Playground —
+            a browser-based interface for interacting with the agent in real time.
+          </p>
+        </article>
+      </div>
+
     </div>
   </section>
 
   <!-- ═══════════════════════════════════════════
-       DEMO WALKTHROUGH
+       5. WORK IQ — The context layer
+  ═══════════════════════════════════════════ -->
+  <section class="workiq-section" id="workiq">
+    <div class="container">
+      <span class="section-label" style="color: var(--accent-purple);">Telemetry + Intent</span>
+      <h2 class="section-title">Work IQ — The missing context layer</h2>
+      <p class="section-subtitle">
+        The agent is deployed and running on Azure. Now here's what makes it
+        fundamentally different: <strong>organizational context</strong>.
+        Traditional AIOps sees metrics. <strong>Agentic ops</strong> sees metrics
+        <em>plus the human decisions that caused them</em>.
+      </p>
+
+      <!-- Value proposition callout -->
+      <div class="workiq-callout fade-in">
+        <div class="workiq-callout-icon" aria-hidden="true">💡</div>
+        <div class="workiq-callout-body">
+          <h3>Why telemetry alone isn't enough</h3>
+          <p>
+            A GPU utilization drop is just a number. Was it a planned model-serving rollout?
+            An accidental config change? A cost-optimization policy kicking in?
+            Without <strong>organizational context</strong>, every anomaly is a mystery.
+            Work IQ bridges that gap — correlating infrastructure telemetry with the
+            change events, decisions, ownership, and runbooks that explain what happened
+            and who to talk to next.
+          </p>
+        </div>
+      </div>
+
+      <!-- Four context surfaces -->
+      <h3 class="workiq-grid-title fade-in">Four context surfaces the agent consults</h3>
+      <div class="workiq-grid">
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #58a6ff;">
+          <span class="workiq-card-icon" aria-hidden="true">📋</span>
+          <h4 class="workiq-card-title">Change Events</h4>
+          <p class="workiq-card-desc">
+            Recent deployments, config changes, policy updates, and rollout windows
+            that coincide with anomaly timestamps. The agent asks:
+            <em>"What changed near this incident?"</em>
+          </p>
+        </article>
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #bc8cff;">
+          <span class="workiq-card-icon" aria-hidden="true">🗳️</span>
+          <h4 class="workiq-card-title">Decisions</h4>
+          <p class="workiq-card-desc">
+            Approval records, AI Factory planning decisions, budget sign-offs,
+            and architecture choices. The agent correlates
+            <em>"who decided this"</em> with <em>"what broke."</em>
+          </p>
+        </article>
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #3fb950;">
+          <span class="workiq-card-icon" aria-hidden="true">👥</span>
+          <h4 class="workiq-card-title">Ownership</h4>
+          <p class="workiq-card-desc">
+            Service owners, on-call rosters, and escalation paths.
+            When the agent identifies a root cause, it knows exactly
+            <em>who to page</em> — no more "who owns this?" Slack threads.
+          </p>
+        </article>
+
+        <article class="workiq-card fade-in" style="--wiq-accent: #f0883e;">
+          <span class="workiq-card-icon" aria-hidden="true">📖</span>
+          <h4 class="workiq-card-title">Runbooks</h4>
+          <p class="workiq-card-desc">
+            Documented remediation procedures linked to specific failure modes.
+            The agent surfaces the right runbook for the diagnosed issue —
+            <em>governance through institutional knowledge</em>.
+          </p>
+        </article>
+
+      </div>
+
+      <!-- Change Correlation callout -->
+      <div class="workiq-callout fade-in" style="border-left-color: #bc8cff; margin-top: 1.5rem;">
+        <div class="workiq-callout-icon" aria-hidden="true">🔗</div>
+        <div class="workiq-callout-body">
+          <h3>Change Correlation</h3>
+          <p>
+            The agent connects infrastructure events to change context — approvals, policy updates,
+            rollout windows, and AI Factory planning decisions — using the Work IQ pattern.
+            This is how the agent moves from "something broke" to "here's what caused it and who owns it."
+          </p>
+        </div>
+      </div>
+
+      <!-- MCP Pattern -->
+      <div class="workiq-mcp fade-in">
+        <div class="workiq-mcp-header">
+          <span class="workiq-mcp-icon" aria-hidden="true">🔌</span>
+          <h3>The MCP Pattern — Model Context Protocol</h3>
+        </div>
+        <p>
+          Work IQ data can be surfaced via the
+          <strong>Model Context Protocol (MCP)</strong> — an open standard for connecting
+          AI agents to external context sources. In this architecture, the agent calls an
+          MCP-wrapped endpoint to retrieve change events, decisions, and ownership context,
+          keeping the tool interface clean and the context pipeline extensible.
+          The MCP wrapper is gated behind the <code>ENABLE_MCP</code> feature flag.
+        </p>
+        <div class="workiq-mcp-flow">
+          <span class="mcp-node">Agent</span>
+          <span class="mcp-arrow" aria-hidden="true">→</span>
+          <span class="mcp-node mcp-highlight">MCP Protocol</span>
+          <span class="mcp-arrow" aria-hidden="true">→</span>
+          <span class="mcp-node">Work IQ Context</span>
+          <span class="mcp-arrow" aria-hidden="true">→</span>
+          <span class="mcp-node">Diagnosis + Action</span>
+        </div>
+      </div>
+
+      <!-- Hybrid narrative -->
+      <div class="workiq-hybrid fade-in">
+        <h3>The hybrid advantage</h3>
+        <p>
+          This is what makes agentic ops fundamentally different from traditional monitoring.
+          The agent doesn't just <em>detect</em> anomalies — it <em>explains</em> them
+          by merging two signal streams:
+        </p>
+        <div class="workiq-hybrid-cols">
+          <div class="workiq-hybrid-col">
+            <span class="workiq-hybrid-label">📊 Telemetry</span>
+            <p>GPU drops, latency spikes, cost anomalies, incidents — the <em>what</em>.</p>
+          </div>
+          <div class="workiq-hybrid-plus" aria-hidden="true">+</div>
+          <div class="workiq-hybrid-col">
+            <span class="workiq-hybrid-label">🔗 Intent</span>
+            <p>Change events, decisions, ownership, runbooks — the <em>why</em> and <em>who</em>.</p>
+          </div>
+          <div class="workiq-hybrid-equals" aria-hidden="true">=</div>
+          <div class="workiq-hybrid-col workiq-hybrid-result">
+            <span class="workiq-hybrid-label">⚙️ Governed Diagnosis</span>
+            <p>Root-cause with evidence, confidence, owner, and a safe remediation plan.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div class="workiq-disclaimer fade-in">
+        <span class="workiq-disclaimer-icon" aria-hidden="true">⚠️</span>
+        <p>
+          <strong>We're simulating Work IQ outputs in this demo.</strong>
+          Work IQ is in <strong>public preview</strong> and requires
+          Microsoft 365 Copilot licensing + admin consent.
+          All change events, decisions, ownership, and runbook data shown here are synthetic.
+          Work IQ is presented as a <em>pattern</em>, not a live integration.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       6. MONITORING & OBSERVABILITY
+  ═══════════════════════════════════════════ -->
+  <section class="features" id="monitoring">
+    <div class="container">
+      <span class="section-label" style="color: #39d353;">Monitoring &amp; Observability</span>
+      <h2 class="section-title">Insights from the running agent</h2>
+      <p class="section-subtitle">
+        You can't govern what you can't see. Every agent call, tool invocation, and LLM request
+        is instrumented with OpenTelemetry and exported to Azure Application Insights.
+      </p>
+
+      <!-- Monitoring flow diagram -->
+      <div class="workiq-callout fade-in" style="border-left-color: #39d353;">
+        <div class="workiq-callout-icon" aria-hidden="true">📡</div>
+        <div class="workiq-callout-body">
+          <h3>End-to-end trace pipeline</h3>
+          <div class="workiq-mcp-flow" style="margin: 1rem 0;">
+            <span class="mcp-node">Agent Call</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">Tool Invocation</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">LLM Request</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node mcp-highlight">OpenTelemetry</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">Application Insights</span>
+          </div>
+          <p>
+            Every span is captured — from the initial user query through tool dispatch to LLM
+            token generation. Traces, metrics, and logs flow through the OpenTelemetry SDK
+            to Azure Application Insights for real-time analysis.
+          </p>
+        </div>
+      </div>
+
+      <!-- Monitoring cards -->
+      <div class="features-grid" style="margin-top: 2rem;">
+
+        <article class="feature-card fade-in" style="--card-accent: #58a6ff;">
+          <span class="feature-icon" aria-hidden="true">📊</span>
+          <h3 class="feature-title">Telemetry Analysis</h3>
+          <p class="feature-desc">
+            Queries synthetic GPU utilization, network latency, cost, and incident data via SQL.
+            Surfaces anomalies, trends, and root-cause signals in seconds.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #39d353;">
+          <span class="feature-icon" aria-hidden="true">📡</span>
+          <h3 class="feature-title">Observability Instrumentation</h3>
+          <p class="feature-desc">
+            OpenTelemetry traces for every agent invocation, tool call, and LLM request.
+            Exports to Application Insights with Azure Monitor Workbook dashboards.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #d29922;">
+          <span class="feature-icon" aria-hidden="true">📈</span>
+          <h3 class="feature-title">Azure Monitor Workbooks</h3>
+          <p class="feature-desc">
+            Pre-built dashboards tracking token usage, response latency, tool call patterns,
+            and error rates — giving operators a live view of agent health and behavior.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #f85149;">
+          <span class="feature-icon" aria-hidden="true">🔒</span>
+          <h3 class="feature-title">Privacy by Default</h3>
+          <p class="feature-desc">
+            Content recording is <strong>OFF</strong> by default
+            (<code>AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false</code>).
+            Trace structure and latency are captured — prompt/response content is not.
+          </p>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       7. EVALUATIONS — Quality gates in the pipeline
+  ═══════════════════════════════════════════ -->
+  <section class="features" id="evaluations">
+    <div class="container">
+      <span class="section-label" style="color: #f0883e;">Evaluations</span>
+      <h2 class="section-title">Quality gates in the pipeline</h2>
+      <p class="section-subtitle">
+        You don't just build agents — you continuously evaluate them.
+        Four custom evaluators run on every PR in GitHub Actions, gating deployment
+        to ensure the agent never regresses.
+      </p>
+
+      <!-- Evaluator cards -->
+      <div class="features-grid">
+
+        <article class="feature-card fade-in" style="--card-accent: #58a6ff;">
+          <span class="feature-icon" aria-hidden="true">✅</span>
+          <h3 class="feature-title">Correctness</h3>
+          <p class="feature-desc">
+            Does the agent's diagnosis match the expected root cause?
+            Evaluates factual accuracy of the agent's conclusions against ground-truth test sets.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #3fb950;">
+          <span class="feature-icon" aria-hidden="true">📎</span>
+          <h3 class="feature-title">Evidence Quality</h3>
+          <p class="feature-desc">
+            Does the agent cite specific telemetry data and change events?
+            Measures grounding — the agent must show its work, not just guess.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #f0883e;">
+          <span class="feature-icon" aria-hidden="true">🛡️</span>
+          <h3 class="feature-title">Safety</h3>
+          <p class="feature-desc">
+            Are the proposed remediation actions safe? Checks for harmful, risky, or
+            out-of-scope actions. Human-in-the-loop gates must be preserved.
+          </p>
+        </article>
+
+        <article class="feature-card fade-in" style="--card-accent: #bc8cff;">
+          <span class="feature-icon" aria-hidden="true">🔍</span>
+          <h3 class="feature-title">Groundedness</h3>
+          <p class="feature-desc">
+            Is the agent hallucinating? Detects fabricated data, invented metrics, or
+            claims not supported by the tool outputs the agent actually received.
+          </p>
+        </article>
+
+      </div>
+
+      <!-- Eval pipeline callout -->
+      <div class="workiq-callout fade-in" style="border-left-color: #f0883e; margin-top: 2rem;">
+        <div class="workiq-callout-icon" aria-hidden="true">🧪</div>
+        <div class="workiq-callout-body">
+          <h3>The responsible AI story</h3>
+          <div class="workiq-mcp-flow" style="margin: 1rem 0;">
+            <span class="mcp-node">PR Opened</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">GitHub Actions CI</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node mcp-highlight">Eval Suite Runs</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">Pass / Fail Gate</span>
+            <span class="mcp-arrow" aria-hidden="true">→</span>
+            <span class="mcp-node">Deploy (or Block)</span>
+          </div>
+          <p>
+            Evaluations run in <strong>GitHub Actions CI</strong> on every pull request.
+            The eval runner supports <code>--save-baseline</code> to snapshot current scores
+            and <code>--compare-baseline</code> to detect regressions.
+            <strong>Failed evals block deployment</strong> — the agent can't ship if quality drops.
+            This is continuous evaluation as a first-class CI/CD citizen.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       8. DEMO WALKTHROUGH — See it in action
   ═══════════════════════════════════════════ -->
   <section class="demo" id="demo">
     <div class="container">
@@ -651,7 +843,60 @@
   </section>
 
   <!-- ═══════════════════════════════════════════
-       TECH STACK
+       9. GETTING STARTED
+  ═══════════════════════════════════════════ -->
+  <section class="getting-started" id="getting-started">
+    <div class="container">
+      <span class="section-label" style="color: var(--accent-green);">Try It Yourself</span>
+      <h2 class="section-title">Getting started in 60 seconds</h2>
+      <p class="section-subtitle">
+        Clone the repo, seed the synthetic database, and run the agent locally —
+        no Azure credentials required for demo mode.
+      </p>
+
+      <div class="getting-started-steps fade-in">
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-dot" style="background:#f85149" aria-hidden="true"></span>
+            <span class="code-block-dot" style="background:#d29922" aria-hidden="true"></span>
+            <span class="code-block-dot" style="background:#3fb950" aria-hidden="true"></span>
+            <span class="code-block-title">Terminal</span>
+          </div>
+          <pre class="code-block-body"><code><span class="code-comment"># 1. Clone &amp; install</span>
+git clone https://github.com/tammym-demos/Agentic-Ops-Advisor.git
+cd Agentic-Ops-Advisor
+pip install -r requirements.txt
+
+<span class="code-comment"># 2. Seed the synthetic telemetry database</span>
+python -m data.seed_telemetry
+
+<span class="code-comment"># 3. Run in demo mode (no Azure creds needed)</span>
+python scripts/run_local.py
+
+<span class="code-comment"># 4. Run the test suite</span>
+python -m pytest tests/ -q</code></pre>
+        </div>
+      </div>
+
+      <div class="getting-started-ctas fade-in">
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
+           class="btn btn-primary" target="_blank" rel="noopener">
+          ⭐ Clone on GitHub
+        </a>
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions"
+           class="btn btn-secondary" target="_blank" rel="noopener">
+          ⚙️ View CI/CD Pipelines
+        </a>
+        <a href="pages/dashboard.html"
+           class="btn btn-secondary">
+          📊 Explore the Dashboard
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       10. TECH STACK
   ═══════════════════════════════════════════ -->
   <section class="techstack" id="techstack">
     <div class="container">
@@ -748,60 +993,7 @@
   </section>
 
   <!-- ═══════════════════════════════════════════
-       GETTING STARTED
-  ═══════════════════════════════════════════ -->
-  <section class="getting-started" id="getting-started">
-    <div class="container">
-      <span class="section-label" style="color: var(--accent-green);">Try It Yourself</span>
-      <h2 class="section-title">Getting started in 60 seconds</h2>
-      <p class="section-subtitle">
-        Clone the repo, seed the synthetic database, and run the agent locally —
-        no Azure credentials required for demo mode.
-      </p>
-
-      <div class="getting-started-steps fade-in">
-        <div class="code-block">
-          <div class="code-block-header">
-            <span class="code-block-dot" style="background:#f85149" aria-hidden="true"></span>
-            <span class="code-block-dot" style="background:#d29922" aria-hidden="true"></span>
-            <span class="code-block-dot" style="background:#3fb950" aria-hidden="true"></span>
-            <span class="code-block-title">Terminal</span>
-          </div>
-          <pre class="code-block-body"><code><span class="code-comment"># 1. Clone &amp; install</span>
-git clone https://github.com/tammym-demos/Agentic-Ops-Advisor.git
-cd Agentic-Ops-Advisor
-pip install -r requirements.txt
-
-<span class="code-comment"># 2. Seed the synthetic telemetry database</span>
-python -m data.seed_telemetry
-
-<span class="code-comment"># 3. Run in demo mode (no Azure creds needed)</span>
-python scripts/run_local.py
-
-<span class="code-comment"># 4. Run the test suite</span>
-python -m pytest tests/ -q</code></pre>
-        </div>
-      </div>
-
-      <div class="getting-started-ctas fade-in">
-        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
-           class="btn btn-primary" target="_blank" rel="noopener">
-          ⭐ Clone on GitHub
-        </a>
-        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions"
-           class="btn btn-secondary" target="_blank" rel="noopener">
-          ⚙️ View CI/CD Pipelines
-        </a>
-        <a href="pages/dashboard.html"
-           class="btn btn-secondary">
-          📊 Explore the Dashboard
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════════════════════════════
-       DISCLAIMERS
+       11. DISCLAIMERS
   ═══════════════════════════════════════════ -->
   <section class="disclaimers" id="disclaimers" aria-label="Important disclaimers">
     <div class="container">

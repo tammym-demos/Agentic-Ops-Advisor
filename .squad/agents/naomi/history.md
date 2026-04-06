@@ -108,3 +108,14 @@
   - **CSS added:** `.getting-started`, `.code-block`, `.code-block-header`, `.code-block-body`, `.code-comment`, `.getting-started-ctas` styles in `docs/style.css`. Terminal-style presentation with red/yellow/green dots.
 - **SP script fix:** Changed `SP_OBJECT_ID` default from hardcoded `d30fcff3-4eab-4b85-a366-f9a17142be39` to empty string. Added validation with clear error message explaining how to find the SP object ID. Updated help text to show "(required — must be provided)".
 - **Key files:** `docs/index.html`, `docs/style.css`, `scripts/grant-sp-permissions.sh`.
+
+### 2025-07-27: Demo Story Arc Restructure — GitHub Pages
+- **Task:** Restructure `docs/index.html` to follow a coherent 11-section demo story arc for Tammy's presentation.
+- **Story arc order:** (1) Hero — sharpened narrative hook, (2) The Problem — NEW section on alert fatigue/manual trawling, (3) Built with GitHub — existing GitHub Products section, (4) Deployed to Azure — restructured Architecture with deploy pipeline callout + container/Bicep/Playground cards, (5) Work IQ — existing deep-dive with added Change Correlation callout, (6) Monitoring & Observability — NEW standalone section with OTel flow diagram + 4 cards (Telemetry, Observability, Workbooks, Privacy), (7) Evaluations — NEW standalone section with 4 evaluator cards + responsible AI pipeline callout, (8) Demo Walkthrough — existing 4-step flow, (9) Getting Started — moved before Tech Stack, (10) Tech Stack — moved to near bottom, (11) Disclaimers.
+- **Capabilities section removed:** 6 feature cards redistributed: Telemetry Analysis → Monitoring, Change Correlation → Work IQ, Safe Remediation → Demo, Continuous Evaluation → Evaluations, Observability → Monitoring, Container Deployment → Azure.
+- **New visual elements:** Deploy pipeline flow diagram (git push → Actions → test → eval → Docker → Foundry), OTel trace pipeline diagram, Eval CI pipeline diagram — all using existing `workiq-mcp-flow` CSS pattern.
+- **Nav updated:** 10 links matching new section order (The Problem, GitHub, Azure, Work IQ, Monitoring, Evaluations, Demo, Get Started, Dashboard, GitHub ↗).
+- **CSS unchanged:** All new sections reuse existing CSS classes (`features`, `feature-card`, `workiq-callout`, `workiq-mcp-flow`, `mcp-node`, `mcp-highlight`).
+- **Validation:** 11 sections balanced, 95 div tags balanced, no duplicate IDs, all nav anchors valid.
+- **Key files:** `docs/index.html`.
+
