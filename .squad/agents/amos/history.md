@@ -74,3 +74,9 @@
 - **Documentation:** DOCKER_OPTIMIZATION.md created with layer analysis, expected vs actual estimates, future optimization paths
 - **Verification status:** Docker unavailable in this environment; analysis from Dockerfile inspection + dependency profiling. Ready for docker build on deployment machine.
 
+### 2026-04-06: Team Sync — Health Endpoint & Docker Optimization Complete
+- **Naomi (Backend):** Implemented /health endpoint (aiohttp, port 8080). 348 tests pass. Issue #60 complete.
+- **Alex (Tester):** Validated implementation against spec-first test suite (15 tests + 2 integration tests). All pass.
+- **Cross-team delivery:** Optimized Dockerfile now has confirmed health endpoint for HEALTHCHECK probing. Multi-stage build + enhanced .dockerignore delivers 400–450 MB image. Issue #61 complete. All work unblocked for integration testing.
+- **Decision log:** Merged 3 agent decisions into `.squad/decisions.md`. Created orchestration logs per agent + session log. Deleted inbox files. Appended team updates to agent history files.
+

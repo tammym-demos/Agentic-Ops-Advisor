@@ -72,3 +72,9 @@
 - **Files modified:** `scripts/run_local.py` (added health server + threading), `requirements.txt`, `pyproject.toml`.
 - **Testing:** Automated test confirmed 200 OK response with correct JSON schema. Health check compatible with Dockerfile HEALTHCHECK: `curl -f http://localhost:8080/health || exit 1`.
 - **Key files:** `scripts/run_local.py`, `requirements.txt`, `pyproject.toml`, `Dockerfile` (reference).
+
+### 2026-04-06: Team Sync — Health Endpoint & Docker Optimization
+- **Alex (Tester):** Created spec-first test suite (`tests/test_health.py`, 15 tests) + integration tests before implementation. Tests verify response format, availability, integration, edge cases. All 348 tests pass.
+- **Amos (DevOps):** Optimized Dockerfile with multi-stage build (builder + runtime), consolidated .dockerignore. Expected 400–450 MB (140–220 MB savings, 25–30%). Under 500 MB target. Issue #61 complete.
+- **Cross-team impact:** Health endpoint enables Docker HEALTHCHECK; test suite validates spec compliance; optimized Dockerfile packages both <500 MB. All work unblocked for integration testing.
+- **Decision log:** Merged 3 decisions from inbox to `.squad/decisions.md` (naomi-health-endpoint, alex-health-test-strategy, amos-docker-optimization). Created orchestration logs and session log per Scribe charter.

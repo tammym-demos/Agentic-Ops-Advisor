@@ -69,3 +69,10 @@
   - Implementation checklist at bottom for Naomi (web framework choice, requirements, Docker integration)
 - **Configuration update:** Added `integration` marker to `pyproject.toml` to register custom mark
 - **Result:** All 15 tests collected successfully, all skip as expected. Tests are ready to be unskipped and updated once Naomi's implementation lands.
+
+### 2026-04-06: Team Sync — Health Endpoint Spec-First Delivery
+- **Implementation validated:** Naomi implemented /health endpoint per spec. All 15 health tests in `tests/test_health.py` now pass. Added integration tests in `tests/test_health_endpoint.py` (2 tests).
+- **Test coverage confirmed:** Response format (HTTP 200, JSON, required fields), Availability (no Azure deps, pre-init response), Integration (live HTTP GET, curl), Edge cases (status values, UTC, version matching).
+- **Spec execution:** Naomi's aiohttp implementation matches test expectations exactly. Port 8080, ISO 8601 timestamps, pyproject.toml version extraction all validated.
+- **348 tests passing:** Full test suite now clean with 0 failures. Health endpoint unblocked for Docker HEALTHCHECK integration.
+- **Cross-team impact:** Amos's Docker optimization now has confirmed health endpoint for probing. Naomi's implementation satisfies Alex's spec. Integration testing phase can proceed.

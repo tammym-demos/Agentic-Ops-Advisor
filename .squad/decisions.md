@@ -497,3 +497,188 @@ Once blockers are resolved, trigger a test deployment to verify the full pipelin
 **Date:** 2026-04-05  
 **Status:** ✅ APPROVED — Feature Complete & Ready for Deployment
 
+
+## Decision: naomi-health-endpoint
+# Health Endpoint Implementation — Naomi (Backend Dev)
+
+**Date:** 2026-04-06  
+**Author:** Naomi (Backend Dev)  
+**Issue:** #60  
+**Status:** ✅ Implemented  
+
+## Summary
+
+Implemented `/health` endpoint on port 8080 using aiohttp in `scripts/run_local.py`. Endpoint returns JSON with `status`, `timestamp` (ISO 8601), and `version` fields. No external dependencies required; works before agent initialization. Response time <1 second.
+
+## Implementation
+
+- Framework: aiohttp (async HTTP server)
+- Port: 8080
+- Endpoint: GET `/health`
+- Response: JSON with `{"status": "healthy", "timestamp": "2026-04-06T...", "version": "x.y.z"}`
+- Availability: Works without Azure credentials, starts before chat loop on separate task
+- Docker integration: Endpoint enables `HEALTHCHECK` probe on port 8080
+
+## Test Coverage
+
+All 348 tests pass, including 15 spec-driven tests in `tests/test_health.py`:
+- Response format validation (HTTP 200, JSON, required fields)
+- Availability tests (no Azure creds, before init)
+- Integration tests (live HTTP GET + curl)
+- Edge case tests (field validation, UTC, version matching)
+
+## Integration
+
+- Alex's test suite validates endpoint against spec
+- Docker HEALTHCHECK configured to probe endpoint
+- Unblocks integration testing with Amos's optimized container
+
+## Impact
+
+✅ High priority for deployment — enables production health monitoring of containerized agent.
+
+
+## Decision: alex-health-test-strategy
+# Health Endpoint Test Strategy — Alex (Tester)
+
+**Date:** 2026-04-06  
+**Author:** Alex (Tester)  
+**Issue:** #60  
+**Status:** ✅ Complete  
+
+## Summary
+
+Created comprehensive spec-first test suite for `/health` endpoint before implementation. Uses skip decorators and parametrized tests to enable parallel development. 15 spec-driven tests + 2 integration tests.
+
+## Test Structure
+
+**File:** `tests/test_health.py` (15 tests)
+
+1. **Response Format Tests** (5 tests)
+   - HTTP 200 status code
+   - JSON Content-Type
+   - Required fields (status, timestamp, version)
+   - Field type validation
+   - ISO 8601 timestamp format
+
+2. **Availability Tests** (3 tests)
+   - Works without Azure credentials
+   - Available before agent initialization
+   - Response time <1 second
+
+3. **Integration Tests** (3 tests)
+   - Live HTTP GET via requests library
+   - curl command simulation (Docker HEALTHCHECK)
+   - Marked `@pytest.mark.integration`
+
+4. **Edge Case Tests** (4 tests)
+   - Status field values
+   - UTC timezone verification
+   - No extra fields in response
+   - Version matches pyproject.toml
+
+## Patterns Used
+
+- `@pytest.mark.skip` for spec-first development
+- `@pytest.mark.asyncio` for async tests
+- `@pytest.mark.integration` for live HTTP tests
+- `@pytest.mark.parametrize` for edge cases
+- Helper functions: `validate_iso8601_timestamp`, `validate_semantic_version`
+
+## Benefits
+
+- Parallel development: Naomi implemented while tests were written
+- Clear spec: Tests document expected behavior
+- Quality gate: Tests enforce compliance
+- Safety net: Regression detection
+
+## Integration with Naomi
+
+Test file includes implementation checklist for Naomi covering:
+- Web framework choice (aiohttp recommended)
+- Health endpoint requirements
+- Integration with run_local.py (separate thread/task)
+- Docker integration (port 8080, HEALTHCHECK)
+- Testing steps (uncomment, run pytest, verify)
+
+## Result
+
+✅ All 348 tests pass (15 health tests included). Test suite ready for validation.
+
+
+## Decision: amos-docker-optimization
+# Docker Image Size Optimization — Amos (DevOps)
+
+**Date:** 2026-04-06  
+**Author:** Amos (DevOps)  
+**Issue:** #61  
+**Status:** ✅ Implemented  
+
+## Problem
+
+Original Dockerfile was single-stage with build tooling (gcc, build-essential, python3-dev) in runtime image. Estimated size: 550–800 MB, exceeding 500 MB target.
+
+## Solution
+
+Implemented **multi-stage Docker build** pattern:
+
+1. **Builder stage** (`python:3.11-slim AS builder`) — Compiles dependencies with full build toolchain
+2. **Runtime stage** (`python:3.11-slim AS runtime`) — Copies only precompiled wheels
+
+## Changes Made
+
+### Dockerfile
+- Split into two stages with `COPY --from=builder`
+- Builder: `gcc`, `build-essential`, `libssl-dev`, `libffi-dev`, `python3-dev`, `curl`
+- Runtime: `ca-certificates`, `curl`, `gnupg`, `msodbcsql18` (ODBC runtime only)
+- Removed `unixodbc-dev` (dev headers; msodbcsql18 provides runtime client)
+- Single consolidated apt operation per stage
+- Aggressive cleanup: `/tmp/*`, `/var/tmp/*`
+
+### .dockerignore
+- Added: `README.md`, `tests/`, `eval/results/`, `eval/*_results.json`, `.cache/`, `*.pth`
+- Impact: Reduces build context 20–50 MB
+
+## Expected Savings
+
+| Category | Savings |
+|----------|---------|
+| Build tools removed | 100–150 MB |
+| System deps optimized | 10–20 MB |
+| Build context reduced | 20–50 MB |
+| **Total** | **140–220 MB (25–30%)** |
+| **Final size** | **400–450 MB ✅** |
+
+## Trade-Offs
+
+- ✅ No functional changes (runtime behavior identical)
+- ✅ Improved build caching (builder stage invalidation doesn't affect app layers)
+- ✅ Reduced registry storage and pull times
+- ⚠️ Slightly more complex build logic (two stages)
+
+## Alternatives Considered
+
+| Option | Result |
+|--------|--------|
+| Alpine base | ❌ Musl libc breaks msodbcsql18 wheels |
+| Distroless Python | ❌ No shell breaks debugging + health check |
+| Lazy loading eval libs | ❌ Increases deployment complexity |
+| Current multi-stage | ✅ **Best balance** |
+
+## Verification
+
+When Docker available on deployment machine:
+```bash
+docker build -t agentic-ops-advisor:test .
+docker images agentic-ops-advisor:test
+# Expected: ~400–450 MB
+```
+
+## Impact
+
+✅ Dockerfile optimized for production deployment. Expected to achieve < 500 MB target, reducing registry storage and deployment time.
+
+## Documentation
+
+See `DOCKER_OPTIMIZATION.md` for detailed layer breakdown and future optimization paths.
+
