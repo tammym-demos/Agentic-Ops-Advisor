@@ -11,6 +11,37 @@ None.
 **What:** Squad team created with The Expanse universe casting. Holden (Lead), Naomi (Backend), Amos (DevOps), Alex (Tester), Miller (PM), Scribe, Ralph, and Tammy (Human — Demo Lead).
 **Why:** Project entering final deployment phase — need structured team to manage remaining work (tests, Azure deployment, integration test, DoD verification).
 
+### 2026-04-07T02:55:00Z: Foundry Deploy RBAC Fix (Issue #65)
+**By:** Amos (DevOps) + Holden (Lead)
+**What:** Automated RBAC assignment for Foundry Agent Service data-plane access. Deploy SP and Managed Identity assigned `Azure AI Developer` role (data-plane) via deploy.yml (Step 5c) + deploy.sh (Step 6 pre-flight).
+**Why:** Deploy SP has Contributor (management-plane only). Foundry APIs (`list_agents`, `create_agent`) require data-plane access. Implemented imperatively because live AI Hub is manually created `Microsoft.CognitiveServices/accounts` (Bicep template targets different resource type).
+**Outcome:** ✅ Merged commit `0ba8ec6` (4 files, 243 insertions). GitHub issue #65 documents manual prerequisite. Admin must run `az role assignment create` one-time (Owner/User Access Administrator).
+**Risk:** Low — role assignments idempotent, CI step uses `continue-on-error: true`, deploy.sh auto-succeeds when run by Owner.
+**Blocks:** Issue #62 (integration testing against real ACR) — now unblocked after manual grant.
+
+### 2026-04-07T02:55:00Z: GitHub Copilot Agent Auto-Assign Disabled (Requested by Tammy)
+**By:** Amos (DevOps)
+**What:** Disabled automated @copilot coding agent assignment. Set `copilot-auto-assign: false` in `.squad/team.md` and hardcoded `if: false` in `squad-issue-assign.yml` "Assign @copilot coding agent" step.
+**Why:** MCAPS/Contoso EMU org policy does not permit GitHub Copilot coding agents. Every automated assignment failed with policy error, creating workflow noise.
+**Changes:** `.squad/team.md` (flag flip), `.github/workflows/squad-triage.yml` (defensive comment), `squad-issue-assign.yml` (hardcoded `if: false`), `squad-heartbeat.yml` (defensive comment).
+**Impact:** ✅ Zero failed assignments, 348 tests pass, reversible when org enables coding agents.
+
+### 2025-07-26T00:00:00Z: Demo Mode Work-Context Enrichment Strategy (Issue #54 gap closure)
+**By:** Naomi (Backend Dev)
+**What:** Added keyword-based routing in `_run_demo_mode()` that maps query keywords to service names (`gpu-cluster`, `network`, `cost`), then calls appropriate work-context functions (`get_change_events`, `get_ownership`, `get_runbooks`, `get_decisions`) alongside telemetry calls.
+**Why:** Demo mode only called SQL telemetry tools, missing work-context stub entirely. DoD requires both tool surfaces per scenario. Solution mirrors Agent mode's dual-tool approach.
+**Outcome:** ✅ `scripts/run_local.py` updated, 348 tests pass, ruff clean. All work-context calls gated behind existing `ENABLE_WORK_IQ` feature flag.
+
+### 2025-07-25T00:00:00Z: DoD Audit — Issue #54: Verify Definition of Done (Section 8)
+**By:** Holden (Lead)
+**What:** Comprehensive audit of 7 Definition of Done criteria from `customerfriendly-plan.md` Section 8.
+**Verdict:** ✅ **5 PASS, 2 PARTIAL** — Agent code, eval pipeline, tracing, deployment IaC, regression demo, synthetic data posture all solid.
+**Gaps (with closure plans):**
+1. **Demo mode work-context** — Only telemetry in Demo mode, missing work-context stub. Solution: keyword-based routing in `_run_demo_mode()` (now closed by Naomi, see above).
+2. **Test suite broken** — 62 failures, 31 errors, all test-layer mismatches (zero source bugs). All failures trace to tests referencing functions/symbols that don't exist or were renamed. Assigned to Naomi for fix (~3-4h effort).
+3. **GitHub Pages** — Site exists in `docs/` but no evidence of live deployment. Need workflow or verification.
+**Recommendation:** #54 stays open until test suite passes and Pages verified. Remaining effort ~3-4h.
+
 ## Governance
 
 - All meaningful changes require team consensus
