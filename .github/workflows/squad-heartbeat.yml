@@ -7,17 +7,18 @@ name: Squad Heartbeat (Ralph)
 # Run 'squad upgrade' to sync installed copies from source templates.
 
 on:
-  schedule:
-    # Every 30 minutes — adjust via cron expression as needed
-    - cron: '*/30 * * * *'
+  # schedule:
+  #   # Every 30 minutes — adjust via cron expression as needed
+  #   - cron: '*/30 * * * *'
 
-  # React to completed work or new squad work
-  issues:
-    types: [closed, labeled]
-  pull_request:
-    types: [closed]
+  # # React to completed work or new squad work
+  # issues:
+  #   types: [closed, labeled]
+  # pull_request:
+  #   types: [closed]
 
-  # Manual trigger
+  # Manual trigger only — auto-triggers disabled to prevent
+  # unwanted Copilot coding agent sessions (org policy blocks them)
   workflow_dispatch:
 
 permissions:
