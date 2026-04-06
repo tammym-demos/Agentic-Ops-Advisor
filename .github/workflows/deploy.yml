@@ -188,7 +188,10 @@ jobs:
                   ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
                   RG_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['resourceGroupName']['value'])" 2>/dev/null || echo "rg-agentic-ops-advisor")
                   HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
-                  HUB_SCOPE="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}"
+                  # Use the authenticated subscription ID from az CLI to avoid leading/trailing
+                  # whitespace in the AZURE_SUBSCRIPTION_ID secret causing scope lookup errors.
+                  SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                  HUB_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}"
 
                   # Resolve the object ID of the currently authenticated principal
                   ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
