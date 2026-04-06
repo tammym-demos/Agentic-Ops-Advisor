@@ -257,17 +257,22 @@ jobs:
                       echo ""
                       echo "🔄 Falling back to resource-group-scoped deployment..."
 
-                      # Ensure the RG exists (idempotent — safe even if it already exists)
-                      az group create \
-                          --name "$RG_NAME" \
-                          --location "$AZURE_LOCATION" \
-                          --tags project=agentic-ops-advisor environment=prod managedBy=bicep \
-                          --output none 2>&1 || {
-                          echo "❌ Cannot create resource group '$RG_NAME'."
-                          echo "   The SP may not have sufficient permissions even at RG scope."
-                          echo "   Grant subscription Contributor:  ./scripts/grant-sp-permissions.sh"
-                          exit 1
-                      }
+                      # Ensure the RG exists (check first to avoid location-mismatch errors)
+                      if az group show --name "$RG_NAME" --output none 2>/dev/null; then
+                          echo "✅ Resource group '$RG_NAME' already exists."
+                      else
+                          echo "Creating resource group '$RG_NAME'..."
+                          az group create \
+                              --name "$RG_NAME" \
+                              --location "$AZURE_LOCATION" \
+                              --tags project=agentic-ops-advisor environment=prod managedBy=bicep \
+                              --output none 2>&1 || {
+                              echo "❌ Cannot create resource group '$RG_NAME'."
+                              echo "   The SP may not have sufficient permissions even at RG scope."
+                              echo "   Grant subscription Contributor:  ./scripts/grant-sp-permissions.sh"
+                              exit 1
+                          }
+                      fi
 
                       # Deploy using the RG-scoped template (same modules, no RG resource)
                       az deployment group create \
