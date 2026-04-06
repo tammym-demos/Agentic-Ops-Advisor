@@ -93,3 +93,21 @@
 - **Status:** ✓ Complete. Ready for integration test phase.
 - **Orchestration log:** Created `.squad/orchestration-log/2026-04-06T0208-amos.md`.
 
+### 2026-04-06: Branch Cleanup — Merge All copilot/* Branches
+- **Phase 1 — Deleted merged remote branches (13 total):**
+  - 10 were already deleted from remote before this task (pruned on fetch)
+  - 3 remaining deleted: `copilot/add-configuration-feature-flag-module`, `copilot/create-deployment-workflow`, `copilot/create-synthetic-context-data`
+- **Phase 2 — Merged 7 unmerged local branches into main:**
+  - `copilot/add-opentelemetry-instrumentation` — **conflict** (tests/test_tools.py) → resolved with --ours
+  - `copilot/create-agent-orchestration` — **conflict** (agent/agent.py, tests/test_agent.py) → resolved with --ours
+  - `copilot/create-local-development-scripts` — **conflict** (scripts/run_local.py, scripts/setup_local_db.py, tests/test_local_scripts.py) → resolved with --ours
+  - `copilot/create-offline-batch-evaluation-runner` — **clean merge**
+  - `copilot/create-sql-telemetry-tool` — **conflict** (tools/sql_telemetry.py, tests/test_sql_telemetry.py) → resolved with --ours
+  - `copilot/create-unit-integration-tests` — **conflict** (tests/conftest.py) → resolved with --ours
+  - `copilot/create-work-context-stub-tool` — **conflict** (tests/test_work_context_stub.py) → resolved with --ours
+- **Remote-only branches (could not merge):** `copilot/add-comprehensive-readme-for-operators` and `copilot/create-landing-page-brochure` — already deleted from remote before this task
+- **All 7 local branches deleted** after merge
+- **Tests:** 348 passed, 0 failed
+- **Pushed to origin/main** — commit `04664a2`
+- **Remaining branches:** Only `main` and `origin/copilot/kill-long-running-tasks` (unrelated, not in scope)
+
