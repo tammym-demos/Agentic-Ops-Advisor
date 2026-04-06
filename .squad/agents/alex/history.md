@@ -49,3 +49,23 @@
 - `tools/sql_telemetry.py` — TELEMETRY_TABLES schema diverged from `data/seed_telemetry.py` DDL
 - `data/seed_telemetry.py` — actual DDL and seed logic lives here
 - `pyproject.toml` — `pip install -e ".[dev]"` fails (flat-layout discovery error, needs `[tool.setuptools.packages]`)
+
+### 2025-07-25: Health Endpoint Tests (Issue #60)
+- **File created:** `tests/test_health.py` — 15 tests for /health endpoint spec
+- **Test approach:** Structured tests with skip decorators, ready for Naomi's implementation
+- **Test categories:**
+  1. **Response format** (6 tests): HTTP 200, JSON response, required fields (status/timestamp/version), field validation
+  2. **Availability** (3 tests): Works without Azure creds, available before agent init, responds quickly (<1s)
+  3. **Integration** (2 tests): Live HTTP GET and curl tests (require running server on localhost:8080)
+  4. **Edge cases** (4 tests): Status values, UTC timezone, no extra fields, version matches pyproject.toml
+- **Test patterns used:**
+  - `pytest.mark.skip` with reason for implementation-pending tests
+  - `pytest.mark.integration` for tests requiring running server
+  - `pytest.mark.asyncio` for async tests (health endpoint expected to be async)
+  - `pytest.mark.parametrize` for parametrized edge case testing
+  - Helper functions: `validate_iso8601_timestamp()`, `validate_semantic_version()`
+  - TODOs in test bodies showing expected implementation (aiohttp test client, requests library, etc.)
+  - Comprehensive docstrings explaining what each test validates
+  - Implementation checklist at bottom for Naomi (web framework choice, requirements, Docker integration)
+- **Configuration update:** Added `integration` marker to `pyproject.toml` to register custom mark
+- **Result:** All 15 tests collected successfully, all skip as expected. Tests are ready to be unskipped and updated once Naomi's implementation lands.

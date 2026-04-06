@@ -59,3 +59,16 @@
 - **Nav structure:** Dashboard page nav shows "Home" link + active "📊 Dashboard" + same disclaimer banner as main site.
 - **Responsive:** Chart grid collapses to 1 column on mobile (<768px). Health tiles auto-fit from 200px min.
 - **Key files:** `docs/pages/dashboard.html`, `docs/pages/dashboard.css`, `docs/index.html`, `docs/style.css` (reference only).
+
+### 2026-04-06: Health Endpoint Implementation (Issue #60)
+- **Task:** Implement GET /health endpoint for Docker HEALTHCHECK on port 8080.
+- **Implementation:** Added aiohttp-based health server that runs in background daemon thread alongside the interactive CLI loop.
+- **Health server architecture:** `_health_handler` async handler returns JSON with status/timestamp/version. `_start_health_server` creates aiohttp app with `/health` route. `_run_health_server_thread` runs async event loop in dedicated daemon thread.
+- **Response schema:** `{"status": "healthy", "timestamp": "<ISO 8601 UTC>", "version": "<from pyproject.toml>"}`. Version extracted from pyproject.toml using Python 3.11 native `tomllib` (with `tomli` fallback for 3.10).
+- **Port configuration:** Default 8080, configurable via `HEALTH_PORT` env var.
+- **Health independence:** Endpoint responds even without Azure credentials or full agent configuration. Only requires the Python process to be running.
+- **Thread lifecycle:** Daemon thread starts before main loop, dies automatically when parent process exits. No cleanup required.
+- **Dependencies added:** `aiohttp>=3.9.0` to both `requirements.txt` and `pyproject.toml` dependencies list.
+- **Files modified:** `scripts/run_local.py` (added health server + threading), `requirements.txt`, `pyproject.toml`.
+- **Testing:** Automated test confirmed 200 OK response with correct JSON schema. Health check compatible with Dockerfile HEALTHCHECK: `curl -f http://localhost:8080/health || exit 1`.
+- **Key files:** `scripts/run_local.py`, `requirements.txt`, `pyproject.toml`, `Dockerfile` (reference).

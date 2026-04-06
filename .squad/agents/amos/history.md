@@ -5,7 +5,7 @@
 - **Stack:** Python 3.11, Azure AI Agent Service SDK, GPT-4.1, Bicep, OpenTelemetry
 - **Repo:** tammym-demos/Agentic-Ops-Advisor
 - **User:** Tammy
-- **Status:** All 22 PRs merged. Remaining: tests, Azure deployment, integration test.
+- **Status:** All 22 PRs merged. Remaining: tests, Azure deployment, integration test, Docker optimization.
 
 ## Learnings
 
@@ -44,3 +44,33 @@
 - **Remaining blocker — AI Foundry Hub:** `hub-agentops-prod` fails with persistent `InternalServerError` from Azure ML service. Not a template issue — all supporting resources deploy fine.
 - **Region notes:** eastus2 and eastus both blocked SQL server creation during deployment window; centralus worked
 - **All 10 resource providers now Registered**
+
+### 2026-04-05: Issue #63 Resolved — Foundry Hub Blocker
+- **Root cause:** ARM API for `Microsoft.MachineLearningServices/workspaces` (kind: Hub) has intermittent InternalServerError affecting Bicep deployments — not a template/config issue
+- **Resolution path:** Hub created manually via Azure Portal using CognitiveServices-based Foundry model (not ML workspace):
+  - Hub: `hub-agentops-prod` (`Microsoft.CognitiveServices/accounts`, kind: AIServices)
+  - Project: `proj-agentops-prod` (`Microsoft.CognitiveServices/accounts/projects`)
+- **GPT-4.1 deployment:** GlobalStandard capacity 10 deployed directly on Hub resource
+- **SDK migration — v1 beta → v2 GA:**
+  - `azure-ai-projects 1.0.0b7` → `azure-ai-projects 2.0.x` + `azure-ai-agents 1.1.x`
+  - Updated `agent.py`, `config.py`, `pyproject.toml`, tests, `.env.example`
+- **Bicep fix:** `infra/modules/openai.bicep` — changed `kind: 'OpenAI'` to `kind: 'AIServices'` (required for Hub compatibility)
+- **Live connection test:** PASSED — agent creates/deletes successfully against new project endpoint
+- **New environment config:**
+  - `AZURE_AI_AGENTS_ENDPOINT=https://hub-agentops-prod.services.ai.azure.com/api/projects/proj-agentops-prod`
+  - `AZURE_OPENAI_ENDPOINT=https://hub-agentops-prod.cognitiveservices.azure.com/`
+- **Cleanup:** `ais-agentops-prod` and `oai-agentops-prod` now orphaned (GPT-4.1 runs on hub). Can be deleted to reduce cost.
+
+### 2026-04-06: Docker Image Size Optimization (Issue #61)
+- **Problem:** Single-stage Dockerfile would produce ~550–800 MB image (exceeds 500 MB target)
+- **Root cause:** Build tools (gcc, build-essential, headers) included in runtime; redundant system deps; inefficient layer caching
+- **Solution:** Multi-stage build pattern implemented
+  1. Builder stage: Compiles wheels with full build toolchain
+  2. Runtime stage: Copies only /root/.local; excludes build tools (~100–150 MB savings)
+  3. Consolidated RUN commands: Single apt-get update + install + cleanup (~10–20 MB)
+  4. Enhanced .dockerignore: Excludes tests/, README.md, eval results (~20–50 MB)
+- **Expected final size:** 400–450 MB (~25–30% reduction, within target)
+- **Files modified:** Dockerfile (multi-stage), .dockerignore (aggressive exclusions)
+- **Documentation:** DOCKER_OPTIMIZATION.md created with layer analysis, expected vs actual estimates, future optimization paths
+- **Verification status:** Docker unavailable in this environment; analysis from Dockerfile inspection + dependency profiling. Ready for docker build on deployment machine.
+
