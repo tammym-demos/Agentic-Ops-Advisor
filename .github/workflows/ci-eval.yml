@@ -83,3 +83,9 @@ jobs:
               run: |
                   echo "Regressions detected in eval run. Failing the check."
                   exit 1
+
+            - name: Validate Bicep templates
+              if: github.event_name == 'pull_request'
+              run: |
+                  az bicep build --file infra/main.bicep --stdout > /dev/null
+                  echo "✅ Bicep template syntax valid"
