@@ -326,7 +326,7 @@ jobs:
                   )
 
                   if existing:
-                      agent_obj = client.update_agent(assistant_id=existing.id, **agent_kwargs)
+                      agent_obj = client.update_agent(agent_id=existing.id, **agent_kwargs)
                       print(f"✅ Updated agent: {agent_obj.id}")
                   else:
                       agent_obj = client.create_agent(**agent_kwargs)
