@@ -78,3 +78,11 @@
 - **Amos (DevOps):** Optimized Dockerfile with multi-stage build (builder + runtime), consolidated .dockerignore. Expected 400–450 MB (140–220 MB savings, 25–30%). Under 500 MB target. Issue #61 complete.
 - **Cross-team impact:** Health endpoint enables Docker HEALTHCHECK; test suite validates spec compliance; optimized Dockerfile packages both <500 MB. All work unblocked for integration testing.
 - **Decision log:** Merged 3 decisions from inbox to `.squad/decisions.md` (naomi-health-endpoint, alex-health-test-strategy, amos-docker-optimization). Created orchestration logs and session log per Scribe charter.
+
+### 2025-07-26: Demo Mode — Work-Context Stub Integration
+- **Task:** Fix `_run_demo_mode()` in `scripts/run_local.py` to call work-context stub alongside SQL telemetry tools.
+- **Problem:** Demo mode only routed queries to `TOOL_CALLABLES` from `tools/sql_telemetry.py`; no work-context data was shown.
+- **Fix:** Added function-scope imports of `get_change_events`, `get_decisions`, `get_ownership`, `get_runbooks`, `get_full_context`, and `ENABLE_WORK_IQ` from `tools/work_context_stub.py`. After telemetry routing, added keyword-based work-context enrichment gated by `ENABLE_WORK_IQ`.
+- **Service mapping:** GPU keywords → `gpu-cluster`, network/latency → `network`, cost → `cost`. Change keywords trigger `get_change_events`; incident/remediation keywords trigger `get_ownership`, `get_runbooks`, `get_decisions`. Fallback queries get `get_full_context`.
+- **Validation:** 348 tests pass, ruff lint clean.
+- **Key files:** `scripts/run_local.py` (lines 206–280).

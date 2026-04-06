@@ -206,6 +206,14 @@ def _resolve_input(user_input: str) -> str:
 def _run_demo_mode() -> None:
     """Tool-only interactive loop — no LLM required."""
     from tools.sql_telemetry import TOOL_CALLABLES  # noqa: PLC0415
+    from tools.work_context_stub import (  # noqa: PLC0415
+        ENABLE_WORK_IQ,
+        get_change_events,
+        get_decisions,
+        get_full_context,
+        get_ownership,
+        get_runbooks,
+    )
 
     print("  Mode: DEMO (no Azure OpenAI configured — running tool-only mode)\n")
     print("  In demo mode, queries are matched to telemetry tools and raw results")
@@ -251,6 +259,32 @@ def _run_demo_mode() -> None:
             results["gpu_summary"] = TOOL_CALLABLES["query_gpu_utilization"](hours_back=24)
             results["network_summary"] = TOOL_CALLABLES["query_network_telemetry"](hours_back=24)
             results["incidents"] = TOOL_CALLABLES["query_incidents"](status="open")
+
+        # --- Work-context enrichment (gated by ENABLE_WORK_IQ) ---
+        if ENABLE_WORK_IQ:
+            # Determine the relevant service based on query keywords
+            service: str | None = None
+            if any(kw in ql for kw in ("gpu", "utiliz", "utilisation", "cuda")):
+                service = "gpu-cluster"
+            elif any(kw in ql for kw in ("latency", "network", "spike")):
+                service = "network"
+            elif any(kw in ql for kw in ("cost", "spend", "billing", "token")):
+                service = "cost"
+
+            if any(kw in ql for kw in ("changed", "change", "rollout")):
+                svc = service or "gpu-cluster"
+                results["change_events"] = get_change_events(svc)
+
+            if any(kw in ql for kw in ("incident", "known", "issue", "remediat", "plan")):
+                svc = service or "gpu-cluster"
+                results["ownership"] = get_ownership(svc)
+                results["runbooks"] = get_runbooks(svc)
+                results["decisions"] = get_decisions(svc)
+
+            # Fallback: if no specific work-context was added, include full context
+            if not any(k in results for k in ("change_events", "ownership", "runbooks", "decisions")):
+                svc = service or "gpu-cluster"
+                results["work_context"] = get_full_context(svc)
 
         for tool_name, data in results.items():
             print(f"  ── {tool_name} ──")
