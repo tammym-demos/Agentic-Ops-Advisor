@@ -114,3 +114,32 @@
 - **No gaps found.** All requirement items have verifiable evidence in code.
 - **Known caveats (from prior audits, not requirements gaps):** test suite health, Bicep IaC alignment, GitHub Pages deploy workflow.
 - **Decision written to:** `.squad/decisions/inbox/holden-requirements-audit.md`
+
+### 2026-04-09: Pre-Demo Bicep Deployment Review (Issue #72)
+- **Context:** Tammy has demo tomorrow; Run #52 failed with SP permission error. Requested pre-flight review of all Bicep templates for correctness & deployment readiness.
+- **Scope:** 8 module files + main.bicep + parameters.json + deploy.yml integration (lines 213–225)
+- **Verdict:** ⚠️ **CONDITIONAL APPROVAL** — Bicep is architecturally sound; deployment blocked by SP permissions (not template issues).
+- **Key findings:**
+   - ✅ Architecture CORRECT: Hub = CognitiveServices/accounts (kind AIServices), Project & Model = child resources. Matches live infrastructure exactly.
+   - ✅ API versions ALL STABLE: No preview versions except ACR (2023-11-01-preview) and SQL (2023-08-01-preview), which are acceptable for demo.
+   - ✅ Parent–child relationships CORRECT: All child resources properly use `parent:` syntax; Project inherits location from Hub (no explicit location property — correct).
+   - ✅ Naming conventions ALL SAFE: Storage (17 chars < 24), KV (20 chars < 24), ACR (17 chars < 50), SQL (15 chars < 63).
+   - ✅ Parameters ALIGNED: parameters.json values match all main.bicep expectations; no mismatches.
+   - ✅ Outputs COMPLETE: All 9 outputs used by deploy.sh for .env population.
+   - ✅ BCP081 warning SAFE: Schema tooling lag; `Microsoft.CognitiveServices/accounts/projects@2024-10-01` is stable and correct.
+   - ❌ **PERMISSION BLOCKER:** SP (d30fcff3-4eab-4b85-a366-f9a17142be39) has Contributor on RG only. `az deployment sub create` needs subscription-scoped permissions. Error: "does not have authorization to perform action 'Microsoft.Resources/deployments/validate/action' over scope '/subscriptions/...'".
+- **Two fix options:**
+   - **Option A (FAST, for demo):** Grant SP Subscriber Contributor role via one-line RBAC command. 5-minute fix. Non-best-practice but unblocks demo.
+   - **Option B (CORRECT, for production):** Refactor to resource-group-scoped deployment (`targetScope = 'resourceGroup'`), pre-create RG, use `az deployment group create`. 45-minute refactor; follows least-privilege principle.
+- **Recommendation:** GO WITH OPTION A for demo tomorrow. Post-demo, implement Option B for production alignment.
+- **Other observations:** deploy.sh still registers Microsoft.MachineLearningServices provider (unnecessary post-rewrite); openai.bicep stub retained as deprecation reference (OK).
+- **Security posture:** SQL using Azure AD-only auth ✅, KV using RBAC ✅, TLS 1.2 minimum ✅, storage blob public access = false ✅.
+- **Decision written to:** `.squad/decisions/inbox/holden-bicep-deploy-review.md`
+- **Action for Tammy:** Request subscription Owner to grant SP Contributor role at subscription scope (command in decision doc). Then redeploy.
+- **Blocks:** Demo infrastructure deployment until RBAC is in place.
+
+### 2026-04-09: README GitHub Pages Link (Pre-Demo)
+- **Context:** README audit identified one gap — no mention of the GitHub Pages brochure site (`docs/index.html`).
+- **Change:** Added a blockquote-style link to `https://tammym-demos.github.io/Agentic-Ops-Advisor/` right after the project description, before the Table of Contents. Describes it as the interactive overview site covering architecture, Work IQ integration, evaluation framework, and the GitHub-to-Azure pipeline.
+- **Style:** Used `> 🌐` blockquote format consistent with the existing disclaimer banners. 1 line, no structural changes to the README.
+- **Rationale:** Demo is tomorrow — visitors and stakeholders need a one-click path to the polished overview site.

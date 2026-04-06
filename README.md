@@ -6,6 +6,8 @@
 
 A **governed, production-style AI agent** that performs root-cause + change-context reasoning over infrastructure telemetry and operator intent. Built for deployment to **Azure AI Foundry Agent Service**, this demo showcases agentic ops, hybrid governance, and self-driving operations aligned with the Azure AI Foundry platform.
 
+> 🌐 **[Project Brochure Site](https://tammym-demos.github.io/Agentic-Ops-Advisor/)** — Interactive overview site for demos and walkthroughs. Covers architecture, Work IQ integration, evaluation framework, and the full GitHub-to-Azure delivery pipeline.
+
 ---
 
 ## Table of Contents
