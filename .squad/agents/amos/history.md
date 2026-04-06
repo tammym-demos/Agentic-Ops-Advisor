@@ -80,3 +80,16 @@
 - **Cross-team delivery:** Optimized Dockerfile now has confirmed health endpoint for HEALTHCHECK probing. Multi-stage build + enhanced .dockerignore delivers 400–450 MB image. Issue #61 complete. All work unblocked for integration testing.
 - **Decision log:** Merged 3 agent decisions into `.squad/decisions.md`. Created orchestration logs per agent + session log. Deleted inbox files. Appended team updates to agent history files.
 
+### 2026-04-06: deploy.yml v2 SDK Migration — Amos Sync
+- **Task:** Migrate `.github/workflows/deploy.yml` from azure-ai-projects v1 beta to v2 GA SDK
+- **Changes made:**
+   1. Header comments: `AZURE_AI_PROJECT_CONNECTION_STRING` → `AZURE_AI_AGENTS_ENDPOINT`
+   2. Env block: Same secret rename
+   3. Step 5c (agent deploy): `AIProjectClient.from_connection_string()` → `AgentsClient(endpoint=..., credential=...)`, `client.agents.list_agents().data` → `client.list_agents()` (ItemPaged), `client.agents.create_agent/update_agent` → `client.create_agent/update_agent`
+   4. Step 6 (smoke test): Full rewrite — `client.threads.create()`, `client.messages.create()`, `client.runs.create_and_process()`, `client.get_last_message_text_by_role(role=MessageRole.AGENT)` replacing manual message list filtering
+   5. `copilot-setup-steps.yml`: Added `azure.ai.agents` import verification
+- **No changes to:** OIDC login, Bicep deploy, ACR build/push, or status summary steps
+- **Commit:** `b417a2c` — `fix: migrate deploy.yml to v2 SDK (AgentsClient)`
+- **Status:** ✓ Complete. Ready for integration test phase.
+- **Orchestration log:** Created `.squad/orchestration-log/2026-04-06T0208-amos.md`.
+
