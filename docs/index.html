@@ -43,9 +43,10 @@
         <li><a href="#features">Capabilities</a></li>
         <li><a href="#workiq">Work IQ</a></li>
         <li><a href="#architecture">Architecture</a></li>
-        <li><a href="#techstack">Tech Stack</a></li>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#getting-started">Get Started</a></li>
         <li><a href="pages/dashboard.html">📊 Dashboard</a></li>
-        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub</a></li>
+        <li><a href="https://github.com/tammym-demos/Agentic-Ops-Advisor" target="_blank" rel="noopener">GitHub ↗</a></li>
       </ul>
     </div>
   </nav>
@@ -80,18 +81,17 @@
       </p>
 
       <div class="hero-ctas">
-        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
-           class="btn btn-primary"
-           target="_blank" rel="noopener">
-          View on GitHub
+        <a href="#getting-started"
+           class="btn btn-primary">
+          🚀 Try the Demo
         </a>
-        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions"
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
            class="btn btn-secondary"
            target="_blank" rel="noopener">
-          <span aria-hidden="true">⚙️</span> View GitHub Actions
+          View on GitHub ↗
         </a>
-        <a href="#github-products" class="btn btn-secondary">
-          <span aria-hidden="true">🔍</span> Explore GitHub Features
+        <a href="#demo" class="btn btn-secondary">
+          <span aria-hidden="true">🔍</span> See It in Action
         </a>
       </div>
     </div>
@@ -744,6 +744,59 @@
           </tr>
         </tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       GETTING STARTED
+  ═══════════════════════════════════════════ -->
+  <section class="getting-started" id="getting-started">
+    <div class="container">
+      <span class="section-label" style="color: var(--accent-green);">Try It Yourself</span>
+      <h2 class="section-title">Getting started in 60 seconds</h2>
+      <p class="section-subtitle">
+        Clone the repo, seed the synthetic database, and run the agent locally —
+        no Azure credentials required for demo mode.
+      </p>
+
+      <div class="getting-started-steps fade-in">
+        <div class="code-block">
+          <div class="code-block-header">
+            <span class="code-block-dot" style="background:#f85149" aria-hidden="true"></span>
+            <span class="code-block-dot" style="background:#d29922" aria-hidden="true"></span>
+            <span class="code-block-dot" style="background:#3fb950" aria-hidden="true"></span>
+            <span class="code-block-title">Terminal</span>
+          </div>
+          <pre class="code-block-body"><code><span class="code-comment"># 1. Clone &amp; install</span>
+git clone https://github.com/tammym-demos/Agentic-Ops-Advisor.git
+cd Agentic-Ops-Advisor
+pip install -r requirements.txt
+
+<span class="code-comment"># 2. Seed the synthetic telemetry database</span>
+python -m data.seed_telemetry
+
+<span class="code-comment"># 3. Run in demo mode (no Azure creds needed)</span>
+python scripts/run_local.py
+
+<span class="code-comment"># 4. Run the test suite</span>
+python -m pytest tests/ -q</code></pre>
+        </div>
+      </div>
+
+      <div class="getting-started-ctas fade-in">
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor"
+           class="btn btn-primary" target="_blank" rel="noopener">
+          ⭐ Clone on GitHub
+        </a>
+        <a href="https://github.com/tammym-demos/Agentic-Ops-Advisor/actions"
+           class="btn btn-secondary" target="_blank" rel="noopener">
+          ⚙️ View CI/CD Pipelines
+        </a>
+        <a href="pages/dashboard.html"
+           class="btn btn-secondary">
+          📊 Explore the Dashboard
+        </a>
+      </div>
     </div>
   </section>
 

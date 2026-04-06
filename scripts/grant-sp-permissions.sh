@@ -18,7 +18,7 @@ set -euo pipefail
 
 # ---- Defaults (match project config) -----------------------------------------
 
-SP_OBJECT_ID="${SP_OBJECT_ID:-d30fcff3-4eab-4b85-a366-f9a17142be39}"
+SP_OBJECT_ID="${SP_OBJECT_ID:-}"
 SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-e0b48569-71a2-40fe-9b7a-2fb859f31288}"
 RG_NAME="${AZURE_RESOURCE_GROUP:-rg-agentic-ops-advisor}"
 
@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
       echo "'az deployment sub create' works in the deploy pipeline."
       echo ""
       echo "Defaults:"
-      echo "  SP_OBJECT_ID:    ${SP_OBJECT_ID}"
+      echo "  SP_OBJECT_ID:    (required — must be provided)"
       echo "  SUBSCRIPTION_ID: ${SUBSCRIPTION_ID}"
       echo "  RG_NAME:         ${RG_NAME}"
       exit 0
@@ -46,6 +46,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---- Pre-flight ---------------------------------------------------------------
+
+if [[ -z "$SP_OBJECT_ID" ]]; then
+    echo "❌ ERROR: SP_OBJECT_ID is required but not set."
+    echo ""
+    echo "You must provide the Object ID of your deploy Service Principal."
+    echo "Find it in Azure Portal → App registrations → your app → Overview → Object ID"
+    echo "(or use: az ad sp show --id <app-id> --query id -o tsv)"
+    echo ""
+    echo "Usage:"
+    echo "  SP_OBJECT_ID=<your-sp-object-id> $0"
+    echo "  $0 --sp-object-id <your-sp-object-id>"
+    exit 1
+fi
 
 echo "🔍 Checking Azure CLI login..."
 az account show --output none 2>/dev/null || {

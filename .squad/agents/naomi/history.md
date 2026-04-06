@@ -97,3 +97,14 @@
 - **Language alignment:** Uses "agentic ops", "hybrid", "governance", "telemetry + intent", "self-driving operations" throughout.
 - **Disclaimer included:** "We're simulating Work IQ outputs in this demo. Work IQ is in public preview and requires Microsoft 365 Copilot licensing + admin consent."
 - **Key files:** `docs/index.html`, `docs/style.css`.
+
+### 2025-07-27: Demo Site Final Polish & SP Script Fix
+- **Task:** Final review and polish of `docs/index.html` for Tammy's demo presentation. Fix hardcoded SP object ID in `scripts/grant-sp-permissions.sh`.
+- **Site review findings:** No broken links. No references to deleted files (customerfriendly-plan.md, DOCKER_OPTIMIZATION.md, synthetic_context.json). GitHub repo URL correct. Work IQ section is prominent and well-structured. Architecture diagram, demo walkthrough, tech stack all complete.
+- **Improvements made:**
+  - **Nav updated:** Added "Demo" and "Get Started" links. Removed "Tech Stack" from nav (less important). Added "↗" to external GitHub link for clarity.
+  - **Hero CTAs redesigned:** Primary CTA is now "🚀 Try the Demo" (anchors to Getting Started). Secondary buttons: "View on GitHub ↗" and "🔍 See It in Action" (anchors to Demo walkthrough).
+  - **Getting Started section added:** New section between Tech Stack and Disclaimers with terminal-style code block showing clone → install → seed → run → test in 4 steps. Includes three CTA buttons: Clone on GitHub, View CI/CD Pipelines, Explore the Dashboard.
+  - **CSS added:** `.getting-started`, `.code-block`, `.code-block-header`, `.code-block-body`, `.code-comment`, `.getting-started-ctas` styles in `docs/style.css`. Terminal-style presentation with red/yellow/green dots.
+- **SP script fix:** Changed `SP_OBJECT_ID` default from hardcoded `d30fcff3-4eab-4b85-a366-f9a17142be39` to empty string. Added validation with clear error message explaining how to find the SP object ID. Updated help text to show "(required — must be provided)".
+- **Key files:** `docs/index.html`, `docs/style.css`, `scripts/grant-sp-permissions.sh`.

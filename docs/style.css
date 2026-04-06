@@ -837,6 +837,69 @@ img { max-width: 100%; height: auto; }
 
 .tech-table tr:last-child td { border-bottom: none; }
 
+/* ---------- Getting Started Section ---------- */
+.getting-started {
+  padding: var(--section-pad);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+}
+
+.getting-started-steps {
+  max-width: 700px;
+  margin: 2rem auto;
+}
+
+.code-block {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.75rem 1rem;
+  background: rgba(48, 54, 61, 0.5);
+  border-bottom: 1px solid var(--border);
+}
+
+.code-block-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.code-block-title {
+  margin-left: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+}
+
+.code-block-body {
+  padding: 1.25rem;
+  margin: 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+.code-block-body .code-comment {
+  color: var(--text-muted);
+}
+
+.getting-started-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
 /* ---------- Disclaimer Section ---------- */
 .disclaimers {
   padding: 3rem 1.5rem;
