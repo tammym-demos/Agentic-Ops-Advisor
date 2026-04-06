@@ -88,4 +88,5 @@ jobs:
               if: github.event_name == 'pull_request'
               run: |
                   az bicep build --file infra/main.bicep --stdout > /dev/null
+                  az bicep build --file infra/main-rg.bicep --stdout > /dev/null
                   echo "✅ Bicep template syntax valid"

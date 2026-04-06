@@ -27,6 +27,13 @@
 #
 #   1. Contributor (management-plane) — scoped to the resource group:
 #      Grants Bicep deployment, ACR operations, resource management.
+#      NOTE: RG-scoped Contributor is sufficient for most deploy steps.
+#      The Bicep step auto-falls-back to resource-group-scoped deployment.
+#
+#   1b. (Optional) Contributor at subscription scope:
+#       Required for `az deployment sub create` (main.bicep creates the RG).
+#       Without this, the deploy falls back to main-rg.bicep (RG-scoped).
+#       Grant with:  ./scripts/grant-sp-permissions.sh
 #
 #   2. Azure AI Developer (data-plane) — scoped to the AI Hub resource:
 #      Role ID: 64702f94-c441-49e6-a78b-ef80e0188fee
@@ -205,10 +212,23 @@ jobs:
             - name: Validate Bicep templates
               run: |
                   az bicep build --file infra/main.bicep --stdout > /dev/null
-                  echo "✅ Bicep template validation passed"
+                  az bicep build --file infra/main-rg.bicep --stdout > /dev/null
+                  echo "✅ Bicep template validation passed (main.bicep + main-rg.bicep)"
 
             # ------------------------------------------------------------------
             # Step 4 — Deploy Bicep infrastructure (conditional)
+            #
+            # Strategy: main.bicep is subscription-scoped and requires the SP
+            # to have Contributor at subscription level. If the SP only has
+            # RG-scoped Contributor (the common case), the sub-level deploy
+            # fails with AuthorizationFailed.
+            #
+            # Fallback: ensure the RG exists via `az group create`, then run
+            # `az deployment group create` with infra/main-rg.bicep (the
+            # resource-group-scoped variant that deploys the same modules).
+            #
+            # To avoid the fallback, grant subscription Contributor:
+            #   ./scripts/grant-sp-permissions.sh
             # ------------------------------------------------------------------
             - name: Deploy Bicep infrastructure
               if: >-
@@ -216,12 +236,50 @@ jobs:
                   github.event.inputs.force_infra == 'true'
               run: |
                   echo "::group::Bicep deployment"
-                  az deployment sub create \
-                      --name "agentic-ops-advisor-$(date -u +%Y%m%d%H%M%S)" \
+
+                  DEPLOY_NAME="agentic-ops-advisor-$(date -u +%Y%m%d%H%M%S)"
+                  RG_NAME="$AZURE_RESOURCE_GROUP"
+
+                  # --- Attempt 1: subscription-scoped deploy (requires sub Contributor) ---
+                  echo "🔍 Attempting subscription-scoped deployment..."
+                  if az deployment sub create \
+                      --name "$DEPLOY_NAME" \
                       --location "$AZURE_LOCATION" \
                       --template-file infra/main.bicep \
                       --parameters @infra/parameters.json \
-                      --output table
+                      --output table 2>&1; then
+                      echo "✅ Subscription-scoped Bicep deployment succeeded."
+                  else
+                      echo ""
+                      echo "⚠️  Subscription-scoped deploy failed (likely AuthorizationFailed)."
+                      echo "   The SP needs Contributor at subscription scope for 'az deployment sub create'."
+                      echo "   To fix permanently, run:  ./scripts/grant-sp-permissions.sh"
+                      echo ""
+                      echo "🔄 Falling back to resource-group-scoped deployment..."
+
+                      # Ensure the RG exists (idempotent — safe even if it already exists)
+                      az group create \
+                          --name "$RG_NAME" \
+                          --location "$AZURE_LOCATION" \
+                          --tags project=agentic-ops-advisor environment=prod managedBy=bicep \
+                          --output none 2>&1 || {
+                          echo "❌ Cannot create resource group '$RG_NAME'."
+                          echo "   The SP may not have sufficient permissions even at RG scope."
+                          echo "   Grant subscription Contributor:  ./scripts/grant-sp-permissions.sh"
+                          exit 1
+                      }
+
+                      # Deploy using the RG-scoped template (same modules, no RG resource)
+                      az deployment group create \
+                          --name "$DEPLOY_NAME" \
+                          --resource-group "$RG_NAME" \
+                          --template-file infra/main-rg.bicep \
+                          --parameters @infra/parameters.json \
+                          --output table
+
+                      echo "✅ Resource-group-scoped Bicep deployment succeeded (fallback)."
+                  fi
+
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------

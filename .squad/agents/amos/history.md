@@ -210,3 +210,16 @@
 - **Not deleted:** `infra/main.json` — also appears to be dead compiled ARM output, but was out of scope. Worth cleaning up later.
 - **Commit:** `50c2486` — `ci: add Bicep PR validation, remove dead infra modules`
 - **Key pattern:** `az bicep build --stdout > /dev/null` is the lightweight offline validation command; no credentials needed, suitable for CI.
+
+### 2026-07-26: Bicep Deploy Fix — Subscription-Scope Fallback (Run #52)
+- **Problem:** Run #52 failed with `AuthorizationFailed` on `Microsoft.Resources/deployments/validate/action` at subscription scope. The SP (`d30fcff3-...`) has Contributor only at RG scope (`rg-agentic-ops-advisor`), but `az deployment sub create` requires subscription-level permissions because `main.bicep` has `targetScope = 'subscription'` (it creates the RG resource).
+- **Root cause:** `az deployment sub create` submits the deployment to `/subscriptions/{id}/providers/Microsoft.Resources/deployments`, which requires subscription-scope write. RG-scoped Contributor doesn't grant this.
+- **Solution — two-part:**
+  1. **deploy.yml Step 4 — smart fallback:** Attempts `az deployment sub create` first (works when SP has sub Contributor). On failure, falls back to: `az group create` (idempotent) + `az deployment group create` with `infra/main-rg.bicep`. Clear error messages explain what happened and how to fix permanently.
+  2. **infra/main-rg.bicep — RG-scoped template:** Same modules and outputs as main.bicep, but `targetScope = 'resourceGroup'`, no RG resource. Parameters kept identical for `@infra/parameters.json` compatibility.
+  3. **scripts/grant-sp-permissions.sh:** One-command script for Tammy to grant subscription-scope Contributor. Includes pre-flight checks, argument parsing, verification.
+  4. **deploy.yml header:** Documented that RG-scoped Contributor is sufficient (pipeline auto-falls-back), subscription-scope is optional.
+  5. **ci-eval.yml:** Added `main-rg.bicep` to Bicep PR validation.
+- **BCP081 note:** Warning about `Microsoft.CognitiveServices/accounts/projects@2024-10-01` is informational — Bicep can't validate the resource properties but it won't block deployment.
+- **Files modified:** `.github/workflows/deploy.yml`, `.github/workflows/ci-eval.yml`, `infra/main-rg.bicep` (new), `scripts/grant-sp-permissions.sh` (new)
+- **Status:** ✓ Complete. Pipeline will auto-recover with RG-scoped Contributor. Demo unblocked.
