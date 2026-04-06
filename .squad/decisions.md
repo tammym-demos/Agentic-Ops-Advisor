@@ -749,3 +749,109 @@ docker images agentic-ops-advisor:test
 
 See `DOCKER_OPTIMIZATION.md` for detailed layer breakdown and future optimization paths.
 
+
+## Batch — Demo Readiness & Deployment Unblock (2026-04-06)
+
+### Decision: naomi-demo-site-polish
+# Decision: Demo Site Final Polish & Getting Started CTA
+
+**By:** Naomi (Backend Dev)  
+**Date:** 2026-04-06  
+**Type:** Enhancement  
+**Status:** ✅ Implemented (commit d364628)
+
+## What
+Final review and polish of docs/index.html as the demo entry point. Added "Getting Started" section with quick-start terminal commands. Redesigned hero CTAs to prioritize the demo experience. Fixed hardcoded SP object ID in scripts/grant-sp-permissions.sh.
+
+## Why
+The demo site is the first thing the audience sees tomorrow. It needed a clear call-to-action that says "you can try this yourself" — the Getting Started section with a copy-paste terminal block provides that. The SP script had a non-existent app registration ID hardcoded, which would confuse anyone trying to use it.
+
+## Changes
+- **Nav:** Added "Demo" and "Get Started" links for better discoverability
+- **Hero:** Primary CTA is now "Try the Demo" instead of "View on GitHub"
+- **Getting Started section:** Clone → install → seed → run → test in 60 seconds
+- **SP script:** Empty default + validation error with clear instructions
+
+## Impact
+- Low risk — additive changes only, no existing content removed
+- Site tells a complete story: What → Why → How → Try It
+- SP script now fails fast with helpful guidance instead of silently using a wrong ID
+
+
+### Decision: holden-readme-pages-link
+# Decision: Add GitHub Pages brochure link to README
+
+**Author:** Holden (Lead)  
+**Date:** 2026-04-06  
+**Status:** ✅ Implemented (commit bbbbfb1)
+
+## Context
+README audit (prior session) identified that the GitHub Pages site (docs/index.html) was not referenced anywhere in README.md. The brochure site covers architecture, Work IQ integration, evaluation framework, and the GitHub-to-Azure delivery pipeline — all key demo talking points.
+
+## Decision
+Added a single blockquote link (> 🌐 **[Project Brochure Site](...)**) immediately after the project description paragraph, before the Table of Contents. This mirrors the existing > ⚠️ and > ℹ️ disclaimer style.
+
+## Rationale
+- Demo is tomorrow — stakeholders need a one-click path to the polished overview
+- Minimal change (1 line added), zero structural disruption
+- Placed near the top for maximum visibility without cluttering the ToC
+
+## Impact
+- README.md: 1 line added (line 9)
+- No code changes, no test impact
+
+
+### Decision: amos-bicep-rg-fallback
+# Decision: Bicep Deploy Fix — Subscription-Scope Fallback
+
+**Date:** 2026-04-06  
+**By:** Amos (DevOps)  
+**Severity:** Critical — blocked all Bicep deployments since architecture rewrite  
+**Related:** Run #59 failure (location mismatch), Run #60 success
+
+## Problem
+
+Deploy pipeline has never succeeded since the CognitiveServices architecture rewrite.
+z deployment sub create requires subscription-scope Contributor, but the SP
+(d30fcff3-4eab-4b85-a366-f9a17142be39) only has Contributor at RG scope
+(g-agentic-ops-advisor). Error: AuthorizationFailed on
+Microsoft.Resources/deployments/validate/action over subscription scope.
+
+## Solution
+
+**Two-part approach — works with existing RG-scoped Contributor, no permission changes needed:**
+
+1. **deploy.yml Step 4 — smart fallback:**
+   - Tries z deployment sub create first (subscription-scoped, uses main.bicep)
+   - If auth fails, falls back to z group create + z deployment group create with main-rg.bicep
+   - Clear cho messages explain what happened and how to fix permanently
+
+2. **infra/main-rg.bicep — resource-group-scoped template:**
+   - Identical modules and outputs as main.bicep
+   - 	argetScope = 'resourceGroup' instead of 'subscription'
+   - No esource rg block (RG created by z group create in the shell step)
+   - Same parameters for @infra/parameters.json compatibility
+
+3. **scripts/grant-sp-permissions.sh — optional permanent fix:**
+   - Grants subscription-scope Contributor to the SP
+   - Tammy can run this to avoid the fallback path entirely
+   - Includes pre-flight checks, argument parsing, verification output
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| .github/workflows/deploy.yml | Step 4 rewritten with try/fallback, header docs updated, validation includes main-rg.bicep |
+| .github/workflows/ci-eval.yml | Added main-rg.bicep to Bicep PR validation |
+| infra/main-rg.bicep | NEW — RG-scoped variant of main.bicep |
+| scripts/grant-sp-permissions.sh | NEW — one-command SP permission grant |
+
+## Impact
+
+- **Demo unblocked:** Pipeline will succeed with existing RG-scoped Contributor
+- **No breaking changes:** Subscription-scoped path still preferred, fallback is transparent
+- **BCP081 warning:** Microsoft.CognitiveServices/accounts/projects@2024-10-01 is informational only, does not block deployment
+
+## Status
+
+✅ Commits 858d5f8 + 96bf601 merged. Run #60 succeeded (full deploy, agent live, smoke test passed).
