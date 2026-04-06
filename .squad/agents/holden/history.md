@@ -54,3 +54,32 @@
 - **Assignment:** Tammy to decide Option 1 vs 2; Naomi (Backend) for Option 1 implementation, Amos (DevOps) for Option 2 gating.
 - **Blocks:** Entire deploy pipeline until alignment resolved. Amos can't fix model reference until we know which endpoint/resource to target.
 - **Cross-team note:** Amos's deploy.yml fix (commit `8ea32f7`) added model deployment diagnostics (Step 5c) that will expose the deployment name mismatch on next run. His non-fatal smoke test and hardened error handling complement this review. Final resolution depends on infrastructure alignment decision (Option 1: rewrite Bicep, Option 2: skip Bicep for AI).
+
+### 2025-07-25: Docs Site Content Cleanup
+- Cleaned up `docs/index.html` — four surgical edits per Tammy's plan.
+- Removed "100% Open Source" stat block and "Open source on GitHub" footer text.
+- Reduced 🤖 emoji noise: swapped to ⚙️ for favicon, nav brand, and footer brand. Kept 🤖 in the four contextually-correct spots (Copilot card, SVG diagram x2, tech badge).
+- Removed star-begging: stripped ⭐ from nav link, hero CTA ("View on GitHub" now), and footer link. Removed special green/blue styling and redundant GitHub SVG icon.
+- Rewrote hero tagline to lead with substance (what the agent does, how it helps) and credit the GitHub toolchain second in a smaller secondary line.
+
+### 2026-04-08: Bicep Rewrite Architecture Review (Option 1 Implementation)
+- **Context:** Amos completed Bicep rewrite implementing Option 1 (Hub as CognitiveServices AIServices + native GPT-4.1 deployment). Reviewed all changed files: `aifoundry.bicep`, `openai.bicep` (stub), `main.bicep`, `parameters.json`, `.gitignore`.
+- **Verdict:** ⚠️ **APPROVE WITH CRITICAL FIX REQUIRED** — Architecture is correct, one blocking issue.
+- **Critical blocker (❌):** `aiProject` resource (line 144 of `aifoundry.bicep`) explicitly sets `location: location` property. Child resources with `parent:` syntax inherit location from parent; explicit `location` will cause ARM deployment failure: `"The location property is not allowed for child resources"`. **Fix:** Delete line 144 (`location: location`).
+- **Findings:**
+  - ✅ Resource types correct: Hub (`Microsoft.CognitiveServices/accounts` kind AIServices), Model (`accounts/deployments` child), Project (`accounts/projects` child)
+  - ✅ Live infrastructure alignment: Bicep matches live Hub `hub-agentops-prod`, model deployment (GPT-4.1 capacity 10 GlobalStandard), ACR `crhubagentopsprod`, identity `id-agentops-prod`
+  - ✅ Naming convention safety: Storage 17 chars (limit 24), Key Vault 20 chars (limit 24), ACR 17 chars (limit 50) — all safe
+  - ✅ deploy.sh output extraction: All 9 output keys match exactly (`aiProjectConnectionString`, `openAiEndpoint`, etc.)
+  - ✅ deploy.yml compatibility: No references to old OpenAI module, works with new structure
+  - ✅ Hub endpoint output: `aiHub.properties.endpoint` returns valid OpenAI-compatible endpoint (`https://<custom-subdomain>.cognitiveservices.azure.com/`)
+  - ✅ Project connection string format: Semicolon-separated format valid for Azure AI Projects SDK (CognitiveServices-based Hubs)
+  - ⚠️ Project `dependsOn` includes `gpt41Deployment` unnecessarily — project creation doesn't need model deployed first. Non-blocking; can optimize later.
+- **Residual cleanup (⚠️ non-blocking):** 
+  - `deploy.sh` line 94 still registers `Microsoft.MachineLearningServices` provider (no longer needed; CognitiveServices-only architecture)
+  - `openai.bicep` stub retained with deprecation notice (good pattern for historical reference)
+- **Evidence collection:** Verified Azure API docs confirm `Microsoft.CognitiveServices/accounts/projects@2024-10-01` supports both `identity` and `location` properties on parent resources, but child resources inherit location via `parent:` syntax.
+- **Recommendation:** Amos to remove `location: location` line from Project resource, merge, then deploy. Provider cleanup can be separate PR.
+- **Assignment:** Amos (DevOps) for fix (delete one line).
+- **Escalation:** None — fix is straightforward.
+- **Outcome:** Review written to `.squad/decisions/inbox/holden-bicep-review.md` with detailed findings, verdict, and exact fix.

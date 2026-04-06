@@ -156,3 +156,35 @@
 - **Files modified:** `.github/workflows/deploy.yml`
 - **Commit:** `8ea32f7` — `fix(deploy): add model diagnostics, make smoke test non-fatal, harden error handling`
 - **Cross-team note:** Holden's infrastructure alignment review identified the root cause: Bicep/live Hub mismatch (see Holden's history). Model diagnostics will confirm deployment name on live Hub; final fix depends on infrastructure alignment decision (Option 1: rewrite Bicep, Option 2: skip Bicep for AI).
+
+### 2026-04-XX: Bicep Architecture Rewrite — CognitiveServices-based AI Foundry
+- **Problem:** Critical architecture mismatch between Bicep IaC and live Azure infrastructure. Bicep created MachineLearningServices Hub + separate OpenAI account, but live infrastructure is CognitiveServices Hub with native GPT-4.1 deployment.
+- **Decision:** Tammy chose Option 1 — rewrite Bicep to match reality (preserve IaC benefits).
+- **Changes made:**
+  1. **infra/modules/aifoundry.bicep — Complete rewrite:**
+     - Hub: `Microsoft.MachineLearningServices/workspaces@2024-10-01` (kind: Hub) → `Microsoft.CognitiveServices/accounts@2024-10-01` (kind: AIServices)
+     - Model: Added `Microsoft.CognitiveServices/accounts/deployments` as child of Hub (GPT-4.1, GlobalStandard SKU, capacity 10)
+     - Project: `Microsoft.MachineLearningServices/workspaces` (kind: Project) → `Microsoft.CognitiveServices/accounts/projects` (child of Hub)
+     - Removed: OpenAI connection resource, `openAiAccountId`/`openAiEndpoint` parameters
+     - Added: Model deployment parameters (`deploymentName`, `modelName`, `modelVersion`, `capacity`)
+     - Kept: Storage Account, Key Vault, Container Registry (still required)
+     - Updated outputs: Added `hubEndpoint`, `modelDeploymentName`
+  2. **infra/modules/openai.bicep — Deprecated:** Converted to stub with deprecation notice (model now part of Hub)
+  3. **infra/main.bicep — Updated orchestration:**
+     - Removed: `openAi` module call entirely
+     - Added parameters: `modelName`, `modelVersion` (defaults: `gpt-4.1`, `2025-04-14`)
+     - Updated aiFoundry module call: Model config instead of OpenAI references
+     - Updated outputs: `openAiEndpoint` from `aiFoundry.outputs.hubEndpoint`, `openAiDeployment` from `aiFoundry.outputs.modelDeploymentName`
+  4. **infra/parameters.json:** Added `modelName` and `modelVersion` parameters
+  5. **infra/deploy.sh:** No changes needed (output names backward compatible)
+- **Validation:** `az bicep build --file infra/main.bicep` — ✓ successful compilation with 2 benign warnings (unnecessary dependsOn linter suggestion, expected CognitiveServices/accounts/projects type warning)
+- **Architecture now:**
+  ```
+  Hub: Microsoft.CognitiveServices/accounts (kind: AIServices)
+    ├── Deployment: GPT-4.1 (GlobalStandard, capacity 10)
+    └── Project: Microsoft.CognitiveServices/accounts/projects
+  ```
+- **Resource names unchanged:** `hub-agentops-prod`, `proj-agentops-prod`, deployment `gpt-4.1`
+- **Files modified:** `infra/modules/aifoundry.bicep`, `infra/modules/openai.bicep` (stub), `infra/main.bicep`, `infra/parameters.json`
+- **Team decision:** Created `.squad/decisions/inbox/amos-bicep-rewrite.md` with full context, impact, next steps
+- **Status:** ✓ Complete. Bicep now matches live infrastructure. Safe to redeploy. Can now use IaC for future model updates.
