@@ -18,9 +18,9 @@
 #
 #   Agent runtime config (stored as environment secrets in the "production"
 #   GitHub Environment so they are gated by branch-protection review):
-#     AZURE_AI_PROJECT_CONNECTION_STRING — Foundry project connection string
-#     AZURE_OPENAI_ENDPOINT              — Azure OpenAI endpoint URL
-#     AZURE_OPENAI_DEPLOYMENT            — Model deployment name (e.g. gpt-4.1)
+#     AZURE_AI_AGENTS_ENDPOINT             — Foundry Agent Service endpoint URL
+#     AZURE_OPENAI_ENDPOINT                — Azure OpenAI endpoint URL
+#     AZURE_OPENAI_DEPLOYMENT              — Model deployment name (e.g. gpt-4.1)
 #     APPLICATIONINSIGHTS_CONNECTION_STRING — App Insights (optional)
 #
 # OIDC setup (one-time, run locally):
@@ -103,7 +103,7 @@ jobs:
             AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
             AZURE_RESOURCE_GROUP: rg-agentic-ops-advisor
             AZURE_LOCATION: eastus2
-            AZURE_AI_PROJECT_CONNECTION_STRING: ${{ secrets.AZURE_AI_PROJECT_CONNECTION_STRING }}
+            AZURE_AI_AGENTS_ENDPOINT: ${{ secrets.AZURE_AI_AGENTS_ENDPOINT }}
             AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
             AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
             APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
@@ -229,18 +229,17 @@ jobs:
                   echo "::group::Agent deployment"
                   python - <<'EOF'
                   import os, sys
-                  from azure.ai.projects import AIProjectClient
+                  from azure.ai.agents import AgentsClient
                   from azure.identity import DefaultAzureCredential
 
-                  _PLACEHOLDER = "your-project-connection-string"
-                  conn_str = os.environ["AZURE_AI_PROJECT_CONNECTION_STRING"]
-                  if not conn_str or conn_str == _PLACEHOLDER:
-                      print("⚠️  AZURE_AI_PROJECT_CONNECTION_STRING not configured — skipping agent deploy.")
+                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
+                  if not endpoint:
+                      print("⚠️  AZURE_AI_AGENTS_ENDPOINT not configured — skipping agent deploy.")
                       sys.exit(0)
 
-                  client = AIProjectClient.from_connection_string(
+                  client = AgentsClient(
+                      endpoint=endpoint,
                       credential=DefaultAzureCredential(),
-                      conn_str=conn_str,
                   )
 
                   # Read system prompt from file
@@ -254,8 +253,8 @@ jobs:
                   container_image = os.environ.get("CONTAINER_IMAGE", "")
 
                   # Upsert agent: list existing, update if found, create if not
-                  agents = client.agents.list_agents()
-                  existing = next((a for a in agents.data if a.name == "agentic-ops-advisor"), None)
+                  agents = client.list_agents()
+                  existing = next((a for a in agents if a.name == "agentic-ops-advisor"), None)
 
                   agent_kwargs = dict(
                       model=deployment_name,
@@ -266,10 +265,10 @@ jobs:
                   )
 
                   if existing:
-                      agent_obj = client.agents.update_agent(assistant_id=existing.id, **agent_kwargs)
+                      agent_obj = client.update_agent(assistant_id=existing.id, **agent_kwargs)
                       print(f"✅ Updated agent: {agent_obj.id}")
                   else:
-                      agent_obj = client.agents.create_agent(**agent_kwargs)
+                      agent_obj = client.create_agent(**agent_kwargs)
                       print(f"✅ Created agent: {agent_obj.id}")
 
                   if container_image:
@@ -290,34 +289,34 @@ jobs:
                   python - <<'EOF'
                   import os, sys, time
 
-                  _PLACEHOLDER = "your-project-connection-string"
                   _SMOKE_TEST_TIMEOUT_SECONDS = 120
-                  conn_str = os.environ.get("AZURE_AI_PROJECT_CONNECTION_STRING", "")
+                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
                   agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
 
-                  if not conn_str or conn_str == _PLACEHOLDER or not agent_id:
-                      print("⚠️  Smoke test skipped — agent not deployed (connection string or agent ID missing).")
+                  if not endpoint or not agent_id:
+                      print("⚠️  Smoke test skipped — agent not deployed (endpoint or agent ID missing).")
                       sys.exit(0)
 
-                  from azure.ai.projects import AIProjectClient
+                  from azure.ai.agents import AgentsClient
+                  from azure.ai.agents.models import MessageRole
                   from azure.identity import DefaultAzureCredential
 
-                  client = AIProjectClient.from_connection_string(
+                  client = AgentsClient(
+                      endpoint=endpoint,
                       credential=DefaultAzureCredential(),
-                      conn_str=conn_str,
                   )
 
                   probe = "What is the GPU utilization trend for the last 24 hours?"
                   print(f"Probe query: {probe}")
 
-                  thread = client.agents.create_thread()
-                  client.agents.create_message(
+                  thread = client.threads.create()
+                  client.messages.create(
                       thread_id=thread.id,
                       role="user",
                       content=probe,
                   )
 
-                  run = client.agents.create_and_process_run(
+                  run = client.runs.create_and_process(
                       thread_id=thread.id,
                       assistant_id=agent_id,
                   )
@@ -325,19 +324,20 @@ jobs:
                   deadline = time.time() + _SMOKE_TEST_TIMEOUT_SECONDS
                   while run.status in ("queued", "in_progress") and time.time() < deadline:
                       time.sleep(3)
-                      run = client.agents.get_run(thread_id=thread.id, run_id=run.id)
+                      run = client.runs.get(thread_id=thread.id, run_id=run.id)
 
                   if run.status != "completed":
                       print(f"❌ Smoke test FAILED — run status: {run.status}")
                       sys.exit(1)
 
-                  messages = client.agents.list_messages(thread_id=thread.id)
-                  assistant_msgs = [m for m in messages.data if m.role == "assistant"]
-                  if not assistant_msgs:
-                      print("❌ Smoke test FAILED — no assistant response received.")
+                  response_text = client.get_last_message_text_by_role(
+                      thread_id=thread.id,
+                      role=MessageRole.AGENT,
+                  )
+                  if not response_text:
+                      print("❌ Smoke test FAILED — no agent response received.")
                       sys.exit(1)
 
-                  response_text = assistant_msgs[0].content[0].text.value
                   print(f"✅ Smoke test PASSED\nResponse preview: {response_text[:300]}")
                   EOF
                   echo "::endgroup::"
