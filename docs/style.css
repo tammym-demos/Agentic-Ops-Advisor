@@ -578,6 +578,124 @@ img { max-width: 100%; height: auto; }
   line-height: 1.5;
 }
 
+/* ---------- GitHub Products Section ---------- */
+.github-products {
+  padding: var(--section-pad);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.github-products::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 70% 40% at 50% 0%, rgba(63,185,80,0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.github-products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
+}
+
+.github-product-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.75rem;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.github-product-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gh-accent, var(--accent-green));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.github-product-card:hover {
+  border-color: var(--gh-accent, var(--accent-green));
+  transform: translateY(-3px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.github-product-card:hover::before {
+  opacity: 1;
+}
+
+.gh-product-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.gh-product-icon {
+  font-size: 1.75rem;
+  flex-shrink: 0;
+}
+
+.gh-product-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gh-accent, var(--accent-green));
+  background: color-mix(in srgb, var(--gh-accent, var(--accent-green)) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--gh-accent, var(--accent-green)) 35%, transparent);
+  border-radius: 6px;
+  padding: 0.2rem 0.6rem;
+}
+
+.gh-product-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.gh-product-desc {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  flex: 1;
+}
+
+.gh-product-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gh-accent, var(--accent-green));
+  text-decoration: none;
+  margin-top: 0.5rem;
+  display: inline-block;
+  transition: opacity 0.2s ease;
+}
+
+.gh-product-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+/* Fallback for browsers without color-mix */
+@supports not (color: color-mix(in srgb, red 10%, transparent)) {
+  .gh-product-badge {
+    background: rgba(63, 185, 80, 0.12);
+    border-color: rgba(63, 185, 80, 0.35);
+  }
+}
+
 /* ---------- Footer ---------- */
 .site-footer {
   background: var(--bg-secondary);
