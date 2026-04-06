@@ -1,5 +1,6 @@
 # === Docker build context exclusions ===
 # Keep the build context small and avoid leaking secrets.
+# Size optimization: exclude everything not needed for runtime
 
 # Version control
 .git/
@@ -29,6 +30,7 @@ monitoring/
 infra/
 .squad/
 customerfriendly-plan.md
+README.md
 
 # IDE / editor
 .vscode/
@@ -44,8 +46,9 @@ htmlcov/
 .pytest_cache/
 .tox/
 .nox/
+tests/
 
-# Python build artifacts
+# Python build artifacts (reduce wheel copies)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -59,6 +62,7 @@ build/
 
 # Node (if any)
 node_modules/
+npm-debug.log
 
 # OS files
 .DS_Store
@@ -76,3 +80,8 @@ eval/*_results.json
 
 # Copilot session state
 .copilot/
+
+# PyPI and pip caches (not needed in final image)
+.cache/
+*.pth
+

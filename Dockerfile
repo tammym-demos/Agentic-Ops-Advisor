@@ -1,8 +1,29 @@
 # =============================================================================
-# Dockerfile — Agentic Ops Advisor
+# Dockerfile — Agentic Ops Advisor (Multi-stage optimized)
 # Production container for Azure AI Foundry Agent Service deployment
+# Size optimization: ~450 MB target (vs ~550-800 MB single-stage)
 # =============================================================================
 
+# ============ STAGE 1: Builder ============
+# Install build tools and compile Python wheels
+FROM python:3.11-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libssl-dev \
+        libffi-dev \
+        python3-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY requirements.txt .
+
+RUN pip install --user --no-cache-dir --no-warn-script-location \
+        --upgrade pip setuptools wheel && \
+    pip install --user --no-cache-dir --no-warn-script-location \
+        -r requirements.txt
+
+# ============ STAGE 2: Runtime ============
 FROM python:3.11-slim AS runtime
 
 LABEL maintainer="Agentic Ops Advisor Team" \
@@ -11,14 +32,17 @@ LABEL maintainer="Agentic Ops Advisor Team" \
 
 # ---- Python behaviour ----
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH=/root/.local/bin:$PATH \
+    PYTHONPATH=/app:$PYTHONPATH
 
 # ---- System dependencies & Microsoft ODBC Driver 18 ----
+# Combine into single RUN to reduce layers and exploit caching
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        ca-certificates \
         curl \
-        gnupg \
-        unixodbc-dev && \
+        gnupg && \
     # Add Microsoft package repository (Debian 12 / bookworm)
     curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | \
         gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg && \
@@ -27,9 +51,11 @@ RUN apt-get update && \
         > /etc/apt/sources.list.d/mssql-release.list && \
     apt-get update && \
     ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
-    # Clean up apt caches to keep image lean
     apt-get purge -y --auto-remove gnupg && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# ---- Copy compiled dependencies from builder (excludes build tools) ----
+COPY --from=builder /root/.local /root/.local
 
 # ---- Non-root user ----
 RUN groupadd --system agent && \
@@ -37,11 +63,6 @@ RUN groupadd --system agent && \
 
 # ---- Working directory ----
 WORKDIR /app
-
-# ---- Python dependencies (layer-cached) ----
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
 # ---- Application source ----
 COPY pyproject.toml .
