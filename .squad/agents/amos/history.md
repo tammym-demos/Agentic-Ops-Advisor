@@ -155,3 +155,4 @@
   - Better error messages will speed up debugging if new issues arise.
 - **Files modified:** `.github/workflows/deploy.yml`
 - **Commit:** `8ea32f7` — `fix(deploy): add model diagnostics, make smoke test non-fatal, harden error handling`
+- **Cross-team note:** Holden's infrastructure alignment review identified the root cause: Bicep/live Hub mismatch (see Holden's history). Model diagnostics will confirm deployment name on live Hub; final fix depends on infrastructure alignment decision (Option 1: rewrite Bicep, Option 2: skip Bicep for AI).

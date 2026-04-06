@@ -34,3 +34,23 @@
 - **Admin action required:** One-time role assignment by Owner/User Access Administrator (CLI command in issue #65).
 - **Risk:** Low — role assignments are idempotent, CI workflow never breaks.
 - **Status:** Deploy workflow can now progress. Awaiting manual RBAC grant before first deploy run.
+
+### 2026-04-07: Infrastructure Alignment Review (Bicep vs Live Resources)
+- **Context:** All 50 deploy runs failed with `invalid_engine_error: Failed to resolve model info`. Tammy requested architecture review of Bicep templates vs live infrastructure.
+- **Root cause:** **Critical mismatch** — Bicep defines ML workspace-based Hub (`Microsoft.MachineLearningServices/workspaces`) + standalone OpenAI resource, but live Hub is `Microsoft.CognitiveServices/accounts` (AIServices) with native `gpt-4.1` deployment.
+- **Risk:** If Bicep deploy runs now, it will create orphaned resources or fail with name collision. Agent can't discover model because it's looking on wrong Hub/resource.
+- **Evidence:**
+  - `infra/modules/aifoundry.bicep` line 93: Creates Hub as MachineLearningServices workspace (kind: Hub)
+  - `infra/modules/openai.bicep` line 16: Creates standalone CognitiveServices resource `oai-agentops-prod` with `gpt-4.1`
+  - deploy.yml line 212, 328: References `Microsoft.CognitiveServices/accounts/hub-agentops-prod` (live Hub is CognitiveServices, not ML workspace)
+  - deploy.yml line 36 header: Documents that Hub is CognitiveServices, NOT MachineLearningServices
+- **Analysis:** Wrote comprehensive review to `.squad/decisions/inbox/holden-infra-alignment-review.md` covering:
+  - Architecture gap (Bicep vs reality)
+  - Failure mode analysis (why model discovery fails)
+  - Risk assessment (what happens if Bicep runs)
+  - Three options: (1) Fix Bicep to match reality (4-6h), (2) Skip Bicep for AI resources + document manual setup (1-2h), (3) Tear down and rebuild (not recommended)
+  - `from __future__ import annotations` risk assessment (verdict: low risk, current code is safe)
+- **Recommendation:** **Hard-stop Bicep deploy** until IaC aligned. Option 1 (fix Bicep) preferred for long-term, Option 2 (skip + document) fastest to unblock Amos.
+- **Assignment:** Tammy to decide Option 1 vs 2; Naomi (Backend) for Option 1 implementation, Amos (DevOps) for Option 2 gating.
+- **Blocks:** Entire deploy pipeline until alignment resolved. Amos can't fix model reference until we know which endpoint/resource to target.
+- **Cross-team note:** Amos's deploy.yml fix (commit `8ea32f7`) added model deployment diagnostics (Step 5c) that will expose the deployment name mismatch on next run. His non-fatal smoke test and hardened error handling complement this review. Final resolution depends on infrastructure alignment decision (Option 1: rewrite Bicep, Option 2: skip Bicep for AI).
