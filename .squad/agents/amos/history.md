@@ -188,3 +188,25 @@
 - **Files modified:** `infra/modules/aifoundry.bicep`, `infra/modules/openai.bicep` (stub), `infra/main.bicep`, `infra/parameters.json`
 - **Team decision:** Created `.squad/decisions/inbox/amos-bicep-rewrite.md` with full context, impact, next steps
 - **Status:** ✓ Complete. Bicep now matches live infrastructure. Safe to redeploy. Can now use IaC for future model updates.
+
+### 2026-04-07: Deploy Pipeline Hardening — Pre-deploy Tests, Bicep Validate, ODBC, Parameterize RBAC
+- **Task:** Four improvements to `.github/workflows/deploy.yml` to harden the deploy pipeline
+- **Changes made:**
+  1. **ODBC driver install (Step 3, before pip install):** Added `msodbcsql18` + `unixodbc-dev` install matching `ci-eval.yml`. Required for pyodbc (transitive dep) to compile during `pip install -r requirements.txt`.
+  2. **Pre-deploy test gate (Step 3b):** Added `python scripts/setup_local_db.py` + `pytest tests/ -x --tb=short` between pip install and Bicep deploy. Untested code can no longer reach production.
+  3. **Bicep template validation (Step 3c):** Added always-run `az deployment sub validate` step. Validates Bicep syntax on every deploy without actually deploying. Catches template errors early.
+  4. **Parameterized Step 5d RBAC:** Replaced hardcoded `hub-agentops-prod` and `id-agentops-prod` with `parameters.json`-derived values (`hub-${PROJECT_NAME}-${ENV_NAME}`, `id-${PROJECT_NAME}-${ENV_NAME}`), matching Step 4b's approach.
+- **Pattern:** All workflows should use `parameters.json` for resource names, never hardcode. ODBC driver install should precede `pip install -r requirements.txt` in any workflow that uses pyodbc.
+- **Files modified:** `.github/workflows/deploy.yml` (+39/-3)
+- **Commit:** `b59a791`
+- **Status:** ✓ Complete.
+
+### 2026-04-07: Bicep PR Validation + Dead Module Cleanup
+- **Task 1 — Bicep PR validation:** Added `Validate Bicep templates` step to `ci-eval.yml` at end of `eval` job. Runs `az bicep build --file infra/main.bicep --stdout > /dev/null` on PRs only. Offline validation — no Azure login required. Catches syntax errors before merge.
+- **Task 2 — Dead code removal:**
+  - Deleted `infra/modules/openai.bicep` — was a deprecated stub since Bicep rewrite. Model now deployed natively on Hub via `aifoundry.bicep`. No references in any `.bicep`, `.yml`, `.sh`, or `.py` files.
+  - Deleted `infra/modules/keyvault.json` — compiled ARM template with zero references anywhere. The active Key Vault module is `keyvault.bicep`.
+- **Validation:** `az bicep build --file infra/main.bicep` passes (exit 0, only benign warnings about CognitiveServices/accounts/projects type and unnecessary dependsOn).
+- **Not deleted:** `infra/main.json` — also appears to be dead compiled ARM output, but was out of scope. Worth cleaning up later.
+- **Commit:** `50c2486` — `ci: add Bicep PR validation, remove dead infra modules`
+- **Key pattern:** `az bicep build --stdout > /dev/null` is the lightweight offline validation command; no credentials needed, suitable for CI.
