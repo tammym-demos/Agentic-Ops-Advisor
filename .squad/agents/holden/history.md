@@ -98,3 +98,19 @@
 - **Key discovery:** `scripts/export_dashboard_data.py` initially looked dead but IS referenced by `docs/pages/dashboard.html` (line 237) — it generates `dashboard-data.json` for the GitHub Pages dashboard. Not dead.
 - **Pattern:** Test file `test_agent.py` has intentional shim (lines 22-29) bridging `get_full_context` → `get_work_context` API name mismatch. Known workaround.
 - **Decision written to:** `.squad/decisions/inbox/holden-dead-code-review.md`
+
+### 2026-04-08: Full Requirements Coverage Audit (customerfriendly-plan.md)
+- **Context:** Tammy requested full audit of all 10 sections (0–9) of `customerfriendly-plan.md` against the codebase.
+- **Scope:** 48 individual requirement items across: Mission, Non-negotiable Constraints, Demo Narrative, Architecture, Foundry Operational Requirements, Regression Demo, Repo Deliverables, Agent Persona, Definition of Done, Work IQ References.
+- **Verdict:** **48/48 DONE — FULL COVERAGE ✅**
+- **Key findings:**
+  - All 3 tool surfaces fully implemented: `tools/sql_telemetry.py`, `tools/work_context_stub.py`, `tools/action_stub.py`
+  - 4 evaluation metrics (correctness, evidence quality, safety, groundedness) implemented as callable classes in `eval/evaluators.py`
+  - OTel tracing covers all 3 span types (agent invocation, tool call, LLM call) with App Insights export
+  - Monitoring workbook has all 4 required panels: request count, latency, tool failure rate, quality score trend
+  - 6-step regression demo fully scripted in `scripts/run_regression_demo.py`
+  - All disclaimers and Work IQ simulation notices present in system prompt, tool outputs, and README
+  - Language alignment (agentic ops, hybrid, governance, telemetry + intent, self-driving operations) present in system prompt and README
+- **No gaps found.** All requirement items have verifiable evidence in code.
+- **Known caveats (from prior audits, not requirements gaps):** test suite health, Bicep IaC alignment, GitHub Pages deploy workflow.
+- **Decision written to:** `.squad/decisions/inbox/holden-requirements-audit.md`
