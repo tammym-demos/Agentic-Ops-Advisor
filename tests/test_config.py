@@ -68,7 +68,8 @@ class TestSettingsValidation:
     def test_raises_when_project_conn_missing(self, monkeypatch):
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
         monkeypatch.delenv("AZURE_AI_PROJECT_CONNECTION_STRING", raising=False)
-        with pytest.raises(ValueError, match="AZURE_AI_PROJECT_CONNECTION_STRING"):
+        monkeypatch.delenv("AZURE_AI_AGENTS_ENDPOINT", raising=False)
+        with pytest.raises(ValueError, match="AZURE_AI_AGENTS_ENDPOINT"):
             Settings.from_env()
 
     def test_raises_when_openai_endpoint_missing(self, monkeypatch):
@@ -82,15 +83,17 @@ class TestSettingsValidation:
 
     def test_raises_for_both_missing(self, monkeypatch):
         monkeypatch.delenv("AZURE_AI_PROJECT_CONNECTION_STRING", raising=False)
+        monkeypatch.delenv("AZURE_AI_AGENTS_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
         with pytest.raises(ValueError) as exc_info:
             Settings.from_env()
         msg = str(exc_info.value)
-        assert "AZURE_AI_PROJECT_CONNECTION_STRING" in msg
+        assert "AZURE_AI_AGENTS_ENDPOINT" in msg
         assert "AZURE_OPENAI_ENDPOINT" in msg
 
     def test_error_message_mentions_env_example(self, monkeypatch):
         monkeypatch.delenv("AZURE_AI_PROJECT_CONNECTION_STRING", raising=False)
+        monkeypatch.delenv("AZURE_AI_AGENTS_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
         with pytest.raises(ValueError, match=".env.example"):
             Settings.from_env()
