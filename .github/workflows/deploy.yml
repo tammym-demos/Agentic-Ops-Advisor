@@ -376,7 +376,7 @@ jobs:
                       sys.exit(0)
 
                   from azure.ai.agents import AgentsClient
-                  from azure.ai.agents.models import FunctionTool, MessageRole, ToolSet
+                  from azure.ai.agents.models import MessageRole
                   from azure.identity import DefaultAzureCredential
                   from agent.agent import _build_function_set
 
@@ -385,13 +385,13 @@ jobs:
                       credential=DefaultAzureCredential(),
                   )
 
-                  # Build toolset so the SDK can dispatch tool calls during the run.
-                  # The system prompt instructs the agent to always query telemetry first,
-                  # so a toolset with the real function implementations must be provided.
+                  # Register function implementations so create_and_process can dispatch
+                  # tool calls automatically during the run. enable_auto_function_calls
+                  # sets client.runs._function_tool, which create_and_process uses for
+                  # dispatching — passing toolset only to create_and_process is NOT enough.
                   enable_work_iq = os.environ.get("ENABLE_WORK_IQ", "true").lower() not in ("false", "0", "no")
                   function_set = _build_function_set(enable_work_iq)
-                  toolset = ToolSet()
-                  toolset.add(FunctionTool(functions=function_set))
+                  client.enable_auto_function_calls(tools=function_set)
 
                   probe = "What is the GPU utilization trend for the last 24 hours?"
                   print(f"Probe query: {probe}")
@@ -406,11 +406,14 @@ jobs:
                   run = client.runs.create_and_process(
                       thread_id=thread.id,
                       agent_id=agent_id,
-                      toolset=toolset,
                   )
 
                   if run.status != "completed":
-                      print(f"❌ Smoke test FAILED — run status: {run.status}")
+                      error_detail = getattr(run, "last_error", None)
+                      error_msg = f"run status: {run.status}"
+                      if error_detail:
+                          error_msg += f" — {error_detail}"
+                      print(f"❌ Smoke test FAILED — {error_msg}")
                       sys.exit(1)
 
                   response_text = client.messages.get_last_message_text_by_role(
