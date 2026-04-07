@@ -185,7 +185,7 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
         }
         tool_definitions.append(work_context_def)
 
-    # --- Fix #1: Explicit Azure AD token provider for the openai library ---
+    # --- Auth: managed identity with API key fallback ---
     try:
         from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
@@ -198,9 +198,17 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
             azure_ad_token_provider=token_provider,
             api_version=api_version,
         )
-    except Exception as exc:
-        logger.exception("Azure OpenAI client initialization failed")
-        return {"content": "", "error": f"Auth/client init failed: {exc}"}
+    except Exception as cred_exc:
+        logger.warning("Managed identity auth failed: %s — trying API key fallback", cred_exc)
+        api_key = os.environ.get("AZURE_OPENAI_API_KEY", "")
+        if api_key:
+            client = AzureOpenAI(
+                azure_endpoint=endpoint,
+                api_key=api_key,
+                api_version=api_version,
+            )
+        else:
+            return {"content": "", "error": f"Auth failed (no managed identity or API key): {cred_exc}"}
 
     # Prepend system prompt
     conversation: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] + messages
@@ -456,6 +464,18 @@ def main() -> None:
         return
 
     logger.info("Starting Agentic Ops Advisor hosted agent server …")
+
+    # --- Startup diagnostics ---
+    logger.info("AZURE_OPENAI_ENDPOINT: %s", os.environ.get("AZURE_OPENAI_ENDPOINT", "(not set)"))
+    logger.info("AZURE_OPENAI_API_KEY: %s", "set" if os.environ.get("AZURE_OPENAI_API_KEY") else "not set")
+    logger.info("AZURE_CLIENT_ID: %s", "set" if os.environ.get("AZURE_CLIENT_ID") else "not set")
+    try:
+        from azure.identity import DefaultAzureCredential
+        cred = DefaultAzureCredential()
+        cred.get_token("https://cognitiveservices.azure.com/.default")
+        logger.info("Managed identity auth: SUCCESS")
+    except Exception as diag_exc:
+        logger.warning("Managed identity auth: FAILED (%s)", diag_exc)
 
     # Ensure DB exists before starting server
     try:

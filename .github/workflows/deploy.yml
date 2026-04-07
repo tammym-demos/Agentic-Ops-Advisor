@@ -635,6 +635,8 @@ jobs:
                           "DB_MODE": "sqlite",
                           "ENABLE_WORK_IQ": os.environ.get("ENABLE_WORK_IQ", "true"),
                           "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED": "false",
+                          "AZURE_CLIENT_ID": os.environ.get("AZURE_CLIENT_ID", ""),
+                          "AZURE_OPENAI_API_KEY": os.environ.get("AZURE_OPENAI_API_KEY", ""),
                       },
                   )
 
@@ -817,7 +819,7 @@ jobs:
 
                   # Get Azure access token for authentication
                   credential = DefaultAzureCredential()
-                  token = credential.get_token("https://cognitiveservices.azure.com/.default")
+                  token = credential.get_token("https://ai.azure.com/.default")
                   
                   # The hosted agent is accessible via the Foundry endpoint
                   # Pattern: {endpoint}/agents/{agent_name}/responses

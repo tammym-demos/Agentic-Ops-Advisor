@@ -18,9 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /build
 COPY requirements.txt .
 
-RUN pip install --user --no-cache-dir --no-warn-script-location \
+RUN pip install --no-cache-dir --no-warn-script-location \
         --upgrade pip setuptools wheel && \
-    pip install --user --no-cache-dir --no-warn-script-location \
+    pip install --no-cache-dir --no-warn-script-location \
         -r requirements.txt
 
 # ============ STAGE 2: Runtime ============
@@ -33,7 +33,6 @@ LABEL maintainer="Agentic Ops Advisor Team" \
 # ---- Python behaviour ----
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PATH=/root/.local/bin:$PATH \
     PYTHONPATH=/app:$PYTHONPATH
 
 # ---- System dependencies & Microsoft ODBC Driver 18 ----
@@ -54,8 +53,9 @@ RUN apt-get update && \
     apt-get purge -y --auto-remove gnupg && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# ---- Copy compiled dependencies from builder (excludes build tools) ----
-COPY --from=builder /root/.local /root/.local
+# ---- Copy compiled dependencies from builder (system-wide install) ----
+COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # ---- Non-root user ----
 RUN groupadd --system agent && \
