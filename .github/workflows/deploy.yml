@@ -1,10 +1,14 @@
 # =============================================================================
-# Deploy — Azure AI Foundry Agent Service (azd-based)
+# Deploy — Azure AI Foundry Agent Service (Hybrid: az CLI + Python SDK)
 # =============================================================================
 #
-# Simplified deployment workflow using Azure Developer CLI (azd). Replaces
-# the ~1100-line deploy.yml with declarative infrastructure and agent
-# lifecycle management via `azd up`.
+# Deployment workflow for Foundry hosted agents. Uses a hybrid approach:
+#   1. az acr build   — build + push container image to ACR
+#   2. Python SDK     — create_version() to register hosted agent
+#   3. ARM REST       — publish Agent Application for Playground routing
+#
+# NOTE: azd does NOT natively support Foundry hosted agents (only Container
+# Apps). This workflow uses targeted az CLI + SDK commands instead.
 #
 # Required secrets (configure in GitHub → Settings → Secrets → Actions):
 #
@@ -64,7 +68,7 @@
 #
 # =============================================================================
 
-name: Deploy — Foundry Agent Service (azd)
+name: Deploy — Foundry Agent Service
 
 on:
     push:
@@ -259,7 +263,7 @@ jobs:
                   fi
 
     # -------------------------------------------------------------------------
-    # 3. Deploy agent + container using azd
+    # 3. Deploy agent: ACR build → SDK create_version → ARM publish
     # -------------------------------------------------------------------------
     deploy-agent:
         name: Deploy agent
@@ -344,69 +348,205 @@ jobs:
                   python -m pytest tests/ -x --tb=short
 
             # ------------------------------------------------------------------
-            # Step 5 — Install Azure Developer CLI (azd)
+            # Step 5 — Resolve infrastructure resource names
             # ------------------------------------------------------------------
-            - name: Install azd
+            # Derives Hub, Project, and ACR names from infra/parameters.json
+            # to match the Bicep naming conventions.
+            # ------------------------------------------------------------------
+            - name: Resolve resource names
+              id: resolve_names
               run: |
-                  curl -fsSL https://aka.ms/install-azd.sh | bash
-                  echo "$HOME/.azd/bin" >> "$GITHUB_PATH"
-                  azd version
+                  PARAMS_FILE="infra/parameters.json"
+                  PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
+                  ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
 
-            # Authenticate azd using the same OIDC identity used by az login
-            - name: Authenticate azd
+                  HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
+                  PROJECT_RESOURCE_NAME="proj-${PROJECT_NAME}-${ENV_NAME}"
+                  ACR_NAME=$(echo "cr${HUB_NAME}" | tr -d '-' | tr '[:upper:]' '[:lower:]')
+                  ACR_LOGIN_SERVER="${ACR_NAME}.azurecr.io"
+
+                  IMAGE_TAG="${GITHUB_SHA:0:7}"
+                  IMAGE_REF="${ACR_LOGIN_SERVER}/agentic-ops-advisor:${IMAGE_TAG}"
+
+                  echo "Hub:     ${HUB_NAME}"
+                  echo "Project: ${PROJECT_RESOURCE_NAME}"
+                  echo "ACR:     ${ACR_NAME} (${ACR_LOGIN_SERVER})"
+                  echo "Image:   ${IMAGE_REF}"
+
+                  echo "HUB_NAME=${HUB_NAME}" >> "$GITHUB_OUTPUT"
+                  echo "PROJECT_RESOURCE_NAME=${PROJECT_RESOURCE_NAME}" >> "$GITHUB_OUTPUT"
+                  echo "ACR_NAME=${ACR_NAME}" >> "$GITHUB_OUTPUT"
+                  echo "ACR_LOGIN_SERVER=${ACR_LOGIN_SERVER}" >> "$GITHUB_OUTPUT"
+                  echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+                  echo "IMAGE_REF=${IMAGE_REF}" >> "$GITHUB_OUTPUT"
+
+            # ------------------------------------------------------------------
+            # Step 6 — Build and push container image to ACR
+            # ------------------------------------------------------------------
+            - name: Build and push container image
               run: |
-                  azd auth login \
-                      --client-id "${{ secrets.AZURE_CLIENT_ID }}" \
-                      --federated-credential-provider "github" \
-                      --tenant-id "${{ secrets.AZURE_TENANT_ID }}"
-                  echo "✅ azd authenticated"
+                  echo "::group::ACR Build"
+                  ACR_NAME="${{ steps.resolve_names.outputs.ACR_NAME }}"
+                  IMAGE_TAG="${{ steps.resolve_names.outputs.IMAGE_TAG }}"
 
-            # ------------------------------------------------------------------
-            # Step 6 — Configure azd environment
-            # ------------------------------------------------------------------
-            - name: Configure azd environment
-              run: |
-                  # Initialize azd environment (creates .azure/<env>/config.json)
-                  azd env new production --location "$AZURE_LOCATION" --subscription "$AZURE_SUBSCRIPTION_ID"
+                  az acr build \
+                      --registry "${ACR_NAME}" \
+                      --image "agentic-ops-advisor:${IMAGE_TAG}" \
+                      --image "agentic-ops-advisor:latest" \
+                      --file Dockerfile \
+                      .
 
-                  # Set all required environment variables for the agent container
-                  azd env set AZURE_RESOURCE_GROUP "$AZURE_RESOURCE_GROUP"
-                  azd env set AZURE_LOCATION "$AZURE_LOCATION"
-                  azd env set AZURE_SUBSCRIPTION_ID "$AZURE_SUBSCRIPTION_ID"
-                  azd env set AZURE_AI_AGENTS_ENDPOINT "$AZURE_AI_AGENTS_ENDPOINT"
-                  azd env set AZURE_OPENAI_ENDPOINT "$AZURE_OPENAI_ENDPOINT"
-                  azd env set AZURE_OPENAI_DEPLOYMENT "$AZURE_OPENAI_DEPLOYMENT"
-                  azd env set AZURE_OPENAI_API_KEY "$AZURE_OPENAI_API_KEY"
-                  azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "$APPLICATIONINSIGHTS_CONNECTION_STRING"
-                  azd env set AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED "false"
-                  azd env set ENABLE_WORK_IQ "true"
-                  azd env set ENABLE_MCP "false"
-                  azd env set DB_MODE "sqlite"
-                  azd env set AZURE_CLIENT_ID "${{ secrets.AZURE_CLIENT_ID }}"
-
-                  echo "✅ azd environment configured"
-
-            # ------------------------------------------------------------------
-            # Step 7 — Deploy agent (skip provisioning, already done in deploy-infra job)
-            # ------------------------------------------------------------------
-            # `azd deploy` performs package + deploy without provisioning:
-            #   - Builds and pushes the container image to ACR
-            #   - Creates/updates the hosted agent version
-            #   - Publishes the Agent Application
-            # ------------------------------------------------------------------
-            - name: Deploy agent with azd
-              run: |
-                  echo "::group::azd deploy"
-                  
-                  azd deploy \
-                      --environment production \
-                      --no-prompt
-                  
-                  echo "✅ Agent deployed via azd"
+                  echo "✅ Container image built and pushed to ACR"
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 8 — Wait for agent warmup
+            # Step 7 — Register hosted agent version (Python SDK)
+            # ------------------------------------------------------------------
+            # Uses azure-ai-projects SDK to create a new hosted agent version.
+            # azd does NOT natively support Foundry hosted agents — this is the
+            # recommended SDK path per Microsoft docs.
+            # ------------------------------------------------------------------
+            - name: Register hosted agent version
+              id: register_agent
+              env:
+                  IMAGE_REF: ${{ steps.resolve_names.outputs.IMAGE_REF }}
+              run: |
+                  echo "::group::Register agent version"
+                  python3 - <<'PYEOF'
+                  import os, sys, json
+
+                  from azure.identity import DefaultAzureCredential
+                  from azure.ai.projects import AIProjectClient
+                  from azure.ai.projects.models import (
+                      HostedAgentDefinition,
+                      ProtocolVersionRecord,
+                  )
+
+                  endpoint = os.environ["AZURE_AI_AGENTS_ENDPOINT"]
+                  image_ref = os.environ["IMAGE_REF"]
+
+                  credential = DefaultAzureCredential()
+                  client = AIProjectClient(
+                      credential=credential,
+                      endpoint=endpoint,
+                      allow_preview=True,
+                      headers={"Foundry-Features": "HostedAgents=V1Preview"},
+                  )
+
+                  # Environment variables injected into the hosted container
+                  env_vars = {}
+                  for key in [
+                      "AZURE_OPENAI_ENDPOINT",
+                      "AZURE_OPENAI_DEPLOYMENT",
+                      "AZURE_OPENAI_API_KEY",
+                      "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                      "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED",
+                      "DB_MODE",
+                      "ENABLE_WORK_IQ",
+                      "ENABLE_MCP",
+                  ]:
+                      val = os.environ.get(key, "")
+                      if val:
+                          env_vars[key] = val
+
+                  agent_def = HostedAgentDefinition(
+                      kind="hosted",
+                      container_protocol_versions=[
+                          ProtocolVersionRecord(
+                              protocol_name="responses",
+                              protocol_version="v1",
+                          )
+                      ],
+                      cpu="2",
+                      memory="4Gi",
+                      image=image_ref,
+                      environment_variables=env_vars,
+                  )
+
+                  print(f"Creating hosted agent version...")
+                  print(f"  Image:     {image_ref}")
+                  print(f"  Protocol:  responses v1")
+                  print(f"  Resources: 2 CPU, 4Gi memory")
+
+                  version = client.agents.create_version(
+                      agent_name="agentic-ops-advisor",
+                      body=agent_def,
+                  )
+
+                  version_id = getattr(version, "id", None) or getattr(version, "version", "unknown")
+                  print(f"✅ Agent version created: {version_id}")
+
+                  with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+                      f.write(f"AGENT_VERSION={version_id}\n")
+                  PYEOF
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 8 — Publish Agent Application (ARM REST)
+            # ------------------------------------------------------------------
+            # Creates the Agent Application resource so the Foundry Playground
+            # routes to the hosted container's Responses API instead of the
+            # legacy Agents API. This is the fix for issue #84/#85.
+            # ------------------------------------------------------------------
+            - name: Publish Agent Application
+              run: |
+                  echo "::group::Publish Agent Application"
+                  HUB_NAME="${{ steps.resolve_names.outputs.HUB_NAME }}"
+                  PROJECT_NAME="${{ steps.resolve_names.outputs.PROJECT_RESOURCE_NAME }}"
+                  AGENT_NAME="agentic-ops-advisor"
+                  SUB_ID=$(echo "$AZURE_SUBSCRIPTION_ID" | xargs)
+                  RG="$AZURE_RESOURCE_GROUP"
+
+                  RESOURCE_URI="/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}/projects/${PROJECT_NAME}/applications/${AGENT_NAME}"
+                  API_VERSION="2025-10-01-preview"
+
+                  echo "Publishing Agent Application..."
+                  echo "  Resource: ${RESOURCE_URI}"
+                  echo "  API version: ${API_VERSION}"
+
+                  az rest --method PUT \
+                      --uri "https://management.azure.com${RESOURCE_URI}?api-version=${API_VERSION}" \
+                      --body '{"properties":{"agents":[{"agentName":"'"${AGENT_NAME}"'"}]}}' \
+                      --headers "Content-Type=application/json" \
+                      2>&1 || {
+                          echo "⚠️  ARM publish returned non-zero — trying hub-scoped path..."
+                          # Fallback: try without /projects/ segment
+                          RESOURCE_URI_HUB="/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}/applications/${AGENT_NAME}"
+                          az rest --method PUT \
+                              --uri "https://management.azure.com${RESOURCE_URI_HUB}?api-version=${API_VERSION}" \
+                              --body '{"properties":{"agents":[{"agentName":"'"${AGENT_NAME}"'"}]}}' \
+                              --headers "Content-Type=application/json" \
+                              2>&1 || echo "⚠️  ARM publish failed on both paths. Check Portal → Foundry → Agent Applications."
+                      }
+
+                  echo "✅ Agent Application publish requested"
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 9 — Start hosted agent container
+            # ------------------------------------------------------------------
+            - name: Start hosted agent
+              continue-on-error: true
+              run: |
+                  echo "::group::Start hosted agent"
+                  HUB_NAME="${{ steps.resolve_names.outputs.HUB_NAME }}"
+
+                  # Attempt to start the hosted agent via CLI extension
+                  az cognitiveservices account agent start \
+                      --account-name "${HUB_NAME}" \
+                      --resource-group "$AZURE_RESOURCE_GROUP" \
+                      --agent-name "agentic-ops-advisor" \
+                      2>&1 || {
+                          echo "⚠️  Agent start command unavailable or failed."
+                          echo "   Hosted agents typically auto-start after create_version()."
+                          echo "   If needed, start manually via Azure Portal."
+                      }
+
+                  echo "✅ Hosted agent start requested"
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 10 — Wait for agent warmup
             # ------------------------------------------------------------------
             - name: Wait for agent warmup
               run: |
@@ -414,7 +554,7 @@ jobs:
                   sleep 30
 
             # ------------------------------------------------------------------
-            # Step 9 — Smoke test: Responses API
+            # Step 11 — Smoke test: Responses API
             # ------------------------------------------------------------------
             - name: Smoke test (Responses API)
               id: smoke_test
@@ -536,7 +676,7 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 10 — Post deployment status summary
+            # Step 12 — Post deployment status summary
             # ------------------------------------------------------------------
             - name: Post deployment status
               if: always()
