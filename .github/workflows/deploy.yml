@@ -504,6 +504,17 @@ jobs:
                               --scope "$HUB_RESOURCE_ID" \
                               --output none 2>&1 || echo "⚠️  Could not assign role (SP likely lacks Microsoft.Authorization/roleAssignments/write). An admin must pre-assign Azure AI Developer — see workflow header comments."
                           echo "✅ Azure AI Developer role assignment attempted for deploy SP."
+
+                          # Azure AI Project Manager is required for publishing Agent Applications
+                          # See: https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
+                          echo "Assigning Azure AI Project Manager to SP $SP_OBJECT_ID on Hub..."
+                          az role assignment create \
+                              --assignee-object-id "$SP_OBJECT_ID" \
+                              --assignee-principal-type ServicePrincipal \
+                              --role "Azure AI Project Manager" \
+                              --scope "$HUB_RESOURCE_ID" \
+                              --output none 2>&1 || echo "⚠️  Could not assign Azure AI Project Manager — admin must pre-assign for publish."
+                          echo "✅ Azure AI Project Manager role assignment attempted for deploy SP."
                       else
                           echo "⚠️  Could not resolve SP object ID from AZURE_CLIENT_ID — skipping SP RBAC."
                       fi
@@ -881,20 +892,20 @@ jobs:
                   echo "   Project ARM ID: ${PROJECT_RESOURCE_ID}"
 
                   # Try multiple API versions (newest first)
-                  API_VERSIONS=("2025-10-01-preview" "2025-12-01")
+                  # Supported: 2025-10-01-preview, 2026-01-15-preview
+                  # See: https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
+                  API_VERSIONS=("2026-01-15-preview" "2025-10-01-preview")
                   APP_CREATED=false
 
                   for API_VERSION in "${API_VERSIONS[@]}"; do
                       echo ""
                       echo "--- Creating Agent Application (api-version=${API_VERSION}) ---"
 
+                      # Minimal body per MS docs — authorizationPolicy defaults to RBAC
                       APP_BODY=$(cat <<JSONEOF
                   {
                     "properties": {
-                      "displayName": "Agentic Ops Advisor",
-                      "description": "Hosted agent for infrastructure telemetry and change-context reasoning",
-                      "agents": [{"agentName": "${AGENT_NAME}"}],
-                      "authorizationPolicy": {"type": "Default"}
+                      "agents": [{"agentName": "${AGENT_NAME}"}]
                     }
                   }
                   JSONEOF
