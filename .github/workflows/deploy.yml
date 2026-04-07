@@ -357,7 +357,7 @@ jobs:
             - name: Build and push container image
               run: |
                   echo "::group::Container build & push"
-                  ACR_NAME="${AZURE_CONTAINER_REGISTRY_NAME:-cragenticopsdemo}"
+                  ACR_NAME="${AZURE_CONTAINER_REGISTRY_NAME:-crhubagentopsprod}"
                   IMAGE_TAG="$(git rev-parse --short HEAD)"
                   FULL_IMAGE="${ACR_NAME}.azurecr.io/agentic-ops-advisor:${IMAGE_TAG}"
 

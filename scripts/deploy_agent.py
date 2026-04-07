@@ -6,7 +6,7 @@ Uses the Azure AI Projects SDK to create a new hosted agent version.
 
 Required environment variables:
     AZURE_AI_AGENTS_ENDPOINT  — Foundry Agent Service endpoint
-    CONTAINER_IMAGE           — Full ACR image ref (e.g. cragenticopsdemo.azurecr.io/agentic-ops-advisor:abc1234)
+    CONTAINER_IMAGE           — Full ACR image ref (e.g. crhubagentopsprod.azurecr.io/agentic-ops-advisor:abc1234)
 
 Optional:
     AZURE_OPENAI_ENDPOINT     — Injected into container env
