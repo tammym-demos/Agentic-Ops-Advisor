@@ -168,3 +168,18 @@
 - **Known low-severity issue (out of scope):** `agent.yaml` parameter name mismatch (`change_id` + `approver` vs `change_request_id`).
 - **Next steps:** Container rebuild, Foundry redeployment, demo with real queries.
 - **Decision merged to:** `.squad/decisions/decisions.md` (deduped with Naomi's diagnostic)
+
+### 2026-04-10: Container Auth Review — Thread YhmpIKtgJT9l4tjiQbLA415U (Issue #86)
+- **Context:** Run #86 smoke test failed: `401 Unauthorized: "audience is incorrect (https://ai.azure.com)"`. Container deployed OK but fails at runtime. Tammy requested lead review of deploy config + RBAC + env vars.
+- **Root cause identified:** ❌ **serve.py line 194 uses WRONG token audience.**
+  - Current: `get_bearer_token_provider(credential, "https://cognitiveservices.azure.com/.default")`
+  - Correct: `get_bearer_token_provider(credential, "https://ai.azure.com/.default")`
+  - Foundry Responses API validates `aud` claim; it expects `ai.azure.com`, not `cognitiveservices.azure.com`.
+  - Evidence: Azure Foundry docs + SDK issues + error message itself all confirm correct audience is `https://ai.azure.com/.default`.
+- **Managed identity RBAC:** ✅ PASS — Bicep assigns identity to Hub & Project. Key Vault Reader role present for initialization. Azure AI Developer role assignment happens in deploy.yml Step 4b for the Deploy SP (not the managed identity itself, but Foundry grants implicit access).
+- **Environment variables:** ✅ PASS — All critical vars passed to hosted agent container (AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, DB_MODE, ENABLE_WORK_IQ, tracing flags).
+- **Smoke test audience:** ✅ CORRECT — Error message proves Foundry is correctly validating the audience; the token being sent has the wrong scope.
+- **Verdict:** 🔴 **BLOCKING** — One-line fix required in serve.py before next deploy.
+- **Post-demo recommendation:** Add explicit Azure AI Developer role assignment to managed identity on Hub in Bicep (security hardening; not blocking).
+- **Decision written to:** `.squad/decisions/inbox/holden-container-auth-review.md`
+- **Confidence:** HIGH (95%) — Trivial fix with clear evidence.

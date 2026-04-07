@@ -1,9 +1,0 @@
-Scribe: Session documentation and decision consolidation (2026-04-07)
-
-- Orchestration log: Naomi's Foundry Responses API v1 schema fix (ca9dc78)
-- Session log: Responses API compliance work completed
-- Decision consolidation: Merged inbox entries (Alex tests, Amos Docker, Naomi server/dates/README/story)
-- Naomi history: Added 2026-04-07 Responses API compliance work entry
-- Inbox cleanup: Deleted 6 merged decision files
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>

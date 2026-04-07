@@ -45,6 +45,16 @@
 - **Commit:** ca9dc78. Pushed to main. Deploy Run #86 triggered.
 - **Status:** ✅ SUCCESS — Responses API v1 compliant. Ready for Foundry container rebuild and redeployment.
 
+### 2026-04-07: Container Auth & Dockerfile Fix (Deploy Run #86 Failure)
+- **Task:** Fix hosted agent runtime failures — 401 Unauthorized in smoke test, potential package access crash in container.
+- **Root causes:** (1) Dockerfile installed pip packages with `--user` to `/root/.local/`, but container runs as `USER agent` who can't read `/root/`; (2) `serve.py` only supported managed identity auth — no fallback if `DefaultAzureCredential` fails in container; (3) Smoke test used wrong audience (`cognitiveservices.azure.com` vs `ai.azure.com`); (4) `AZURE_CLIENT_ID` and `AZURE_OPENAI_API_KEY` not passed to container env.
+- **Dockerfile fix:** Removed `--user` flag from pip install (builder stage). Changed COPY to copy from `/usr/local/lib/python3.11/site-packages/` and `/usr/local/bin/` instead of `/root/.local`. Removed `/root/.local/bin` from PATH.
+- **serve.py auth fix:** Added API key fallback in `_run_agent_conversation()` — if `DefaultAzureCredential` fails and `AZURE_OPENAI_API_KEY` is set, falls back to API key auth.
+- **serve.py diagnostics:** Added startup logging in `main()` — prints endpoint config, API key presence (not value), client ID presence, and managed identity probe result.
+- **deploy.yml env vars:** Added `AZURE_CLIENT_ID` and `AZURE_OPENAI_API_KEY` to hosted agent `environment_variables`.
+- **deploy.yml smoke test:** Changed token audience from `cognitiveservices.azure.com/.default` to `ai.azure.com/.default` (Foundry Responses API audience).
+- **Tests:** 366 passed, 0 failed. All existing tests pass with auth fallback logic.
+
 ### 2025-04-05: Dashboard Data Export Script
 - **Task:** Create `scripts/export_dashboard_data.py` to export synthetic telemetry data as JSON for GitHub Pages KPI dashboard.
 - **Output:** `docs/pages/assets/dashboard-data.json` (generated, 40.7 KB).
