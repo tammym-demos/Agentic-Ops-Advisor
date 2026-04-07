@@ -6,8 +6,8 @@
 #   ./infra/deploy.sh [--what-if] [--subscription <id>]
 #
 # Environment variables (override defaults):
-#   AZURE_SUBSCRIPTION_ID   — Azure subscription (default: e0b48569-...)
-#   AZURE_LOCATION          — Deployment location    (default: eastus2)
+#   AZURE_SUBSCRIPTION_ID   — Azure subscription (required)
+#   AZURE_LOCATION          — Deployment location    (default: eastus)
 #   SQL_ADMIN_PASSWORD      — SQL admin password; stored in Key Vault if secret is missing
 #   KEY_VAULT_NAME          — Key Vault name  (default: kv-agentic-ops-secrets)
 #   KEY_VAULT_RG            — Key Vault resource group (default: rg-secrets)
@@ -20,8 +20,8 @@ set -euo pipefail
 
 # ---- Configuration defaults -------------------------------------------
 
-SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-e0b48569-71a2-40fe-9b7a-2fb859f31288}"
-LOCATION="${AZURE_LOCATION:-eastus2}"
+SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID must be set}"
+LOCATION="${AZURE_LOCATION:-eastus}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_FILE="${SCRIPT_DIR}/main.bicep"
 KV_PREREQS_FILE="${SCRIPT_DIR}/keyvault-prereqs.bicep"

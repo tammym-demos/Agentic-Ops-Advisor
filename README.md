@@ -373,7 +373,7 @@ Evaluations run automatically on every pull request via the `.github/workflows/c
 
 ```bash
 az login
-az account set --subscription e0b48569-71a2-40fe-9b7a-2fb859f31288
+az account set --subscription <YOUR_SUBSCRIPTION_ID>
 ```
 
 ### Step 2 — Provision infrastructure
@@ -639,9 +639,9 @@ Copy `.env.example` to `.env` and fill in these values. Variables marked **Requi
 | `ENABLE_MCP` | `false` | Both | Enable the MCP server wrapper (`true`/`false`) |
 | `APPLICATIONINSIGHTS_CONNECTION_STRING` | _(empty)_ | Azure | Application Insights connection string for telemetry export |
 | `AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED` | `false` | Both | Record prompt/completion content in traces (`true`/`false`) — **leave `false` for demos** |
-| `AZURE_SUBSCRIPTION_ID` | `e0b48569-71a2-40fe-9b7a-2fb859f31288` | Azure | Azure subscription ID (used by `infra/deploy.sh`) |
+| `AZURE_SUBSCRIPTION_ID` | _(your subscription ID)_ | Azure | Azure subscription ID (used by `infra/deploy.sh`) |
 | `AZURE_RESOURCE_GROUP` | `rg-agentic-ops-advisor` | Azure | Azure resource group name |
-| `AZURE_LOCATION` | `eastus2` | Azure | Azure region for resource deployment |
+| `AZURE_LOCATION` | `eastus` | Azure | Azure region for resource deployment |
 | `HEALTH_PORT` | `8080` | Both | Port for health check endpoint (used by Docker HEALTHCHECK and k8s probes) |
 
 ---
@@ -743,7 +743,7 @@ python eval/run_eval.py
    ```
 2. Confirm you have Contributor or Owner role:
    ```bash
-   az role assignment list --assignee $(az account show --query user.name -o tsv) --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288
+   az role assignment list --assignee $(az account show --query user.name -o tsv) --scope /subscriptions/$(az account show --query id -o tsv)
    ```
 3. Re-run `cd infra && ./deploy.sh`
 

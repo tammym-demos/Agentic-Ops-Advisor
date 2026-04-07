@@ -235,8 +235,8 @@ container:
 
     # --- Azure deployment metadata ------------------------------------------
     - name: AZURE_SUBSCRIPTION_ID
-      value: e0b48569-71a2-40fe-9b7a-2fb859f31288
+      value: <your-subscription-id>
     - name: AZURE_RESOURCE_GROUP
       value: rg-agentic-ops-advisor
     - name: AZURE_LOCATION
-      value: eastus2
+      value: eastus

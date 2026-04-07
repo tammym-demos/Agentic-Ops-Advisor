@@ -53,13 +53,13 @@
 #   az ad sp create --id <appId>
 #   az role assignment create --assignee <appId> \
 #       --role contributor \
-#       --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor
+#       --scope /subscriptions/<AZURE_SUBSCRIPTION_ID>/resourceGroups/rg-agentic-ops-advisor
 #   # Grant data-plane access to the AI hub (required for Foundry Agent Service APIs):
 #   az role assignment create \
 #       --assignee-object-id <spObjectId> \
 #       --assignee-principal-type ServicePrincipal \
 #       --role "Azure AI Developer" \
-#       --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
+#       --scope /subscriptions/<AZURE_SUBSCRIPTION_ID>/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
 #   # Add federated credential for this repo + branch:
 #   az ad app federated-credential create --id <appId> --parameters '{
 #     "name": "agentic-ops-main",

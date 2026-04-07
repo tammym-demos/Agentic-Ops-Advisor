@@ -10,7 +10,7 @@
 ## Learnings
 
 ### 2026-04-04: Deployment Readiness Audit
-- **az CLI:** Authenticated to subscription `ME-MngEnvMCAP960375-tmcclell-1` (e0b48569-...), state Enabled
+- **az CLI:** Authenticated to subscription `ME-MngEnvMCAP960375-tmcclell-1`, state Enabled
 - **Bicep structure:** `infra/main.bicep` is subscription-scoped, deploys 6 modules: identity, loganalytics, appinsights, sql, openai, aifoundry
 - **Key file paths:** `infra/deploy.sh` (deploy script), `infra/parameters.json` (params with KV ref), `.github/workflows/deploy.yml` (CI/CD)
 - **Blocker — Key Vault missing:** `rg-secrets/kv-agentic-ops-secrets` referenced in parameters.json does not exist; SQL admin password secret not created

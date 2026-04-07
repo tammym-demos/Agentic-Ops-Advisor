@@ -133,7 +133,7 @@ All failures are fixable by updating the test files to match the current source 
 ## ✅ What's Good
 
 - **Azure CLI:** Authenticated as `tmcclell@MngEnvMCAP960375.onmicrosoft.com`
-- **Subscription:** `ME-MngEnvMCAP960375-tmcclell-1` (`e0b48569-71a2-40fe-9b7a-2fb859f31288`) — Enabled, matches deploy.sh and parameters.json
+- **Subscription:** `ME-MngEnvMCAP960375-tmcclell-1` — Enabled, matches deploy.sh and parameters.json
 - **Bicep templates:** All 6 modules present and well-structured (identity, loganalytics, appinsights, sql, openai, aifoundry)
 - **deploy.sh:** Solid script with pre-flight checks, `--what-if` mode, and auto-generates .env output
 - **deploy.yml (CI/CD):** Well-designed workflow with OIDC auth, conditional infra deploy, agent upsert, and smoke test
@@ -146,7 +146,7 @@ All failures are fixable by updating the test files to match the current source 
 
 `parameters.json` references a Key Vault secret:
 ```
-/subscriptions/e0b48569-.../resourceGroups/rg-secrets/providers/Microsoft.KeyVault/vaults/kv-agentic-ops-secrets
+/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/rg-secrets/providers/Microsoft.KeyVault/vaults/kv-agentic-ops-secrets
 ```
 - **Resource group `rg-secrets` does not exist.**
 - **Key Vault `kv-agentic-ops-secrets` does not exist.**

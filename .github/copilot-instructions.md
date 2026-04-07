@@ -82,7 +82,7 @@ The agent is a **professional ops teammate** with light humor:
 
 ## Azure Configuration
 
-- Subscription: `e0b48569-71a2-40fe-9b7a-2fb859f31288`
-- Region: `eastus2`
+- Subscription: _(set via `AZURE_SUBSCRIPTION_ID` env var or GitHub secret)_
+- Region: `eastus`
 - Resource Group: `rg-agentic-ops-advisor`
-- Tenant: Contoso (`MngEnvMCAP960375.onmicrosoft.com`)
+- Tenant: _(your Azure AD tenant)_

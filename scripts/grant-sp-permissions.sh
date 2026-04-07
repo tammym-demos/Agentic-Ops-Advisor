@@ -19,7 +19,7 @@ set -euo pipefail
 # ---- Defaults (match project config) -----------------------------------------
 
 SP_OBJECT_ID="${SP_OBJECT_ID:-}"
-SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:-e0b48569-71a2-40fe-9b7a-2fb859f31288}"
+SUBSCRIPTION_ID="${AZURE_SUBSCRIPTION_ID:?AZURE_SUBSCRIPTION_ID must be set}"
 RG_NAME="${AZURE_RESOURCE_GROUP:-rg-agentic-ops-advisor}"
 
 # ---- Argument parsing ---------------------------------------------------------
