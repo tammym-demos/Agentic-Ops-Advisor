@@ -185,30 +185,34 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
         }
         tool_definitions.append(work_context_def)
 
-    # --- Auth: managed identity with API key fallback ---
-    try:
-        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-
-        credential = DefaultAzureCredential()
-        token_provider = get_bearer_token_provider(
-            credential, "https://cognitiveservices.azure.com/.default"
-        )
+    # --- Auth: API key first, managed identity fallback ---
+    # API key is preferred because DefaultAzureCredential's managed identity
+    # probe can hang for ~2 min when no MI is configured (IMDS timeout).
+    api_key = os.environ.get("AZURE_OPENAI_API_KEY", "")
+    if api_key:
+        logger.info("Using API key auth for Azure OpenAI")
         client = AzureOpenAI(
             azure_endpoint=endpoint,
-            azure_ad_token_provider=token_provider,
+            api_key=api_key,
             api_version=api_version,
         )
-    except Exception as cred_exc:
-        logger.warning("Managed identity auth failed: %s — trying API key fallback", cred_exc)
-        api_key = os.environ.get("AZURE_OPENAI_API_KEY", "")
-        if api_key:
+    else:
+        try:
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+            logger.info("No API key — trying managed identity auth")
+            credential = DefaultAzureCredential()
+            token_provider = get_bearer_token_provider(
+                credential, "https://cognitiveservices.azure.com/.default"
+            )
             client = AzureOpenAI(
                 azure_endpoint=endpoint,
-                api_key=api_key,
+                azure_ad_token_provider=token_provider,
                 api_version=api_version,
             )
-        else:
-            return {"content": "", "error": f"Auth failed (no managed identity or API key): {cred_exc}"}
+        except Exception as cred_exc:
+            logger.error("Auth failed — no API key and managed identity unavailable: %s", cred_exc)
+            return {"content": "", "error": f"Auth failed (no API key or managed identity): {cred_exc}"}
 
     # Prepend system prompt
     conversation: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] + messages
