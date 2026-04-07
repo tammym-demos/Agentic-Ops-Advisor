@@ -106,3 +106,21 @@
 - **Dependencies confirmed:** pytest, pytest-asyncio, aiohttp, aiohttp-cors already in requirements.txt — no new deps needed
 - **Key discovery:** serve.py uses `_call_tool()` which calls `TOOL_CALLABLES["query_telemetry"]`, which is `_sync_query_telemetry()`, which uses `asyncio.run()`. This fails when called from an existing event loop (aiohttp server). Tests mock `_call_tool` to work around this. Naomi should refactor to use async tool dispatch or use a different sync wrapper pattern.
 - **Test execution:** All 18 tests pass with aiohttp test client. Validates Foundry Responses API compliance, tool dispatch workflows, error handling, and CORS configuration.
+
+### Issue #92: Edge-case tests for LLM wrong-parameter fixes
+- **File updated:** `tests/test_tools.py` — added 14 edge-case tests (33 total, all pass)
+- **TestQueryTelemetry additions (5 tests):**
+  1. `test_postgres_syntax_returns_error` — PostgreSQL `NOW() - INTERVAL` syntax rejected by SQLite
+  2. `test_wrong_table_name_gpu_utilization` — LLM's actual mistake (`gpu_utilization`) returns error listing all valid tables
+  3. `test_wrong_column_name_utilization` — wrong column `utilization` (should be `utilization_pct`) errors clearly
+  4. `test_tool_schema_table_description_includes_columns` — TOOL_SCHEMA table description includes `utilization_pct`, `latency_ms`, `cost_usd`
+  5. `test_tool_schema_sql_mentions_sqlite` — TOOL_SCHEMA sql description mentions "SQLite"
+- **TestWorkContextStub additions (7 tests):**
+  1. `test_cluster_name_maps_to_gpu_cluster` — `prod-east-01` → `gpu-cluster` (fuzzy matching)
+  2. `test_cluster_name_maps_to_network` — `cdn-west` → `network` (fuzzy matching)
+  3. `test_exact_service_name_gpu_cluster` — `gpu-cluster` → `gpu-cluster`
+  4. `test_exact_service_name_network` — `network` → `network`
+  5. `test_exact_service_name_cost` — `cost` → `cost`
+  6. `test_unknown_service_falls_back_to_default` — `totally-unknown-service` → `default`
+  7. `test_tool_schema_service_enum` — TOOL_SCHEMA service enum contains `["gpu-cluster", "network", "cost"]`
+- **Why:** These tests directly exercise the edge cases from issue #92 where the LLM generated wrong table names, wrong column names, PostgreSQL syntax, and unresolved cluster names. They verify that the T1-schema, T2-system-prompt, and T3-fuzzy fixes produce clear errors and correct mappings.

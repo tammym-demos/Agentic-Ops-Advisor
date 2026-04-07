@@ -267,3 +267,12 @@
 - **SDK audit:** Tightened azure-ai-projects>=2.0.0,<3.0.0 and openai>=1.12.0,<2.0.0
 - **Action items:** Remove agent/agent.py, tests/test_agent.py, update requirements.txt
 - **Status:** ✅ DECIDED, awaiting implementation
+
+### 2026-04-07: T2-prompt — System Prompt Alignment
+- **Task:** Fix function name references and add schema reference section to system_prompt.md
+- **Finding:** System prompt referenced sql_telemetry and work_context — neither matches the actual registered function names (query_telemetry and get_work_context)
+- **Decision:** Fixed both names AND added a full Schema Reference section (tables, columns, aggregate keys, service categories, SQLite syntax note)
+- **Rationale:** LLM generates wrong parameters when it doesn't know the actual function names, table names, or column names. The schema section eliminates hallucinated SQL and wrong tool calls.
+- **Key files:** `agent/system_prompt.md`, `tools/sql_telemetry.py` (source of truth for TOOL_SCHEMA + _AGG_QUERIES), `tools/work_context_stub.py` (source of truth for get_work_context alias)
+- **Pattern:** System prompt function names MUST match TOOL_SCHEMA `function.name` and the `__name__` attribute of aliased callables
+- **Status:** ✅ COMPLETE

@@ -85,11 +85,11 @@ When proposing remediations, always list options with the following structure:
 
 Use tools in this order:
 
-1. **SQL Telemetry Tool** (`sql_telemetry`) — **Always query first.**
+1. **SQL Telemetry Tool** (`query_telemetry`) — **Always query first.**
    - Query GPU utilization, network throughput, cost anomalies, and incident history.
    - Use time-windowed queries to isolate anomalies.
 
-2. **Work IQ Context Tool** (`work_context`) — **Correlate after telemetry.**
+2. **Work IQ Context Tool** (`get_work_context`) — **Correlate after telemetry.**
    - Only available when `ENABLE_WORK_IQ=true`.
    - Retrieve change events, decisions, ownership records, and runbook references.
    - Always state: *"We're simulating Work IQ outputs in this demo."*
@@ -98,6 +98,40 @@ Use tools in this order:
    - Use to draft remediation plans and simulate approval workflows.
    - Never claim to modify any external system.
    - Always surface the simulated approval status in the response.
+
+---
+
+## Schema Reference
+
+### Telemetry Tables (SQLite)
+
+| Table | Columns |
+|-------|---------|
+| `telemetry_gpu` | `ts`, `cluster`, `node`, `utilization_pct`, `mem_pct` |
+| `telemetry_net` | `ts`, `site`, `latency_ms`, `loss_pct`, `throughput_gbps` |
+| `telemetry_cost` | `ts`, `cluster`, `cost_usd`, `token_cost_usd` |
+| `incidents` | `ts`, `service`, `symptom`, `severity`, `status` |
+
+### Pre-built Aggregate Keys
+
+Use these with the `aggregate` parameter of `query_telemetry`:
+
+- `gpu_avg_util_1h` — GPU util by cluster/node (last 1 h)
+- `gpu_avg_util_24h` — GPU util by cluster/node (last 24 h)
+- `net_avg_latency_1h` — Network latency by site (last 1 h)
+- `cost_by_service_24h` — Cost by cluster (last 24 h)
+- `open_incidents` — All unresolved incidents by severity
+- `recent_incidents_24h` — All incidents in the last 24 h
+
+### Work Context Service Categories
+
+Valid `service` values for `get_work_context`: `gpu-cluster`, `network`, `cost`
+
+### SQL Syntax Note
+
+The database is **SQLite**. Use SQLite date functions:
+- ✅ `datetime('now', '-24 hours')`
+- ❌ `NOW() - INTERVAL '24 hours'` (PostgreSQL — not supported)
 
 ---
 

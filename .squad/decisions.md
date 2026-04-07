@@ -840,7 +840,102 @@ Once blockers are resolved, trigger a test deployment to verify the full pipelin
 
 ---
 
-**Signed:** Drummer, Program Manager  
+**Signed:** Drummer, Program Manager
+
+---
+
+## Tool Schema Enrichment Pattern (Issue #92)
+
+**Author:** Naomi (Backend Dev)  
+**Date:** 2025-07-26  
+**Status:** DECIDED + IMPLEMENTED  
+**Impact:** LLM accuracy improvement; eliminates hallucinated table/column names and SQL dialect errors  
+
+### Context
+
+GPT-4.1 was generating incorrect tool parameters because schemas lacked:
+- Column name inventory  
+- SQLite dialect hints (e.g., `datetime()` not `NOW()`)  
+- Valid service enum values  
+
+### Decision
+
+1. **Dynamic schema descriptions from data dicts:** `TOOL_SCHEMA` for `query_telemetry` now builds the `table` parameter description from `TELEMETRY_TABLES` at import time. Adding a new table automatically updates the schema.
+
+2. **Formalize work_context_stub TOOL_SCHEMA:** Moved from inline dict in `serve.py` → dedicated `TOOL_SCHEMA`, `TOOL_DEFINITIONS`, `TOOL_CALLABLES` in module. All three tools (sql_telemetry, work_context_stub, action_stub) now follow consistent pattern.
+
+3. **Fuzzy cluster→service mapping:** New `_CLUSTER_TO_SERVICE` dict maps cluster name fragments (e.g., `prod-east`→`platform`, `billing`→`billing`) to valid service categories in get_work_context.
+
+### Rationale
+
+- Keeps schema in sync with data automatically — no manual updates needed when columns change  
+- Single source of truth for each tool (no duplication in serve.py)  
+- LLM produces fewer hallucinated parameters and correct SQL syntax  
+- Cluster names from telemetry naturally map to valid service enums
+
+### Impact
+
+- ✅ 329 tests pass (baseline hold, no regressions)  
+- ✅ serve.py is thinner (no inline schema duplication)  
+- ✅ Reduced LLM hallucination class (wrong tables, wrong columns, wrong SQL dialect)  
+
+### Files Modified
+
+- `tools/sql_telemetry.py` (TELEMETRY_TABLES → dynamic schema, _CLUSTER_TO_SERVICE, _service_key)  
+- `tools/work_context_stub.py` (TOOL_SCHEMA formalized, service enum added)  
+
+---
+
+## System Prompt Must Reference Actual Function Names and Schema
+
+**Date:** 2025-07-17  
+**Author:** Holden (Lead)  
+**Status:** DECIDED + IMPLEMENTED  
+**Impact:** Prompt-to-code alignment; eliminates function name mismatch and schema hallucination  
+
+### Context
+
+The system prompt in `agent/system_prompt.md` referenced incorrect tool function names and lacked schema visibility:
+
+- Referenced `sql_telemetry` but actual function is `query_telemetry` (TOOL_SCHEMA source of truth)  
+- Referenced `work_context` but actual function is `get_work_context` (alias, line 224)  
+- LLM had no visibility into table names, column names, aggregate keys, or SQL dialect  
+
+### Decision
+
+1. **Fix function name references** to match actual registered names:
+   - `query_telemetry` (defined in tools/sql_telemetry.py TOOL_SCHEMA)  
+   - `get_work_context` (alias in tools/work_context_stub.py)  
+
+2. **Add Schema Reference section** to system prompt with:
+   - Table & column inventory  
+   - Valid service categories (platform, billing, storage, compute, network, default)  
+   - SQLite syntax guidance (datetime, COUNT DISTINCT, JSON extraction)  
+   - Aggregate key patterns (GROUP BY service, region, resource_id, timestamp bins)  
+
+### Rationale
+
+- **Critical alignment:** LLM can only call functions it knows about by name; mismatch = silent failure  
+- **Schema visibility eliminates hallucination class:** Reduces "table not found," "unknown column," wrong SQL dialect  
+- **Highest ROI fix:** No code changes to tools, pure LLM instruction refinement  
+
+### Convention Established
+
+**Team-wide:** System prompt function names MUST always match `TOOL_SCHEMA["function"]["name"]` and callable `__name__` attributes. On tool add/rename, system prompt updates must happen in the same PR.
+
+### Impact
+
+- ✅ Manual validation confirmed all function names now correct  
+- ✅ Mock LLM call with new prompt produces correct function names  
+- ✅ Schema Reference section tested with both valid and invalid queries  
+
+### Files Modified
+
+- `agent/system_prompt.md` (function names fixed, Schema Reference section added)  
+
+---
+
+**Scribe Log:** 2026-04-07T23:35 UTC — Decisions merged from inbox
 **Date:** 2026-04-05  
 **Status:** ✅ APPROVED — Feature Complete & Ready for Deployment
 
