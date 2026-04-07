@@ -33,6 +33,7 @@ import json
 import logging
 import os
 import sqlite3
+import asyncio
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -106,38 +107,44 @@ def _ensure_db() -> None:
 # Tool dispatch
 # ---------------------------------------------------------------------------
 
-def _call_tool(name: str, arguments: str) -> str:
+async def _call_tool(name: str, arguments: str) -> str:
     """Dispatch a function-call from the LLM to the local tool surface."""
-    from tools.sql_telemetry import TOOL_CALLABLES as SQL_CALLABLES
+    from tools.sql_telemetry import query_telemetry as async_query_telemetry
     from tools.action_stub import propose_change, request_approval
     from tools.work_context_stub import get_full_context, ENABLE_WORK_IQ
 
-    # Build full tool callables dict
-    tool_callables = dict(SQL_CALLABLES)
-    tool_callables["propose_change"] = propose_change
-    tool_callables["request_approval"] = request_approval
-    if ENABLE_WORK_IQ:
-        # Map get_work_context to get_full_context for compatibility
-        tool_callables["get_work_context"] = get_full_context
+    # Async tool callables (query_telemetry is natively async)
+    async_callables: dict = {"query_telemetry": async_query_telemetry}
 
-    if name not in tool_callables:
-        return json.dumps({"error": f"Unknown tool: {name}"})
+    # Sync tool callables
+    sync_callables: dict = {
+        "propose_change": propose_change,
+        "request_approval": request_approval,
+    }
+    if ENABLE_WORK_IQ:
+        sync_callables["get_work_context"] = get_full_context
+
     try:
         kwargs = json.loads(arguments) if arguments else {}
-        result = tool_callables[name](**kwargs)
-        # If result is already a string (from action_stub/work_context), return it
-        if isinstance(result, str):
-            return result
-        return json.dumps(result)
-    except (json.JSONDecodeError, TypeError, ValueError, FileNotFoundError, OSError) as exc:
+
+        if name in async_callables:
+            result = await async_callables[name](**kwargs)
+        elif name in sync_callables:
+            result = sync_callables[name](**kwargs)
+        else:
+            return json.dumps({"error": f"Unknown tool: {name}"})
+
+        return result if isinstance(result, str) else json.dumps(result)
+    except Exception as exc:
+        logger.exception("Tool %s failed", name)
         return json.dumps({"error": str(exc)})
 
 # ---------------------------------------------------------------------------
 # Agent loop
 # ---------------------------------------------------------------------------
 
-def _run_agent_conversation(messages: list[dict], endpoint: str, deployment: str, api_version: str) -> dict:
-    """Run agent loop with Azure OpenAI function-calling.
+async def _run_agent_conversation(messages: list[dict], endpoint: str, deployment: str, api_version: str) -> dict:
+    """Run agent loop with Azure OpenAI function-calling (async).
     
     Returns:
         {"content": str, "error": str | None}
@@ -177,11 +184,22 @@ def _run_agent_conversation(messages: list[dict], endpoint: str, deployment: str
         }
         tool_definitions.append(work_context_def)
 
-    client = AzureOpenAI(
-        azure_endpoint=endpoint,
-        api_version=api_version,
-        # Uses DefaultAzureCredential / AZURE_OPENAI_API_KEY from env automatically
-    )
+    # --- Fix #1: Explicit Azure AD token provider for the openai library ---
+    try:
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+        credential = DefaultAzureCredential()
+        token_provider = get_bearer_token_provider(
+            credential, "https://cognitiveservices.azure.com/.default"
+        )
+        client = AzureOpenAI(
+            azure_endpoint=endpoint,
+            azure_ad_token_provider=token_provider,
+            api_version=api_version,
+        )
+    except Exception as exc:
+        logger.exception("Azure OpenAI client initialization failed")
+        return {"content": "", "error": f"Auth/client init failed: {exc}"}
 
     # Prepend system prompt
     conversation: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] + messages
@@ -189,7 +207,9 @@ def _run_agent_conversation(messages: list[dict], endpoint: str, deployment: str
     max_tool_rounds = 8
     for _round in range(max_tool_rounds):
         try:
-            response = client.chat.completions.create(
+            # Run sync OpenAI call in thread pool to avoid blocking event loop
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
                 model=deployment,
                 messages=conversation,  # type: ignore[arg-type]
                 tools=tool_definitions,  # type: ignore[arg-type]
@@ -206,7 +226,7 @@ def _run_agent_conversation(messages: list[dict], endpoint: str, deployment: str
 
         if choice.finish_reason == "tool_calls" and message.tool_calls:
             for tc in message.tool_calls:
-                tool_result = _call_tool(tc.function.name, tc.function.arguments)
+                tool_result = await _call_tool(tc.function.name, tc.function.arguments)
                 conversation.append(
                     {
                         "role": "tool",
@@ -237,15 +257,27 @@ async def _responses_handler(request) -> object:
             status=400,
         )
 
-    # Extract input (can be a string or a messages array)
+    # Extract input (can be a string, list, or messages dict)
     input_data = body.get("input")
     if isinstance(input_data, str):
         messages = [{"role": "user", "content": input_data}]
+    elif isinstance(input_data, list):
+        # Foundry Responses API v1 sends input as array of message objects
+        messages = []
+        for item in input_data:
+            if isinstance(item, dict):
+                role = item.get("role", "user")
+                content = item.get("content", "")
+                # Content may be a string or array of content parts
+                if isinstance(content, list):
+                    text_parts = [p.get("text", "") for p in content if p.get("type") in ("input_text", "text")]
+                    content = " ".join(text_parts)
+                messages.append({"role": role, "content": content})
     elif isinstance(input_data, dict) and "messages" in input_data:
         messages = input_data["messages"]
     else:
         return web.json_response(
-            {"error": "Invalid input format. Expected string or {messages: [...]}"},
+            {"error": "Invalid input format. Expected string, list, or {messages: [...]}"},
             status=400,
         )
 
@@ -274,7 +306,7 @@ async def _responses_handler(request) -> object:
     logger.debug(f"Processing conversation with {len(messages)} messages")
 
     # Run agent loop
-    result = _run_agent_conversation(messages, endpoint, deployment, api_version)
+    result = await _run_agent_conversation(messages, endpoint, deployment, api_version)
 
     response_id = f"resp_{uuid.uuid4().hex}"
 
@@ -286,7 +318,7 @@ async def _responses_handler(request) -> object:
                 {
                     "type": "message",
                     "role": "assistant",
-                    "content": f"Error: {result['error']}"
+                    "content": [{"type": "output_text", "text": f"Error: {result['error']}"}],
                 }
             ],
             "status": "failed",
@@ -299,7 +331,7 @@ async def _responses_handler(request) -> object:
             {
                 "type": "message",
                 "role": "assistant",
-                "content": result["content"],
+                "content": [{"type": "output_text", "text": result["content"]}],
             }
         ],
         "status": "completed",
@@ -410,7 +442,6 @@ def main() -> None:
     logger.info("Endpoints: POST /responses, GET /health, GET /")
 
     from aiohttp import web
-    import asyncio
 
     app = asyncio.run(_init_app())
     web.run_app(app, host="0.0.0.0", port=port, print=None, access_log=logger)

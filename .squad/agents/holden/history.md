@@ -143,3 +143,15 @@
 - **Change:** Added a blockquote-style link to `https://tammym-demos.github.io/Agentic-Ops-Advisor/` right after the project description, before the Table of Contents. Describes it as the interactive overview site covering architecture, Work IQ integration, evaluation framework, and the GitHub-to-Azure pipeline.
 - **Style:** Used `> 🌐` blockquote format consistent with the existing disclaimer banners. 1 line, no structural changes to the README.
 - **Rationale:** Demo is tomorrow — visitors and stakeholders need a one-click path to the polished overview site.
+
+### 2026-04-10: serve.py Tool Execution Diagnostic (Foundry Playground Bug)
+- **Context:** Run #84 deployed hosted agent successfully, but Foundry Playground shows raw telemetry query text instead of executed tool results. Tammy reported tools are NOT auto-executing.
+- **Root cause:** FOUR compounding bugs in `scripts/serve.py`:
+  1. **Auth gap (P0):** `AzureOpenAI()` at line 180 has no credentials. The comment claiming `DefaultAzureCredential` is wrong — the `openai` library does NOT use Azure SDK credentials automatically. Needs explicit `azure_ad_token_provider`. Constructor crash is also unhandled (outside try/except).
+  2. **Event loop conflict (P0):** `_sync_query_telemetry` (sql_telemetry.py:398) calls `asyncio.run()` from within the aiohttp event loop → RuntimeError. Not caught by `_call_tool`'s exception handler (only catches 5 specific exception types, not RuntimeError).
+  3. **Response format (P1):** `content` field returned as plain string; Foundry Responses API v1 expects array of content blocks `[{"type": "output_text", "text": "..."}]`.
+  4. **Input format (P1):** Parser handles string and dict but not list format. Foundry can send `input` as a list of message items.
+- **Key architecture insight:** `serve.py` (manual openai client + tool loop) vs `agent.py` (Azure Agent SDK with auto-dispatch) — same problem, different SDKs, different auth patterns. The auth pattern from `agent.py` (`DefaultAzureCredential`) must be adapted for the `openai` library's `azure_ad_token_provider` interface.
+- **Deploy.yml observation:** `HostedAgentDefinition` correctly omits tool definitions (container handles them), but doesn't set `AZURE_OPENAI_API_KEY` env var (intentional — should use managed identity, but serve.py doesn't implement that).
+- **Assignment:** Naomi (Backend), ~2.5h total.
+- **Decision written to:** `.squad/decisions/inbox/holden-serve-review.md`

@@ -223,3 +223,21 @@
 - **BCP081 note:** Warning about `Microsoft.CognitiveServices/accounts/projects@2024-10-01` is informational — Bicep can't validate the resource properties but it won't block deployment.
 - **Files modified:** `.github/workflows/deploy.yml`, `.github/workflows/ci-eval.yml`, `infra/main-rg.bicep` (new), `scripts/grant-sp-permissions.sh` (new)
 - **Status:** ✓ Complete. Pipeline will auto-recover with RG-scoped Contributor. Demo unblocked.
+
+### 2026-04-07: Hosted Agent Docker & Manifest Update (Issue #83)
+- **Task:** Migrate from local-run agent to hosted agent on Azure AI Foundry Agent Service
+- **Changes to Dockerfile:**
+  1. Changed EXPOSE from 8080 → 8088 (Foundry standard port)
+  2. Added COPY static/ static/ to include static assets
+  3. Added MODE=serve environment variable (default: "serve")
+  4. Updated HEALTHCHECK to use port 8088
+  5. Changed ENTRYPOINT from scripts/run_local.py → scripts/serve.py
+  6. Kept all existing build steps (SQLite seeding, ODBC driver, multi-stage optimization)
+- **Changes to agent.yaml:**
+  1. Updated container port from 8080 → 8088
+  2. Added protocol section: 	ype: responses, version: v1 (Foundry Responses API)
+  3. Kept all existing tool definitions, environment variables, resource configs
+  4. Updated port comment from "agent HTTP server" → "hosted agent HTTP server"
+- **Pattern:** Hosted agents must expose POST /responses (Foundry Responses API) and GET /health on port 8088. The entrypoint (scripts/serve.py) implements this — Naomi is creating that file in parallel.
+- **Files modified:** Dockerfile (+4/-3), gent.yaml (+8/-1)
+- **Status:** ✓ Complete. Docker config and manifest now ready for hosted agent deployment pattern.
