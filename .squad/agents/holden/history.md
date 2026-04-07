@@ -218,3 +218,52 @@
 - **Framework Assessment:** Merged to `.squad/decisions.md` (replaces inbox file)
 - **Outcome:** Team synchronized on framework modernization priorities. Run #95 issue identified as critical blocker for Playground demo. azd migration timeline confirmed (2–3 sprints).
 - **Status:** ✅ Framework review complete, cross-team coordination logged, inbox merged to decisions.md
+
+### 2026-06-01: API Unification Decision — Removing Legacy agent.py Path
+
+**Context:** Project has two agent orchestration paths — `agent/agent.py` (legacy Azure AI Agent Service threads/runs API) and `scripts/serve.py` (production Foundry Responses API). Created confusion, duplicate tool dispatch logic, maintenance burden.
+
+**Analysis:**
+- **agent.py usage:** NOT actively used
+  - `run_local.py` does NOT import AgentOpsAdvisor — implements own OpenAI chat loop
+  - `eval/run_eval.py` tries to import `run_agent` (doesn't exist), falls back to stub
+  - Only test coverage exists (`test_agent.py` — 742 lines of mocks)
+- **serve.py:** Production-ready Responses API, active test coverage, correct pattern
+- **SDK check:** `azure-ai-agents>=1.0.0` is valid (released May 2025), but project has moved to direct OpenAI integration
+
+**Decision: OPTION B — Remove agent.py entirely**
+
+**Rationale:**
+1. No active consumers (run_local.py and serve.py already self-contained)
+2. Broken eval integration (imports non-existent function)
+3. Technical debt with no benefit
+4. Unification goal: standardize on Responses API (serve.py)
+
+**Actions Taken:**
+- ✅ Wrote decision to `.squad/decisions/inbox/holden-agent-py-evaluation.md`
+- ✅ Removed `azure-ai-agents>=1.0.0` from `requirements.txt` (not needed)
+- ✅ Tightened SDK upper bounds: `azure-ai-projects>=2.0.0,<3.0.0`, `openai>=1.12.0,<2.0.0`
+
+**Next Steps:** Delegate removal to Naomi/Amos:
+1. Remove `agent/agent.py` (460 lines)
+2. Remove `tests/test_agent.py` (742 lines)
+3. Update `tests/test_tools.py` to remove AgentOpsAdvisor import test
+4. Update README to clarify serve.py is production path
+
+**Impact:**
+- ✅ Single source of truth (serve.py pattern)
+- ✅ Remove 1,200+ lines of unused code/tests
+- ✅ Remove dependency on legacy API
+- ✅ Clearer onboarding
+- ❌ If future work needs Agent Service, must rebuild (low risk)
+
+**Key Learning:** When APIs diverge, audit actual usage before keeping "just in case" code. The eval integration attempt revealed agent.py was already dead code.
+
+### 2026-04-07: Wave 1 — agent.py Removal Decision
+- **Task:** Evaluate agent.py legacy path (dead code analysis)
+- **Finding:** agent.py NOT actively used — run_local.py, serve.py, eval all moved to direct OpenAI integration
+- **Decision:** OPTION B — Remove agent.py entirely (removes ~750 lines of code + test mocks)
+- **Rationale:** Single source of truth (Responses API pattern); fixes broken eval integration
+- **SDK audit:** Tightened azure-ai-projects>=2.0.0,<3.0.0 and openai>=1.12.0,<2.0.0
+- **Action items:** Remove agent/agent.py, tests/test_agent.py, update requirements.txt
+- **Status:** ✅ DECIDED, awaiting implementation

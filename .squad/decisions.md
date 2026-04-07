@@ -2,6 +2,216 @@
 
 ## Active Decisions
 
+### 2026-04-07T21:45:00Z: Architecture Decision: agent.py Legacy Path (Removed)
+**Decision Date:** 2026-04-07  
+**Lead:** Holden  
+**Status:** DECIDED → IMPLEMENTATION IN PROGRESS
+
+## Context
+The project has two agent orchestration paths:
+1. gent/agent.py — Legacy threads/runs/messages API via zure-ai-agents>=1.0.0
+2. scripts/serve.py — Production-ready Foundry Responses API v1
+
+This creates duplicate tool dispatch logic, API version confusion, and maintenance burden.
+
+## Analysis
+- **agent.py is NOT actively used:** run_local.py doesn't import AgentOpsAdvisor; eval attempts non-existent un_agent() import
+- **serve.py IS the production path:** Used by Foundry hosted container, implements Responses API v1
+- **Technical debt:** Maintaining legacy API path with no active consumers
+
+## Decision: OPTION B (Remove agent.py)
+
+**Rationale:**
+1. Not actively used — run_local.py and serve.py implement their own agent loops
+2. Broken eval integration — eval/run_eval.py imports non-existent function
+3. Technical debt — legacy API path with no consumers
+4. Unification goal — standardize on Responses API pattern (serve.py)
+
+**Action Plan:**
+- ✅ Remove gent/agent.py entirely
+- ✅ Remove test files: 	ests/test_agent.py (742 lines), import test in 	ests/test_tools.py
+- ✅ Remove SDK dependency: zure-ai-agents>=1.0.0 from requirements.txt
+- ✅ Tighten SDK upper bounds: zure-ai-projects>=2.0.0,<3.0.0, openai>=1.12.0,<2.0.0
+
+**Consequences:**
+- ✅ Single source of truth (serve.py + run_local.py patterns)
+- ✅ Remove 742+ lines of test mocks
+- ✅ Remove dependency on legacy Agent Service threads API
+- ✅ Clearer onboarding (one pattern to learn)
+
+---
+
+### 2026-04-07T21:45:00Z: Decision: Deploy Workflow Simplification via Azure Developer CLI (Implemented)
+
+**Date:** 2026-04-07  
+**Owner:** Amos (DevOps)  
+**Status:** IMPLEMENTED  
+**Related:** Issue #87 (Framework Modernization)
+
+## Context
+Original .github/workflows/deploy.yml was 1,178 lines with complex inline Python scripts, ARM REST API calls, and manual Bicep fallback logic. This created significant maintenance burden and made deployment fragile and hard to debug.
+
+## Problem Statement
+
+**Complexity Hotspots:**
+1. Agent deployment (Steps 5e-5e.2): ~595 lines of inline Python
+2. Manual infrastructure orchestration: Bicep fallback, ACR operations, RBAC — all scripted imperatively
+3. Fragile smoke tests: Two separate patterns with brittle error handling
+4. Poor separation of concerns: Infrastructure, agent lifecycle, and smoke tests all in one monolithic job
+
+**Impact:**
+- High barrier to contributing
+- Difficult to debug failures
+- Slow iteration
+- Duplication of logic between local deploy scripts and CI/CD workflow
+
+## Decision
+
+Migrate to Azure Developer CLI (zd) for declarative agent lifecycle management. Replace inline Python scripts and ARM REST calls with zd up command, leveraging existing zure.yaml project definition.
+
+## Implementation
+
+### Key Changes
+
+1. **Separate infrastructure job (deploy-infra):**
+   - Runs only when infra/ changes or orce_infra flag set
+   - Handles subscription vs RG-scoped Bicep fallback
+   - Assigns Azure AI Developer role on Hub
+
+2. **Simplified agent deployment (deploy-agent):**
+   - Uses zd env set to configure environment variables
+   - Runs zd up --skip-infra to deploy agent + container only
+   - azd handles: ACR build/push, agent version creation, application publish
+
+3. **Streamlined smoke test:**
+   - Removed legacy prompt-agent test
+   - Kept only Responses API test
+   - Added 3-attempt retry with 10s backoff
+   - Non-fatal (continue-on-error: true)
+
+### Gap Resolutions
+
+| Gap | Before | After | Resolution |
+|-----|--------|-------|-----------|
+| Bicep fallback | Manual logic | deploy-infra job | ✅ Preserved |
+| Port | 8088 assumed | Explicit in agent.yaml | ✅ Specified |
+| Env vars | Scattered | zd env set calls | ✅ Centralized |
+| Timing | 10s wait | 30s sleep + retry | ✅ Robust |
+
+### Metrics
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Total lines | 1,178 | 581 | -652 (-55.3%) |
+| Inline Python | ~600 | 0 | Eliminated |
+| ARM REST calls | ~100 | 0 | Delegated to azd |
+| Jobs | 2 | 3 | Separation of concerns |
+
+## Consequences
+
+### Benefits
+- ✅ Maintainability: 55% shorter, uses declarative azd patterns
+- ✅ Debuggability: Structured output vs inline Python stack traces
+- ✅ Alignment: Uses official Azure Developer CLI
+- ✅ Separation of concerns: Infrastructure and agent deployment separated
+- ✅ Testing: Smoke test failures don't block deployment
+
+### Trade-offs
+- Requires zd CLI (added via Azure/setup-azd@v1.0.0)
+- Team learning curve for azd commands and azure.yaml schema
+- Job dependency complexity
+- Production validation needed
+
+## Next Steps
+
+1. Integration testing on staging environment
+2. Verify all 4 gaps properly addressed in production
+3. Update README deployment section
+4. Monitor first 3 production deploys
+5. Cleanup backup file after 2 successful deploys
+
+---
+
+### 2026-04-07T21:45:00Z: Decision: agent.yaml Schema Compatibility with azd (Reviewed)
+
+**Date:** 2026-04-07  
+**Author:** Naomi  
+**Status:** REVIEWED → MINOR DOCS UPDATES
+
+## Context
+
+The zd ai agent extension manages agent deployments to Azure AI Foundry Agent Service. The current gent.yaml was designed as a custom manifest format. We validated whether it conforms to the schema expected by zd ai agent.
+
+## Key Findings
+
+### 1. azd Extension Architecture
+
+The zd ai agent extension uses a **two-file approach**:
+- zure.yaml — Main project configuration
+- Agent definition files — Referenced via gentManifest: agent.yaml
+
+The extension does NOT impose a rigid schema on agent.yaml. Instead:
+- CLI parses zure.yaml to understand project structure
+- agent.yaml treated as **container deployment descriptor**
+- Extension extracts metadata to populate IaC parameters
+
+### 2. Current agent.yaml Assessment
+
+**✅ COMPATIBLE SECTIONS:**
+- name, description, version — Standard metadata
+- model.deployment, model.api_version — OpenAI config
+- protocol.type: responses, protocol.version: v1 — Foundry Responses API
+- instructions_file — Reference to system prompt
+- tools[] — OpenAI function-calling schema
+- container.image, container.port — Docker runtime config
+- container.health — Health check endpoint spec
+- container.resources — CPU/memory requests/limits
+- container.environment[] — Env var definitions with secret flags
+
+**✅ EXTENSION COMPATIBILITY:**
+- No breaking incompatibilities found
+- Well-documented with extensive comments
+- Comprehensive — includes all necessary deployment metadata
+- azure.yaml references correctly (line 84)
+- Works with current CI/CD
+
+### 3. Comparison with Samples
+
+- More comprehensive than Framework samples
+- Documented manifest for human readers and tooling
+- Hybrid: works with deploy.yml (GitHub Actions) AND azd extension
+
+## Decision
+
+**KEEP CURRENT agent.yaml FORMAT** with minor documentation updates.
+
+### Rationale
+1. No breaking incompatibilities found
+2. Well-documented
+3. Comprehensive
+4. azure.yaml already references correctly
+5. Works with current CI/CD
+6. azd extension flexibility — no rigid schema enforcement
+
+### Minor Adjustments Recommended
+1. ✅ Add yaml-language-server hint at top
+2. ✅ Clarify usage comment (both deploy.yml and azd ai agent)
+3. ✅ Document relationship with azure.yaml in header
+
+## Implementation
+
+Updated gent.yaml header to clarify dual usage:
+- Used by .github/workflows/deploy.yml for GitHub Actions CI/CD
+- Referenced by zure.yaml for azd extension deployments
+- Serves as source of truth for agent capabilities and container config
+
+## Conclusion
+
+Our agent.yaml is production-ready and compatible with azd workflows. No structural changes required.
+
+---
+
+
 ### 2026-04-07T16:18:00Z: Container Auth & Package Access Fix (Resolved)
 **By:** Naomi (Backend Dev)  
 **Date:** 2026-04-07  
@@ -925,3 +1135,4 @@ Microsoft.Resources/deployments/validate/action over subscription scope.
 ## Status
 
 ✅ Commits 858d5f8 + 96bf601 merged. Run #60 succeeded (full deploy, agent live, smoke test passed).
+

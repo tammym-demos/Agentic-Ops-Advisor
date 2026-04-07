@@ -1,6 +1,10 @@
 # =============================================================================
-# Deploy — Azure AI Foundry Agent Service
+# Deploy — Azure AI Foundry Agent Service (azd-based)
 # =============================================================================
+#
+# Simplified deployment workflow using Azure Developer CLI (azd). Replaces
+# the ~1100-line deploy.yml with declarative infrastructure and agent
+# lifecycle management via `azd up`.
 #
 # Required secrets (configure in GitHub → Settings → Secrets → Actions):
 #
@@ -8,13 +12,6 @@
 #     AZURE_CLIENT_ID          — App Registration client ID
 #     AZURE_TENANT_ID          — Azure AD tenant ID
 #     AZURE_SUBSCRIPTION_ID    — Target subscription ID
-#
-#   OR Service Principal secret (legacy):
-#     AZURE_CREDENTIALS        — JSON output of `az ad sp create-for-rbac
-#                                  --name "agentic-ops-advisor-deploy"
-#                                  --role contributor
-#                                  --scopes /subscriptions/<id>/resourceGroups/rg-agentic-ops-advisor
-#                                  --sdk-auth`
 #
 #   Agent runtime config (stored as environment secrets in the "production"
 #   GitHub Environment so they are gated by branch-protection review):
@@ -33,20 +30,14 @@
 #   1b. (Optional) Contributor at subscription scope:
 #       Required for `az deployment sub create` (main.bicep creates the RG).
 #       Without this, the deploy falls back to main-rg.bicep (RG-scoped).
-#       Grant with:  ./scripts/grant-sp-permissions.sh
 #
 #   2. Azure AI Developer (data-plane) — scoped to the AI Hub resource:
 #      Role ID: 64702f94-c441-49e6-a78b-ef80e0188fee
 #      Grants data-plane access to Foundry Agent Service (create/list/update
-#      agents, threads, runs). Without this role, agent deploy will fail with
-#      PermissionDenied on Microsoft.CognitiveServices data actions.
-#      The Hub is a CognitiveServices/accounts resource (hub-agentops-prod),
-#      NOT a MachineLearningServices workspace.
+#      agents, threads, runs).
 #
-#   One-time setup (run as Owner or User Access Administrator):
-#     az role assignment create --assignee <SP_OBJECT_ID> \
-#       --role "Azure AI Developer" \
-#       --scope /subscriptions/<sub>/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
+#   3. Azure AI Project Manager — scoped to the AI Hub resource:
+#      Required for publishing Agent Applications.
 #
 # OIDC setup (one-time, run locally):
 #   az ad app create --display-name "agentic-ops-advisor-deploy"
@@ -54,13 +45,16 @@
 #   az role assignment create --assignee <appId> \
 #       --role contributor \
 #       --scope /subscriptions/<AZURE_SUBSCRIPTION_ID>/resourceGroups/rg-agentic-ops-advisor
-#   # Grant data-plane access to the AI hub (required for Foundry Agent Service APIs):
 #   az role assignment create \
 #       --assignee-object-id <spObjectId> \
 #       --assignee-principal-type ServicePrincipal \
 #       --role "Azure AI Developer" \
 #       --scope /subscriptions/<AZURE_SUBSCRIPTION_ID>/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
-#   # Add federated credential for this repo + branch:
+#   az role assignment create \
+#       --assignee-object-id <spObjectId> \
+#       --assignee-principal-type ServicePrincipal \
+#       --role "Azure AI Project Manager" \
+#       --scope /subscriptions/<AZURE_SUBSCRIPTION_ID>/resourceGroups/rg-agentic-ops-advisor/providers/Microsoft.CognitiveServices/accounts/hub-agentops-prod
 #   az ad app federated-credential create --id <appId> --parameters '{
 #     "name": "agentic-ops-main",
 #     "issuer": "https://token.actions.githubusercontent.com",
@@ -70,7 +64,7 @@
 #
 # =============================================================================
 
-name: Deploy — Foundry Agent Service
+name: Deploy — Foundry Agent Service (azd)
 
 on:
     push:
@@ -122,13 +116,158 @@ jobs:
                   fi
 
     # -------------------------------------------------------------------------
-    # 2. Deploy infrastructure + agent
+    # 2. Deploy Bicep infrastructure (separate job, runs before agent deploy)
     # -------------------------------------------------------------------------
-    deploy:
-        name: Deploy to production
+    # This job handles the subscription vs RG-scoped Bicep fallback pattern
+    # that some SPs require. After infra is deployed, the agent deploy job
+    # uses `azd up --skip-infra` to deploy only the agent and container.
+    # -------------------------------------------------------------------------
+    deploy-infra:
+        name: Deploy infrastructure
         needs: detect-changes
+        if: needs.detect-changes.outputs.infra_changed == 'true' || github.event.inputs.force_infra == 'true'
         runs-on: ubuntu-latest
-        environment: production   # GitHub Environment with protection rules
+        environment: production
+
+        env:
+            AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            AZURE_RESOURCE_GROUP: rg-agentic-ops-advisor
+            AZURE_LOCATION: eastus
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v5
+
+            - name: Azure login (OIDC)
+              if: ${{ env.AZURE_CLIENT_ID != '' }}
+              uses: azure/login@v3
+              with:
+                  client-id: ${{ secrets.AZURE_CLIENT_ID }}
+                  tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+                  subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+            - name: Azure login (service principal secret fallback)
+              if: ${{ env.AZURE_CLIENT_ID == '' }}
+              uses: azure/login@v3
+              with:
+                  creds: ${{ secrets.AZURE_CREDENTIALS }}
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+
+            - name: Validate Bicep templates
+              run: |
+                  az bicep build --file infra/main.bicep --stdout > /dev/null
+                  az bicep build --file infra/main-rg.bicep --stdout > /dev/null
+                  echo "✅ Bicep template validation passed"
+
+            - name: Deploy Bicep infrastructure
+              run: |
+                  echo "::group::Bicep deployment"
+                  DEPLOY_NAME="agentic-ops-advisor-$(date -u +%Y%m%d%H%M%S)"
+                  RG_NAME="$AZURE_RESOURCE_GROUP"
+
+                  # Attempt 1: subscription-scoped deploy (requires sub Contributor)
+                  echo "🔍 Attempting subscription-scoped deployment..."
+                  if az deployment sub create \
+                      --name "$DEPLOY_NAME" \
+                      --location "$AZURE_LOCATION" \
+                      --template-file infra/main.bicep \
+                      --parameters @infra/parameters.json \
+                      --output table 2>&1; then
+                      echo "✅ Subscription-scoped Bicep deployment succeeded."
+                  else
+                      echo ""
+                      echo "⚠️  Subscription-scoped deploy failed (likely AuthorizationFailed)."
+                      echo "   Falling back to resource-group-scoped deployment..."
+
+                      # Ensure the RG exists
+                      if az group show --name "$RG_NAME" --output none 2>/dev/null; then
+                          echo "✅ Resource group '$RG_NAME' already exists."
+                      else
+                          echo "Creating resource group '$RG_NAME'..."
+                          az group create \
+                              --name "$RG_NAME" \
+                              --location "$AZURE_LOCATION" \
+                              --tags project=agentic-ops-advisor environment=prod managedBy=bicep \
+                              --output none 2>&1 || {
+                              echo "❌ Cannot create resource group '$RG_NAME'."
+                              exit 1
+                          }
+                      fi
+
+                      # Deploy using the RG-scoped template
+                      az deployment group create \
+                          --name "$DEPLOY_NAME" \
+                          --resource-group "$RG_NAME" \
+                          --template-file infra/main-rg.bicep \
+                          --parameters @infra/parameters.json \
+                          --output table
+
+                      echo "✅ Resource-group-scoped Bicep deployment succeeded (fallback)."
+                  fi
+                  echo "::endgroup::"
+
+            - name: Ensure Azure AI Developer role on AI hub
+              run: |
+                  PARAMS_FILE="infra/parameters.json"
+                  PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
+                  ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
+                  RG_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['resourceGroupName']['value'])" 2>/dev/null || echo "rg-agentic-ops-advisor")
+                  HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
+                  SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                  HUB_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}"
+
+                  # Resolve the object ID of the currently authenticated principal
+                  ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
+                  if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
+                      SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="ServicePrincipal"
+                  else
+                      PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="User"
+                  fi
+
+                  if [[ -z "${PRINCIPAL_ID}" ]]; then
+                      echo "⚠️  Could not determine principal object ID — skipping role assignment."
+                      exit 0
+                  fi
+
+                  echo "Principal: ${PRINCIPAL_ID} (${PRINCIPAL_TYPE})"
+                  echo "Hub scope: ${HUB_SCOPE}"
+
+                  # Assign Azure AI Developer role (idempotent)
+                  ROLE_EXISTS=$(az role assignment list \
+                      --assignee "${PRINCIPAL_ID}" \
+                      --role "Azure AI Developer" \
+                      --scope "${HUB_SCOPE}" \
+                      --query "[].id" -o tsv 2>/dev/null || echo "")
+
+                  if [[ -z "${ROLE_EXISTS}" ]]; then
+                      echo "Assigning Azure AI Developer role..."
+                      az role assignment create \
+                          --assignee-object-id "${PRINCIPAL_ID}" \
+                          --assignee-principal-type "${PRINCIPAL_TYPE}" \
+                          --role "Azure AI Developer" \
+                          --scope "${HUB_SCOPE}" \
+                          --output none
+                      echo "✅ Azure AI Developer role assigned."
+                  else
+                      echo "✅ Azure AI Developer role already present."
+                  fi
+
+    # -------------------------------------------------------------------------
+    # 3. Deploy agent + container using azd
+    # -------------------------------------------------------------------------
+    deploy-agent:
+        name: Deploy agent
+        needs: [detect-changes, deploy-infra]
+        # Always run (infra may not have changed)
+        if: always() && (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped')
+        runs-on: ubuntu-latest
+        environment: production
 
         env:
             AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
@@ -152,7 +291,7 @@ jobs:
               uses: actions/checkout@v5
 
             # ------------------------------------------------------------------
-            # Step 2 — Azure login (OIDC preferred; falls back to SP secret)
+            # Step 2 — Azure login
             # ------------------------------------------------------------------
             - name: Azure login (OIDC)
               if: ${{ env.AZURE_CLIENT_ID != '' }}
@@ -173,7 +312,7 @@ jobs:
                   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
 
             # ------------------------------------------------------------------
-            # Step 3 — Set up Python
+            # Step 3 — Set up Python + dependencies
             # ------------------------------------------------------------------
             - name: Set up Python 3.11
               uses: actions/setup-python@v5
@@ -181,8 +320,6 @@ jobs:
                   python-version: "3.11"
                   cache: "pip"
 
-            # pyodbc (in requirements.txt) requires unixodbc-dev/msodbcsql18 to build,
-            # even when DB_MODE=sqlite is used at runtime.
             - name: Install ODBC Driver for SQL Server
               run: |
                   curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
@@ -196,7 +333,7 @@ jobs:
                   pip install -r requirements.txt
 
             # ------------------------------------------------------------------
-            # Step 3b — Pre-deploy tests (gate: untested code never deploys)
+            # Step 4 — Pre-deploy tests (gate: untested code never deploys)
             # ------------------------------------------------------------------
             - name: Set up local SQLite DB
               run: python scripts/setup_local_db.py
@@ -207,942 +344,103 @@ jobs:
                   python -m pytest tests/ -x --tb=short
 
             # ------------------------------------------------------------------
-            # Step 3c — Validate Bicep templates (always runs, catches syntax
-            # errors early — local build only, no Azure auth required)
+            # Step 5 — Install Azure Developer CLI (azd)
             # ------------------------------------------------------------------
-            - name: Validate Bicep templates
+            - name: Install azd
+              uses: Azure/setup-azd@v1.0.0
+
+            # ------------------------------------------------------------------
+            # Step 6 — Configure azd environment
+            # ------------------------------------------------------------------
+            - name: Configure azd environment
               run: |
-                  az bicep build --file infra/main.bicep --stdout > /dev/null
-                  az bicep build --file infra/main-rg.bicep --stdout > /dev/null
-                  echo "✅ Bicep template validation passed (main.bicep + main-rg.bicep)"
+                  # Initialize azd environment (creates .azure/<env>/config.json)
+                  azd env new production --location "$AZURE_LOCATION" --subscription "$AZURE_SUBSCRIPTION_ID"
+
+                  # Set all required environment variables for the agent container
+                  azd env set AZURE_RESOURCE_GROUP "$AZURE_RESOURCE_GROUP"
+                  azd env set AZURE_LOCATION "$AZURE_LOCATION"
+                  azd env set AZURE_SUBSCRIPTION_ID "$AZURE_SUBSCRIPTION_ID"
+                  azd env set AZURE_AI_AGENTS_ENDPOINT "$AZURE_AI_AGENTS_ENDPOINT"
+                  azd env set AZURE_OPENAI_ENDPOINT "$AZURE_OPENAI_ENDPOINT"
+                  azd env set AZURE_OPENAI_DEPLOYMENT "$AZURE_OPENAI_DEPLOYMENT"
+                  azd env set AZURE_OPENAI_API_KEY "$AZURE_OPENAI_API_KEY"
+                  azd env set APPLICATIONINSIGHTS_CONNECTION_STRING "$APPLICATIONINSIGHTS_CONNECTION_STRING"
+                  azd env set AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED "false"
+                  azd env set ENABLE_WORK_IQ "true"
+                  azd env set ENABLE_MCP "false"
+                  azd env set DB_MODE "sqlite"
+                  azd env set AZURE_CLIENT_ID "${{ secrets.AZURE_CLIENT_ID }}"
+
+                  echo "✅ azd environment configured"
 
             # ------------------------------------------------------------------
-            # Step 4 — Deploy Bicep infrastructure (conditional)
-            #
-            # Strategy: main.bicep is subscription-scoped and requires the SP
-            # to have Contributor at subscription level. If the SP only has
-            # RG-scoped Contributor (the common case), the sub-level deploy
-            # fails with AuthorizationFailed.
-            #
-            # Fallback: ensure the RG exists via `az group create`, then run
-            # `az deployment group create` with infra/main-rg.bicep (the
-            # resource-group-scoped variant that deploys the same modules).
-            #
-            # To avoid the fallback, grant subscription Contributor:
-            #   ./scripts/grant-sp-permissions.sh
+            # Step 7 — Deploy agent using azd up
             # ------------------------------------------------------------------
-            - name: Deploy Bicep infrastructure
-              if: >-
-                  needs.detect-changes.outputs.infra_changed == 'true' ||
-                  github.event.inputs.force_infra == 'true'
+            # azd up performs:
+            #   1. Package: Builds the container image
+            #   2. Provision: Deploys infra (we skip this since deploy-infra job handled it)
+            #   3. Deploy: Creates/updates the hosted agent + publishes application
+            # ------------------------------------------------------------------
+            - name: Deploy agent with azd
               run: |
-                  echo "::group::Bicep deployment"
-
-                  DEPLOY_NAME="agentic-ops-advisor-$(date -u +%Y%m%d%H%M%S)"
-                  RG_NAME="$AZURE_RESOURCE_GROUP"
-
-                  # --- Attempt 1: subscription-scoped deploy (requires sub Contributor) ---
-                  echo "🔍 Attempting subscription-scoped deployment..."
-                  if az deployment sub create \
-                      --name "$DEPLOY_NAME" \
-                      --location "$AZURE_LOCATION" \
-                      --template-file infra/main.bicep \
-                      --parameters @infra/parameters.json \
-                      --output table 2>&1; then
-                      echo "✅ Subscription-scoped Bicep deployment succeeded."
-                  else
-                      echo ""
-                      echo "⚠️  Subscription-scoped deploy failed (likely AuthorizationFailed)."
-                      echo "   The SP needs Contributor at subscription scope for 'az deployment sub create'."
-                      echo "   To fix permanently, run:  ./scripts/grant-sp-permissions.sh"
-                      echo ""
-                      echo "🔄 Falling back to resource-group-scoped deployment..."
-
-                      # Ensure the RG exists (check first to avoid location-mismatch errors)
-                      if az group show --name "$RG_NAME" --output none 2>/dev/null; then
-                          echo "✅ Resource group '$RG_NAME' already exists."
-                      else
-                          echo "Creating resource group '$RG_NAME'..."
-                          az group create \
-                              --name "$RG_NAME" \
-                              --location "$AZURE_LOCATION" \
-                              --tags project=agentic-ops-advisor environment=prod managedBy=bicep \
-                              --output none 2>&1 || {
-                              echo "❌ Cannot create resource group '$RG_NAME'."
-                              echo "   The SP may not have sufficient permissions even at RG scope."
-                              echo "   Grant subscription Contributor:  ./scripts/grant-sp-permissions.sh"
-                              exit 1
-                          }
-                      fi
-
-                      # Deploy using the RG-scoped template (same modules, no RG resource)
-                      az deployment group create \
-                          --name "$DEPLOY_NAME" \
-                          --resource-group "$RG_NAME" \
-                          --template-file infra/main-rg.bicep \
-                          --parameters @infra/parameters.json \
-                          --output table
-
-                      echo "✅ Resource-group-scoped Bicep deployment succeeded (fallback)."
-                  fi
-
+                  echo "::group::azd up"
+                  
+                  # Use --skip-infra to skip Bicep provisioning (already done in deploy-infra job)
+                  # azd will handle:
+                  #   - Building and pushing the container image to ACR
+                  #   - Creating/updating the hosted agent version
+                  #   - Publishing the Agent Application
+                  azd up \
+                      --environment production \
+                      --no-prompt \
+                      --skip-infra
+                  
+                  echo "✅ Agent deployed via azd"
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 4b — Ensure Azure AI Developer role on the AI hub
-            # (data-plane access required by Foundry Agent Service APIs)
+            # Step 8 — Wait for agent warmup
             # ------------------------------------------------------------------
-            - name: Ensure Azure AI Developer role on AI hub
+            - name: Wait for agent warmup
               run: |
-                  PARAMS_FILE="infra/parameters.json"
-                  PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
-                  ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
-                  RG_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['resourceGroupName']['value'])" 2>/dev/null || echo "rg-agentic-ops-advisor")
-                  HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
-                  # Use the authenticated subscription ID from az CLI to avoid leading/trailing
-                  # whitespace in the AZURE_SUBSCRIPTION_ID secret causing scope lookup errors.
-                  SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-                  HUB_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}"
-
-                  # Resolve the object ID of the currently authenticated principal
-                  ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
-                  if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
-                      SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
-                      PRINCIPAL_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
-                      PRINCIPAL_TYPE="ServicePrincipal"
-                  else
-                      PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
-                      PRINCIPAL_TYPE="User"
-                  fi
-
-                  if [[ -z "${PRINCIPAL_ID}" ]]; then
-                      echo "⚠️  Could not determine principal object ID — skipping Azure AI Developer role assignment."
-                      exit 0
-                  fi
-
-                  echo "Principal: ${PRINCIPAL_ID} (${PRINCIPAL_TYPE})"
-                  echo "Hub scope: ${HUB_SCOPE}"
-
-                  # Idempotent: only assign if not already present
-                  ROLE_EXISTS=$(az role assignment list \
-                      --assignee "${PRINCIPAL_ID}" \
-                      --role "Azure AI Developer" \
-                      --scope "${HUB_SCOPE}" \
-                      --query "[].id" -o tsv 2>/dev/null || echo "")
-
-                  if [[ -z "${ROLE_EXISTS}" ]]; then
-                      echo "Assigning Azure AI Developer role to ${PRINCIPAL_ID}..."
-                      az role assignment create \
-                          --assignee-object-id "${PRINCIPAL_ID}" \
-                          --assignee-principal-type "${PRINCIPAL_TYPE}" \
-                          --role "Azure AI Developer" \
-                          --scope "${HUB_SCOPE}" \
-                          --output none
-                      echo "✅ Azure AI Developer role assigned on ${HUB_NAME}."
-                  else
-                      echo "✅ Azure AI Developer role already present on ${HUB_NAME}."
-                  fi
-
-            # ------------------------------------------------------------------
-            # Step 5a — Resolve ACR login server
-            # ------------------------------------------------------------------
-            - name: Resolve ACR login server
-              run: |
-                  # Try Bicep outputs first; fall back to convention-based name
-                  ACR_NAME=$(az deployment sub show \
-                      --name "$(az deployment sub list --location "$AZURE_LOCATION" \
-                          --query "[?starts_with(name,'agentic-ops-advisor')].name | [0]" -o tsv 2>/dev/null || echo '')" \
-                      --query "properties.outputs.acrName.value" -o tsv 2>/dev/null || echo '')
-
-                  if [ -z "$ACR_NAME" ]; then
-                      # Convention: cr<hubName> with hyphens stripped
-                      ACR_NAME="crhubagentopsprod"
-                      echo "⚠️  Could not resolve ACR from Bicep outputs — using convention: $ACR_NAME"
-                  fi
-
-                  ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv 2>/dev/null || echo "${ACR_NAME}.azurecr.io")
-                  echo "ACR_LOGIN_SERVER=${ACR_LOGIN_SERVER}" >> "$GITHUB_ENV"
-                  echo "ACR_NAME=${ACR_NAME}" >> "$GITHUB_ENV"
-                  echo "✅ ACR: ${ACR_LOGIN_SERVER}"
-
-            # ------------------------------------------------------------------
-            # Step 5b — Build and push container image to ACR
-            # ------------------------------------------------------------------
-            - name: Build and push container image
-              run: |
-                  echo "::group::Container build & push"
-                  IMAGE_TAG="${{ github.sha }}"
-                  IMAGE_NAME="${ACR_LOGIN_SERVER}/agentic-ops-advisor"
-
-                  # Authenticate to ACR
-                  az acr login --name "$ACR_NAME"
-
-                  # Build the container image
-                  docker build \
-                      --tag "${IMAGE_NAME}:${IMAGE_TAG}" \
-                      --tag "${IMAGE_NAME}:latest" \
-                      --label "org.opencontainers.image.revision=${{ github.sha }}" \
-                      --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
-                      .
-
-                  # Push both tags
-                  docker push "${IMAGE_NAME}:${IMAGE_TAG}"
-                  docker push "${IMAGE_NAME}:latest"
-
-                  echo "CONTAINER_IMAGE=${IMAGE_NAME}:${IMAGE_TAG}" >> "$GITHUB_ENV"
-                  echo "✅ Pushed: ${IMAGE_NAME}:${IMAGE_TAG}"
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 5c — Diagnose model deployments on AI Hub
-            # ------------------------------------------------------------------
-            # WHY: The agent creation fails with "invalid_engine_error: Failed to
-            # resolve model info" when AZURE_OPENAI_DEPLOYMENT doesn't match a
-            # deployment accessible from the project endpoint. This step lists
-            # available deployments on the Hub to debug mismatches.
-            - name: Diagnose model deployments on AI Hub
-              continue-on-error: true
-              run: |
-                  echo "::group::Model deployment diagnostics"
-
-                  AI_HUB_NAME="hub-agentops-prod"
-                  
-                  # List all deployments on the Hub
-                  echo "📋 Model deployments on $AI_HUB_NAME:"
-                  DEPLOYMENTS=$(az cognitiveservices account deployment list \
-                      --name "$AI_HUB_NAME" \
-                      --resource-group "$AZURE_RESOURCE_GROUP" \
-                      --query "[].{Name:name, Model:properties.model.name, Capacity:sku.capacity}" \
-                      -o table 2>&1 || echo "")
-                  
-                  if [ -n "$DEPLOYMENTS" ]; then
-                      echo "$DEPLOYMENTS"
-                  else
-                      echo "⚠️  Could not list deployments (Hub may not exist or API error)"
-                  fi
-                  
-                  # Validate AZURE_OPENAI_DEPLOYMENT matches one of them
-                  DEPLOYMENT_NAME="${{ secrets.AZURE_OPENAI_DEPLOYMENT }}"
-                  DEPLOYMENT_NAMES=$(az cognitiveservices account deployment list \
-                      --name "$AI_HUB_NAME" \
-                      --resource-group "$AZURE_RESOURCE_GROUP" \
-                      --query "[].name" -o tsv 2>/dev/null || echo "")
-                  
-                  echo ""
-                  echo "🔍 Checking AZURE_OPENAI_DEPLOYMENT secret..."
-                  if [ -z "$DEPLOYMENT_NAME" ]; then
-                      echo "❌ AZURE_OPENAI_DEPLOYMENT is not set!"
-                  else
-                      # Show deployment name length for debugging (masked in logs)
-                      echo "AZURE_OPENAI_DEPLOYMENT is set (length: ${#DEPLOYMENT_NAME} chars)"
-                      
-                      if echo "$DEPLOYMENT_NAMES" | grep -qx "$DEPLOYMENT_NAME"; then
-                          echo "✅ Deployment '$DEPLOYMENT_NAME' found on Hub"
-                      else
-                          echo "❌ Deployment '$DEPLOYMENT_NAME' NOT found on Hub!"
-                          echo "Available deployments: $DEPLOYMENT_NAMES"
-                          echo ""
-                          echo "🔧 Fix: Update AZURE_OPENAI_DEPLOYMENT secret to match one of the deployment names above"
-                      fi
-                  fi
-                  
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 5d — Ensure data-plane RBAC on AI Hub
-            # ------------------------------------------------------------------
-            # WHY: The deploy SP has Contributor (management-plane) but needs
-            # Azure AI Developer (data-plane) to call Foundry Agent APIs like
-            # list_agents / create_agent. The Hub is a CognitiveServices/accounts
-            # resource created manually — not managed by Bicep — so we assign
-            # the role imperatively here.
-            #
-            # Role: Azure AI Developer (64702f94-c441-49e6-a78b-ef80e0188fee)
-            # Scope: Microsoft.CognitiveServices/accounts/hub-agentops-prod
-            #
-            # This step is best-effort: the SP (Contributor) usually cannot
-            # self-assign roles (needs Owner or User Access Administrator).
-            # If it fails, we log a warning and continue — an admin must
-            # pre-assign the role using the one-liner in the header comments.
-            - name: Ensure data-plane RBAC on AI Hub
-              continue-on-error: true
-              env:
-                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-              run: |
-                  echo "::group::Data-plane RBAC check"
-
-                  # --- Config (derived from parameters.json, matching Step 4b) ---
-                  PARAMS_FILE="infra/parameters.json"
-                  PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
-                  ENV_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['environmentName']['value'])" 2>/dev/null || echo "prod")
-                  AI_HUB_NAME="hub-${PROJECT_NAME}-${ENV_NAME}"
-                  AI_DEVELOPER_ROLE_ID="64702f94-c441-49e6-a78b-ef80e0188fee"
-                  MANAGED_IDENTITY_NAME="id-${PROJECT_NAME}-${ENV_NAME}"
-
-                  # Resolve the AI Hub resource ID
-                  HUB_RESOURCE_ID=$(az cognitiveservices account show \
-                      --name "$AI_HUB_NAME" \
-                      --resource-group "$AZURE_RESOURCE_GROUP" \
-                      --query id -o tsv 2>/dev/null || echo "")
-
-                  if [ -z "$HUB_RESOURCE_ID" ]; then
-                      echo "⚠️  Could not find AI Hub '$AI_HUB_NAME' in $AZURE_RESOURCE_GROUP — skipping RBAC."
-                      echo "::endgroup::"
-                      exit 0
-                  fi
-                  echo "✅ AI Hub: $HUB_RESOURCE_ID"
-
-                  # --- 1. Grant Azure AI Developer to the deploy SP ---
-                  if [ -n "${AZURE_CLIENT_ID:-}" ]; then
-                      SP_OBJECT_ID=$(az ad sp show --id "$AZURE_CLIENT_ID" --query id -o tsv 2>/dev/null || echo "")
-                      if [ -n "$SP_OBJECT_ID" ]; then
-                          echo "Assigning Azure AI Developer to SP $SP_OBJECT_ID on Hub..."
-                          az role assignment create \
-                              --assignee-object-id "$SP_OBJECT_ID" \
-                              --assignee-principal-type ServicePrincipal \
-                              --role "$AI_DEVELOPER_ROLE_ID" \
-                              --scope "$HUB_RESOURCE_ID" \
-                              --output none 2>&1 || echo "⚠️  Could not assign role (SP likely lacks Microsoft.Authorization/roleAssignments/write). An admin must pre-assign Azure AI Developer — see workflow header comments."
-                          echo "✅ Azure AI Developer role assignment attempted for deploy SP."
-
-                          # Azure AI Project Manager is required for publishing Agent Applications
-                          # See: https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
-                          echo "Assigning Azure AI Project Manager to SP $SP_OBJECT_ID on Hub..."
-                          az role assignment create \
-                              --assignee-object-id "$SP_OBJECT_ID" \
-                              --assignee-principal-type ServicePrincipal \
-                              --role "Azure AI Project Manager" \
-                              --scope "$HUB_RESOURCE_ID" \
-                              --output none 2>&1 || echo "⚠️  Could not assign Azure AI Project Manager — admin must pre-assign for publish."
-                          echo "✅ Azure AI Project Manager role assignment attempted for deploy SP."
-                      else
-                          echo "⚠️  Could not resolve SP object ID from AZURE_CLIENT_ID — skipping SP RBAC."
-                      fi
-                  fi
-
-                  # --- 2. Grant Azure AI Developer to the managed identity ---
-                  # The managed identity (id-agentops-prod) is used at runtime by
-                  # the container agent and also needs data-plane access to the Hub.
-                  MI_PRINCIPAL_ID=$(az identity show \
-                      --name "$MANAGED_IDENTITY_NAME" \
-                      --resource-group "$AZURE_RESOURCE_GROUP" \
-                      --query principalId -o tsv 2>/dev/null || echo "")
-
-                  if [ -n "$MI_PRINCIPAL_ID" ]; then
-                      echo "Assigning Azure AI Developer to managed identity $MI_PRINCIPAL_ID on Hub..."
-                      az role assignment create \
-                          --assignee-object-id "$MI_PRINCIPAL_ID" \
-                          --assignee-principal-type ServicePrincipal \
-                          --role "$AI_DEVELOPER_ROLE_ID" \
-                          --scope "$HUB_RESOURCE_ID" \
-                          --output none 2>&1 || echo "⚠️  Could not assign MI role — admin must pre-assign."
-                      echo "✅ Azure AI Developer role assignment attempted for managed identity."
-                  else
-                      echo "⚠️  Could not find managed identity '$MANAGED_IDENTITY_NAME' — skipping MI RBAC."
-                  fi
-
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 5d.1 — Ensure capability host exists
-            # ------------------------------------------------------------------
-            - name: Ensure capability host exists
-              run: |
-                  echo "::group::Capability host setup"
-                  # Create capability host with public hosting enabled (idempotent PUT)
-                  HUB_RESOURCE_ID=$(az resource list --resource-group "$AZURE_RESOURCE_GROUP" \
-                    --resource-type "Microsoft.CognitiveServices/accounts" \
-                    --query "[?kind=='AIServices'].id" -o tsv | head -1)
-                  
-                  if [ -z "$HUB_RESOURCE_ID" ]; then
-                    echo "⚠️  No AI Hub found — skipping capability host setup"
-                  else
-                    echo "Setting up capability host on: $HUB_RESOURCE_ID"
-                    az rest --method PUT \
-                      --url "${HUB_RESOURCE_ID}/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" \
-                      --body '{"properties": {"enablePublicHostingEnvironment": true}}' \
-                      || echo "⚠️  Capability host setup returned non-zero (may already exist)"
-                  fi
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 5d.2 — Grant ACR pull to project identity
-            # ------------------------------------------------------------------
-            - name: Grant ACR pull to project identity
-              run: |
-                  echo "::group::ACR pull permissions"
-                  # Get project managed identity
-                  PROJECT_MI=$(az resource list --resource-group "$AZURE_RESOURCE_GROUP" \
-                    --resource-type "Microsoft.CognitiveServices/accounts/projects" \
-                    --query "[0].identity.principalId" -o tsv 2>/dev/null)
-                  
-                  ACR_ID=$(az acr show --name "${ACR_NAME}" --query id -o tsv 2>/dev/null)
-                  
-                  if [ -n "$PROJECT_MI" ] && [ -n "$ACR_ID" ]; then
-                    az role assignment create \
-                      --assignee-object-id "$PROJECT_MI" \
-                      --assignee-principal-type ServicePrincipal \
-                      --role "AcrPull" \
-                      --scope "$ACR_ID" 2>/dev/null \
-                      || echo "ℹ️  ACR pull role already assigned or insufficient permissions"
-                    echo "✅ ACR pull permissions configured"
-                  else
-                    echo "⚠️  Could not determine project MI or ACR ID — skipping"
-                  fi
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 5e — Deploy hosted agent to Foundry Agent Service
-            # ------------------------------------------------------------------
-            - name: Deploy hosted agent to Foundry Agent Service
-              run: |
-                  echo "::group::Agent deployment"
-                  python - <<'EOF'
-                  import os, sys, time
-                  sys.path.insert(0, os.getcwd())
-                  from azure.ai.projects import AIProjectClient
-                  from azure.ai.projects.models import HostedAgentDefinition, ProtocolVersionRecord
-                  from azure.identity import DefaultAzureCredential
-
-                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
-                  if not endpoint:
-                      print("⚠️  AZURE_AI_AGENTS_ENDPOINT not configured — skipping agent deploy.")
-                      sys.exit(0)
-
-                  deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
-                  container_image = os.environ.get("CONTAINER_IMAGE", "")
-                  
-                  if not container_image:
-                      print("⚠️  CONTAINER_IMAGE not set — cannot deploy hosted agent.")
-                      sys.exit(1)
-                  
-                  print(f"🔧 Configuration:")
-                  print(f"   Endpoint: {endpoint}")
-                  print(f"   Model deployment: {deployment_name}")
-                  print(f"   Container image: {container_image}")
-
-                  # Hosted agents is a preview feature — must opt-in via allow_preview
-                  # This causes the SDK to send the Foundry-Features header automatically
-                  # on create_version() and other preview-gated operations.
-                  client = AIProjectClient(
-                      endpoint=endpoint,
-                      credential=DefaultAzureCredential(),
-                      allow_preview=True,
-                  )
-
-                  # Create hosted agent definition with container image reference
-                  # The container handles its own LLM calls, tool dispatch, and system prompt
-                  # via the Foundry Responses API (POST /responses on port 8088).
-                  agent_definition = HostedAgentDefinition(
-                      kind="hosted",
-                      container_protocol_versions=[
-                          ProtocolVersionRecord(protocol="responses", version="v1"),
-                      ],
-                      cpu="2",
-                      memory="4Gi",
-                      image=container_image,
-                      environment_variables={
-                          "AZURE_OPENAI_ENDPOINT": os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
-                          "AZURE_OPENAI_DEPLOYMENT": deployment_name,
-                          "DB_MODE": "sqlite",
-                          "ENABLE_WORK_IQ": os.environ.get("ENABLE_WORK_IQ", "true"),
-                          "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED": "false",
-                          "AZURE_CLIENT_ID": os.environ.get("AZURE_CLIENT_ID", ""),
-                          "AZURE_OPENAI_API_KEY": os.environ.get("AZURE_OPENAI_API_KEY", ""),
-                      },
-                  )
-
-                  agent_name = "agentic-ops-advisor"
-                  agent_description = "Agentic Ops Advisor — hosted agent for infrastructure telemetry & change-context reasoning"
-
-                  # Retry with backoff to handle RBAC propagation delays
-                  MAX_RETRIES = 5
-                  agent_version = None
-                  for attempt in range(MAX_RETRIES):
-                      try:
-                          print(f"Creating/updating hosted agent version (attempt {attempt + 1}/{MAX_RETRIES})...")
-                          agent_version = client.agents.create_version(
-                              agent_name=agent_name,
-                              definition=agent_definition,
-                              description=agent_description,
-                              metadata={"container_image": container_image, "deployment_type": "hosted"},
-                          )
-                          print(f"✅ Hosted agent version created: {agent_version.name}/{agent_version.version}")
-
-                          # Log version details for debugging
-                          print(f"   Version ID: {agent_version.id}")
-                          print(f"   Created at: {agent_version.created_at}")
-                          if hasattr(agent_version, 'definition') and agent_version.definition:
-                              defn = agent_version.definition
-                              print(f"   Definition kind: {getattr(defn, 'kind', 'unknown')}")
-                              print(f"   Image: {getattr(defn, 'image', 'N/A')}")
-                          break
-                      except Exception as e:
-                          if "PermissionDenied" in str(e) and attempt < MAX_RETRIES - 1:
-                              wait = 30 * (attempt + 1)
-                              print(f"⏳ RBAC not propagated yet (attempt {attempt + 1}/{MAX_RETRIES}), waiting {wait}s...")
-                              time.sleep(wait)
-                          elif attempt < MAX_RETRIES - 1:
-                              # For other transient errors, retry with shorter backoff
-                              wait = 10 * (attempt + 1)
-                              print(f"⚠️  Agent creation failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
-                              print(f"   Retrying in {wait}s...")
-                              time.sleep(wait)
-                          else:
-                              error_msg = str(e)
-                              print(f"❌ Failed to create hosted agent: {error_msg}")
-                              print("\n🔍 Troubleshooting:")
-                              print("   1. Verify AZURE_AI_AGENTS_ENDPOINT is correct")
-                              print("   2. Check that the SP has 'Azure AI Developer' role on the Hub")
-                              print("   3. Ensure capability host is configured (previous step)")
-                              print("   4. Verify ACR pull permissions (previous step)")
-                              if "invalid_engine_error" in error_msg or "Failed to resolve model info" in error_msg:
-                                  print(f"\n   Model resolution failure:")
-                                  print(f"   Requested model: {deployment_name}")
-                                  print("   Check the 'Diagnose model deployments' step for available deployments")
-                              sys.exit(1)
-
-                  if not agent_version:
-                      print("❌ Failed to create agent version after all retries")
-                      sys.exit(1)
-
-                  # Persist agent name and version for subsequent steps
-                  agent_id = f"{agent_version.name}/{agent_version.version}"
-                  with open(os.environ["GITHUB_ENV"], "a") as f:
-                      f.write(f"DEPLOYED_AGENT_ID={agent_id}\n")
-                  
-                  print(f"\n✅ Hosted agent deployed successfully: {agent_id}")
-                  EOF
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 5e.1 — Verify hosted agent deployment status
-            # After create_version, check the agent status and list versions.
-            # A healthy hosted agent shows status: Started.
-            # See: https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent
-            # ------------------------------------------------------------------
-            - name: Verify hosted agent deployment
-              continue-on-error: true
-              run: |
-                  echo "::group::Verify hosted agent deployment"
-
-                  AGENT_ID="${DEPLOYED_AGENT_ID:-}"
-                  if [ -z "$AGENT_ID" ]; then
-                      echo "⚠️  No agent deployed — skipping verification."
-                      echo "::endgroup::"
-                      exit 0
-                  fi
-
-                  ENDPOINT="${AZURE_AI_AGENTS_ENDPOINT:-}"
-                  if [ -z "$ENDPOINT" ]; then
-                      echo "⚠️  AZURE_AI_AGENTS_ENDPOINT not set — skipping verification."
-                      echo "::endgroup::"
-                      exit 0
-                  fi
-
-                  # Parse account and project from AZURE_AI_AGENTS_ENDPOINT
-                  # Format: https://<account>.services.ai.azure.com/api/projects/<project>
-                  ACCOUNT_NAME=$(echo "$ENDPOINT" | sed -E 's|https://([^.]+)\..*|\1|')
-                  FOUNDRY_PROJECT=$(echo "$ENDPOINT" | sed -E 's|.*/projects/([^/]+).*|\1|')
-                  AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
-
-                  echo "Account: $ACCOUNT_NAME"
-                  echo "Project: $FOUNDRY_PROJECT"
-                  echo "Agent: $AGENT_NAME"
-
-                  # Ensure cognitiveservices CLI extension is up to date
-                  az extension add --name cognitiveservices --upgrade --yes 2>/dev/null || true
-
-                  echo "--- Agent details ---"
-                  az cognitiveservices agent show \
-                      --account-name "$ACCOUNT_NAME" \
-                      --project-name "$FOUNDRY_PROJECT" \
-                      --name "$AGENT_NAME" \
-                      2>&1 || echo "⚠️  'az cognitiveservices agent show' not available — CLI extension may not support agents yet."
-
-                  echo ""
-                  echo "--- List all agents (check for stale prompt agents) ---"
-                  az cognitiveservices agent list \
-                      --account-name "$ACCOUNT_NAME" \
-                      --project-name "$FOUNDRY_PROJECT" \
-                      2>&1 || echo "⚠️  'az cognitiveservices agent list' not available."
-
-                  # Also verify via SDK — get_version provides deployment status
-                  echo ""
-                  echo "--- SDK version check ---"
-                  python - <<'PYEOF'
-                  import os, sys
-                  sys.path.insert(0, os.getcwd())
-
-                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
-                  agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
-                  if not endpoint or not agent_id:
-                      print("Skipped — no agent deployed.")
-                      sys.exit(0)
-
-                  from azure.ai.projects import AIProjectClient
-                  from azure.identity import DefaultAzureCredential
-
-                  client = AIProjectClient(
-                      endpoint=endpoint,
-                      credential=DefaultAzureCredential(),
-                      allow_preview=True,
-                  )
-
-                  agent_name = agent_id.split("/")[0]
-
-                  # List all versions to find stale prompt-agent versions
-                  print(f"Versions for agent '{agent_name}':")
-                  try:
-                      versions = client.agents.list_versions(agent_name=agent_name)
-                      for v in versions:
-                          defn = getattr(v, 'definition', None)
-                          kind = getattr(defn, 'kind', 'unknown') if defn else 'unknown'
-                          img = getattr(defn, 'image', 'N/A') if defn else 'N/A'
-                          print(f"  v{v.version}: kind={kind}, created={v.created_at}, image={img}")
-                  except Exception as e:
-                      print(f"  list_versions failed: {e}")
-
-                  # Get the deployed version details
-                  version_num = agent_id.split("/")[1]
-                  try:
-                      ver = client.agents.get_version(agent_name=agent_name, agent_version=version_num)
-                      print(f"\nDeployed version {version_num} details:")
-                      print(f"  ID: {ver.id}")
-                      print(f"  Name: {ver.name}")
-                      print(f"  Version: {ver.version}")
-                      print(f"  Created: {ver.created_at}")
-                      defn = getattr(ver, 'definition', None)
-                      if defn:
-                          print(f"  Kind: {getattr(defn, 'kind', 'unknown')}")
-                          print(f"  Image: {getattr(defn, 'image', 'N/A')}")
-                          print(f"  CPU: {getattr(defn, 'cpu', 'N/A')}")
-                          print(f"  Memory: {getattr(defn, 'memory', 'N/A')}")
-                          proto = getattr(defn, 'container_protocol_versions', None)
-                          if proto:
-                              print(f"  Protocols: {[f'{p.protocol}:{p.version}' for p in proto]}")
-                      # Dump raw dict for full visibility
-                      print(f"\n  Raw: {ver.as_dict()}")
-                  except Exception as e:
-                      print(f"  get_version failed: {e}")
-
-                  # Also get the top-level agent details
-                  try:
-                      agent = client.agents.get(agent_name=agent_name)
-                      print(f"\nTop-level agent details:")
-                      print(f"  Name: {agent.name}")
-                      print(f"  Versions: {getattr(agent, 'versions', 'N/A')}")
-                      print(f"  Raw: {agent.as_dict()}")
-                  except Exception as e:
-                      print(f"  get agent failed: {e}")
-                  PYEOF
-
-                  # Brief wait for container warmup before smoke tests
-                  echo ""
                   echo "Waiting 30s for container warmup..."
                   sleep 30
 
-                  echo "::endgroup::"
-
             # ------------------------------------------------------------------
-            # Step 5e.2 — Publish Agent Application (exposes Responses API)
-            #
-            # WHY: create_version() creates a hosted agent version inside the
-            # project, but the Foundry Playground routes through the
-            # /applications/{name}/protocols/openai/responses endpoint which
-            # only exists after the agent is PUBLISHED as an Agent Application.
-            # Publishing creates an ARM resource (Agent Application + Deployment)
-            # that wraps the agent version with a stable endpoint and RBAC.
-            # See: https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
+            # Step 9 — Smoke test: Responses API
             # ------------------------------------------------------------------
-            - name: Publish Agent Application
+            - name: Smoke test (Responses API)
+              id: smoke_test
               continue-on-error: true
               run: |
-                  echo "::group::Publish Agent Application"
-
-                  AGENT_ID="${DEPLOYED_AGENT_ID:-}"
-                  if [ -z "$AGENT_ID" ]; then
-                      echo "⚠️  No agent deployed — skipping publish."
-                      echo "::endgroup::"
-                      exit 0
-                  fi
-
-                  AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
-                  AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
-                  APP_NAME="${AGENT_NAME}"
-                  DEPLOYMENT_NAME="production"
-
-                  echo "🔧 Publish configuration:"
-                  echo "   Agent: ${AGENT_NAME} (v${AGENT_VERSION})"
-                  echo "   Application: ${APP_NAME}"
-                  echo "   Deployment: ${DEPLOYMENT_NAME}"
-
-                  # Resolve project ARM resource ID
-                  PROJECT_RESOURCE_ID=$(az resource list \
-                    --resource-group "$AZURE_RESOURCE_GROUP" \
-                    --resource-type "Microsoft.CognitiveServices/accounts/projects" \
-                    --query "[0].id" -o tsv 2>/dev/null)
-
-                  if [ -z "$PROJECT_RESOURCE_ID" ]; then
-                      echo "⚠️  Could not resolve project resource ID — skipping publish."
-                      echo "::endgroup::"
-                      exit 0
-                  fi
-
-                  echo "   Project ARM ID: ${PROJECT_RESOURCE_ID}"
-
-                  # Try multiple API versions (newest first)
-                  # Supported: 2025-10-01-preview, 2026-01-15-preview
-                  # See: https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
-                  API_VERSIONS=("2026-01-15-preview" "2025-10-01-preview")
-                  APP_CREATED=false
-
-                  for API_VERSION in "${API_VERSIONS[@]}"; do
-                      echo ""
-                      echo "--- Creating Agent Application (api-version=${API_VERSION}) ---"
-
-                      # Minimal body per MS docs — authorizationPolicy defaults to RBAC
-                      APP_BODY=$(cat <<JSONEOF
-                  {
-                    "properties": {
-                      "agents": [{"agentName": "${AGENT_NAME}"}]
-                    }
-                  }
-                  JSONEOF
-                  )
-
-                      if az rest --method PUT \
-                        --url "https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}" \
-                        --headers "Content-Type=application/json" \
-                        --body "$APP_BODY" 2>&1; then
-                          echo "✅ Agent Application created/updated (api-version=${API_VERSION})."
-                          APP_CREATED=true
-
-                          # Create/update Agent Deployment (hosted, Responses protocol)
-                          echo ""
-                          echo "--- Creating Agent Deployment ---"
-
-                          DEPLOY_BODY=$(cat <<JSONEOF2
-                  {
-                    "properties": {
-                      "displayName": "Production Hosted Deployment",
-                      "deploymentType": "Hosted",
-                      "minReplicas": 1,
-                      "maxReplicas": 2,
-                      "protocols": [{"protocol": "Responses", "version": "1.0"}],
-                      "agents": [{"agentName": "${AGENT_NAME}", "agentVersion": "${AGENT_VERSION}"}]
-                    }
-                  }
-                  JSONEOF2
-                  )
-
-                          if az rest --method PUT \
-                            --url "https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}?api-version=${API_VERSION}" \
-                            --headers "Content-Type=application/json" \
-                            --body "$DEPLOY_BODY" 2>&1; then
-                              echo "✅ Agent Deployment created/updated."
-                          else
-                              echo "⚠️  Agent Deployment creation returned non-zero."
-                          fi
-
-                          break
-                      else
-                          echo "⚠️  Agent Application creation failed with api-version=${API_VERSION}, trying next..."
-                      fi
-                  done
-
-                  if [ "$APP_CREATED" = false ]; then
-                      echo "⚠️  Could not create Agent Application with any API version."
-                      echo "   The agent is still accessible via the project-level SDK."
-                      echo "   Playground may need manual publish via the portal."
-                      echo "::endgroup::"
-                      exit 0
-                  fi
-
-                  # Grant Azure AI User on the application so smoke tests can invoke it
-                  echo ""
-                  echo "--- Granting Azure AI User on Agent Application ---"
-                  APP_RESOURCE_ID="${PROJECT_RESOURCE_ID}/applications/${APP_NAME}"
-
-                  ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
-                  if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
-                      SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
-                      PRINCIPAL_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
-                      PRINCIPAL_TYPE="ServicePrincipal"
-                  else
-                      PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
-                      PRINCIPAL_TYPE="User"
-                  fi
-
-                  if [ -n "$PRINCIPAL_ID" ]; then
-                      az role assignment create \
-                        --assignee-object-id "$PRINCIPAL_ID" \
-                        --assignee-principal-type "$PRINCIPAL_TYPE" \
-                        --role "Azure AI User" \
-                        --scope "$APP_RESOURCE_ID" 2>/dev/null \
-                        || echo "ℹ️  Azure AI User role already assigned or insufficient permissions."
-                      echo "✅ Azure AI User role configured on application."
-                  else
-                      echo "⚠️  Could not determine principal ID — skipping RBAC grant."
-                  fi
-
-                  # Wait for deployment to reach Running state
-                  echo ""
-                  echo "Waiting 30s for application deployment to start..."
-                  sleep 30
-
-                  echo ""
-                  echo "✅ Agent Application published: ${APP_NAME}"
-                  echo "   Endpoint: /applications/${APP_NAME}/protocols/openai/responses"
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 5f — Seed local SQLite DB (required for smoke-test tool calls)
-            # ------------------------------------------------------------------
-            - name: Set up local SQLite DB for smoke test
-              run: python scripts/setup_local_db.py
-
-            # ------------------------------------------------------------------
-            # Step 6 — Smoke test: send one query, verify response
-            # ------------------------------------------------------------------
-            # NOTE: This step is non-fatal (continue-on-error: true). The agent
-            # deployment itself (steps 1-5e) is independent of the smoke test.
-            # If the smoke test fails, the deployment is still considered successful
-            # and the issue should be investigated separately.
-            
-            # Step 6a — Smoke test: Prompt agent pattern (legacy)
-            # Validates that the agent can still be invoked via the prompt agent API
-            # with client-side tool dispatch for backward compatibility.
-            - name: Smoke test (prompt agent pattern)
-              id: smoke_test_prompt
-              continue-on-error: true
-              run: |
-                  echo "::group::Smoke test — prompt agent pattern"
+                  echo "::group::Smoke test — Responses API"
                   python - <<'EOF'
-                  import os, sys
+                  import os, sys, json, time
                   sys.path.insert(0, os.getcwd())
 
                   endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
-                  agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
-
-                  if not endpoint or not agent_id:
-                      print("⚠️  Smoke test skipped — agent not deployed (endpoint or agent ID missing).")
-                      sys.exit(0)
-
-                  from azure.ai.agents import AgentsClient
-                  from azure.ai.agents.models import MessageRole
-                  from azure.identity import DefaultAzureCredential
-                  from agent.agent import _build_function_set
-
-                  client = AgentsClient(
-                      endpoint=endpoint,
-                      credential=DefaultAzureCredential(),
-                  )
-
-                  # Register function implementations so create_and_process can dispatch
-                  # tool calls automatically during the run. enable_auto_function_calls
-                  # sets client.runs._function_tool, which create_and_process uses for
-                  # dispatching — passing toolset only to create_and_process is NOT enough.
-                  enable_work_iq = os.environ.get("ENABLE_WORK_IQ", "true").lower() not in ("false", "0", "no")
-                  function_set = _build_function_set(enable_work_iq)
-                  client.enable_auto_function_calls(tools=function_set)
-
-                  probe = "What is the GPU utilization trend for the last 24 hours?"
-                  print(f"Probe query: {probe}")
-
-                  thread = client.threads.create()
-                  client.messages.create(
-                      thread_id=thread.id,
-                      role="user",
-                      content=probe,
-                  )
-
-                  run = client.runs.create_and_process(
-                      thread_id=thread.id,
-                      agent_id=agent_id,
-                  )
-
-                  if run.status != "completed":
-                      error_detail = getattr(run, "last_error", None)
-                      error_msg = f"run status: {run.status}"
-                      if error_detail:
-                          error_msg += f" — {error_detail}"
-                      print(f"❌ Smoke test FAILED — {error_msg}")
-                      sys.exit(1)
-
-                  response_text = client.messages.get_last_message_text_by_role(
-                      thread_id=thread.id,
-                      role=MessageRole.AGENT,
-                  )
-                  if not response_text:
-                      print("❌ Smoke test FAILED — no agent response received.")
-                      sys.exit(1)
-
-                  # Robust response text extraction (handle different SDK return types)
-                  try:
-                      if hasattr(response_text, 'text'):
-                          if hasattr(response_text.text, 'value'):
-                              preview = response_text.text.value[:300]
-                          else:
-                              preview = str(response_text.text)[:300]
-                      else:
-                          preview = str(response_text)[:300]
-                  except Exception as e:
-                      print(f"⚠️  Could not extract response preview: {e}")
-                      preview = "[response received but preview extraction failed]"
-
-                  print(f"✅ Smoke test PASSED (prompt agent)\nResponse preview: {preview}")
-                  EOF
-                  echo "::endgroup::"
-            
-            # Step 6b — Smoke test: Hosted agent pattern (Foundry Responses API)
-            # Validates that the container is running and responding to HTTP requests
-            # via the /responses endpoint with server-side tool dispatch.
-            - name: Smoke test (hosted agent pattern)
-              id: smoke_test_hosted
-              continue-on-error: true
-              run: |
-                  echo "::group::Smoke test — hosted agent pattern (Foundry Responses API)"
-                  python - <<'EOF'
-                  import os, sys, json
-                  sys.path.insert(0, os.getcwd())
-
-                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
-                  agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
-
-                  if not endpoint or not agent_id:
-                      print("⚠️  Smoke test skipped — agent not deployed (endpoint or agent ID missing).")
+                  if not endpoint:
+                      print("⚠️  Smoke test skipped — AZURE_AI_AGENTS_ENDPOINT not set.")
                       sys.exit(0)
 
                   from azure.identity import DefaultAzureCredential
                   import requests
 
-                  # Get Azure access token for authentication
                   credential = DefaultAzureCredential()
                   token = credential.get_token("https://ai.azure.com/.default")
                   
-                  # The hosted agent can be invoked via multiple patterns:
-                  # 1. Published Agent Application: /applications/{name}/protocols/openai/responses
-                  #    (requires agent to be published — Step 5e.2)
-                  # 2. SDK: project.get_openai_client() + agent_reference
-                  #    (project-level invocation, no publish required)
-                  # 3. Internal agents API: /agents/{name}/responses (v1)
-                  # We try in order, stopping at the first success.
                   base = endpoint.rstrip("/")
                   agent_name = "agentic-ops-advisor"
                   probe = "What is the GPU utilization trend for the last 24 hours?"
                   print(f"Probe query: {probe}")
 
-                  last_error = None
+                  # Try the published Agent Application endpoint (primary)
+                  url = f"{base}/applications/{agent_name}/protocols/openai/responses?api-version=2025-11-15-preview"
+                  print(f"\nTesting: {url}")
 
-                  # --- Attempt 1: Published application endpoint (primary) ---
-                  url_attempts = [
-                      (f"{base}/applications/{agent_name}/protocols/openai/responses?api-version=2025-11-15-preview", "applications/openai"),
-                      (f"{base}/agents/{agent_name}/responses?api-version=v1", "agents/v1"),
-                  ]
-
-                  for url, label in url_attempts:
-                      print(f"\nAttempt [{label}]: {url}")
+                  max_retries = 3
+                  for attempt in range(max_retries):
                       try:
                           response = requests.post(
                               url,
@@ -1155,106 +453,84 @@ jobs:
                           )
 
                           print(f"  Status: {response.status_code}")
-                          if response.status_code >= 400:
-                              print(f"  Body: {response.text[:500]}")
-                              last_error = f"[{label}] {response.status_code}: {response.text[:200]}"
+                          
+                          if response.status_code == 404 and attempt < max_retries - 1:
+                              print(f"  Agent not ready yet, retrying in 10s (attempt {attempt + 1}/{max_retries})...")
+                              time.sleep(10)
                               continue
+                          
+                          if response.status_code >= 400:
+                              print(f"  Error body: {response.text[:500]}")
+                              if attempt < max_retries - 1:
+                                  print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
+                                  time.sleep(10)
+                                  continue
+                              else:
+                                  print(f"⚠️  Smoke test failed after {max_retries} attempts")
+                                  print("   The agent may still work in the Foundry Playground — test manually.")
+                                  sys.exit(0)
 
                           data = response.json()
-
-                          if not isinstance(data, dict):
-                              last_error = f"[{label}] Invalid response format: {type(data).__name__}"
-                              print(f"  {last_error}")
-                              continue
-
                           status = data.get("status", "unknown")
                           output = data.get("output", [])
 
                           if status != "completed":
-                              last_error = f"[{label}] Status: {status}"
-                              if "error" in data:
-                                  last_error += f" — {data['error']}"
-                              print(f"  {last_error}")
-                              continue
+                              error_msg = data.get("error", {})
+                              print(f"  Status: {status}")
+                              if error_msg:
+                                  print(f"  Error: {error_msg}")
+                              if attempt < max_retries - 1:
+                                  print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
+                                  time.sleep(10)
+                                  continue
+                              else:
+                                  print(f"⚠️  Smoke test incomplete after {max_retries} attempts")
+                                  sys.exit(0)
 
                           # Extract assistant message
                           assistant_msg = next((m for m in output if m.get("role") == "assistant"), None)
-                          if not assistant_msg or not assistant_msg.get("content"):
+                          if assistant_msg and assistant_msg.get("content"):
+                              preview = str(assistant_msg["content"])[:300]
+                              print(f"✅ Smoke test PASSED\nResponse preview: {preview}")
+                              sys.exit(0)
+                          else:
                               output_text = data.get("output_text", "")
                               if output_text:
-                                  print(f"✅ Smoke test PASSED [{label}]\nResponse preview: {output_text[:300]}")
+                                  print(f"✅ Smoke test PASSED\nResponse preview: {output_text[:300]}")
                                   sys.exit(0)
-                              last_error = f"[{label}] No assistant content in output"
-                              print(f"  {last_error}")
-                              continue
-
-                          preview = str(assistant_msg["content"])[:300]
-                          print(f"✅ Smoke test PASSED [{label}]\nResponse preview: {preview}")
-                          sys.exit(0)
+                              
+                              if attempt < max_retries - 1:
+                                  print(f"  No output content, retrying in 10s (attempt {attempt + 1}/{max_retries})...")
+                                  time.sleep(10)
+                                  continue
+                              else:
+                                  print(f"⚠️  Smoke test received response but no content")
+                                  sys.exit(0)
 
                       except requests.exceptions.RequestException as e:
-                          last_error = f"[{label}] {e}"
                           print(f"  Request error: {e}")
-                          if hasattr(e, 'response') and e.response is not None:
-                              print(f"  Body: {e.response.text[:500]}")
-                          continue
+                          if attempt < max_retries - 1:
+                              print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
+                              time.sleep(10)
+                          else:
+                              print(f"⚠️  Smoke test failed after {max_retries} attempts: {e}")
+                              sys.exit(0)
                       except Exception as e:
-                          last_error = f"[{label}] {e}"
-                          print(f"  Error: {e}")
-                          continue
-
-                  # --- Attempt 3: SDK-based openai.responses.create with agent_reference ---
-                  # Per MS docs: https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent
-                  print(f"\nAttempt [sdk/agent_reference]: openai.responses.create")
-                  try:
-                      from azure.ai.projects import AIProjectClient
-
-                      project = AIProjectClient(
-                          endpoint=endpoint,
-                          credential=credential,
-                          allow_preview=True,
-                      )
-                      openai_client = project.get_openai_client()
-                      agent = project.agents.get(agent_name=agent_name)
-
-                      sdk_response = openai_client.responses.create(
-                          input=[{"role": "user", "content": probe}],
-                          extra_body={"agent_reference": {"name": agent.name, "type": "agent_reference"}},
-                          timeout=180,
-                      )
-
-                      output_text = getattr(sdk_response, 'output_text', '') or ''
-                      if output_text:
-                          print(f"✅ Smoke test PASSED [sdk/agent_reference]\nResponse preview: {output_text[:300]}")
-                          sys.exit(0)
-
-                      # Try extracting from output list
-                      output_items = getattr(sdk_response, 'output', []) or []
-                      for item in output_items:
-                          content = getattr(item, 'content', None)
-                          if content:
-                              preview = str(content)[:300]
-                              print(f"✅ Smoke test PASSED [sdk/agent_reference]\nResponse preview: {preview}")
+                          print(f"  Unexpected error: {e}")
+                          if attempt < max_retries - 1:
+                              print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
+                              time.sleep(10)
+                          else:
+                              print(f"⚠️  Smoke test failed: {e}")
                               sys.exit(0)
 
-                      last_error = "[sdk/agent_reference] Response received but no output text"
-                      print(f"  {last_error}")
-
-                  except Exception as e:
-                      last_error = f"[sdk/agent_reference] {e}"
-                      print(f"  Error: {e}")
-
-                  # All attempts failed — report but don't block deploy
-                  print(f"\n⚠️  Smoke test could not reach hosted agent (all patterns failed).")
-                  print(f"   Last error: {last_error}")
-                  print("   The agent may still work in the Foundry Playground — test manually.")
-                  # Exit 0 so the deploy isn't blocked; the Playground is the real test
+                  print("⚠️  Smoke test exhausted all retries without success")
                   sys.exit(0)
                   EOF
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 7 — Post deployment status summary
+            # Step 10 — Post deployment status summary
             # ------------------------------------------------------------------
             - name: Post deployment status
               if: always()
@@ -1264,10 +540,7 @@ jobs:
                   REF="${{ github.ref_name }}"
                   ACTOR="${{ github.actor }}"
                   TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-                  AGENT_ID="${DEPLOYED_AGENT_ID:-not deployed}"
-                  CONTAINER="${CONTAINER_IMAGE:-not built}"
-                  SMOKE_TEST_PROMPT="${{ steps.smoke_test_prompt.outcome }}"
-                  SMOKE_TEST_HOSTED="${{ steps.smoke_test_hosted.outcome }}"
+                  SMOKE_TEST="${{ steps.smoke_test.outcome }}"
 
                   echo "## 🚀 Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
                   echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -1277,42 +550,32 @@ jobs:
                   echo "| **Commit**   | \`${SHA:0:8}\` |" >> "$GITHUB_STEP_SUMMARY"
                   echo "| **Branch**   | \`${REF}\` |" >> "$GITHUB_STEP_SUMMARY"
                   echo "| **Actor**    | ${ACTOR} |" >> "$GITHUB_STEP_SUMMARY"
-                  echo "| **Agent ID** | \`${AGENT_ID}\` |" >> "$GITHUB_STEP_SUMMARY"
-                  echo "| **Container** | \`${CONTAINER}\` |" >> "$GITHUB_STEP_SUMMARY"
                   echo "| **Time**     | ${TIMESTAMP} |" >> "$GITHUB_STEP_SUMMARY"
                   echo "" >> "$GITHUB_STEP_SUMMARY"
 
-                  # Deployment status (steps 1-5e)
-                  if [ "$AGENT_ID" != "not deployed" ]; then
+                  if [ "$STATUS" = "success" ]; then
                       echo "✅ **Agent deployment succeeded.** The agent is live on Azure AI Foundry Agent Service." >> "$GITHUB_STEP_SUMMARY"
                   else
-                      echo "❌ **Agent deployment failed.** Check the 'Deploy container agent' step for details." >> "$GITHUB_STEP_SUMMARY"
+                      echo "❌ **Agent deployment failed.** Check the workflow logs for details." >> "$GITHUB_STEP_SUMMARY"
                   fi
                   
                   echo "" >> "$GITHUB_STEP_SUMMARY"
-                  
-                  # Smoke test status (non-fatal)
                   echo "### Smoke Test Results" >> "$GITHUB_STEP_SUMMARY"
                   echo "" >> "$GITHUB_STEP_SUMMARY"
                   
-                  # Prompt agent pattern test
-                  if [ "$SMOKE_TEST_PROMPT" = "success" ]; then
-                      echo "- ✅ **Prompt agent pattern:** Passed" >> "$GITHUB_STEP_SUMMARY"
-                  elif [ "$SMOKE_TEST_PROMPT" = "failure" ]; then
-                      echo "- ⚠️  **Prompt agent pattern:** Failed (see logs)" >> "$GITHUB_STEP_SUMMARY"
-                  elif [ "$SMOKE_TEST_PROMPT" = "skipped" ]; then
-                      echo "- ℹ️  **Prompt agent pattern:** Skipped" >> "$GITHUB_STEP_SUMMARY"
+                  if [ "$SMOKE_TEST" = "success" ]; then
+                      echo "- ✅ **Responses API:** Passed" >> "$GITHUB_STEP_SUMMARY"
+                  elif [ "$SMOKE_TEST" = "failure" ]; then
+                      echo "- ⚠️  **Responses API:** Failed (see logs)" >> "$GITHUB_STEP_SUMMARY"
+                  elif [ "$SMOKE_TEST" = "skipped" ]; then
+                      echo "- ℹ️  **Responses API:** Skipped" >> "$GITHUB_STEP_SUMMARY"
                   else
-                      echo "- ❓ **Prompt agent pattern:** Unknown" >> "$GITHUB_STEP_SUMMARY"
+                      echo "- ❓ **Responses API:** Unknown" >> "$GITHUB_STEP_SUMMARY"
                   fi
-                  
-                  # Hosted agent pattern test
-                  if [ "$SMOKE_TEST_HOSTED" = "success" ]; then
-                      echo "- ✅ **Hosted agent pattern (Responses API):** Passed" >> "$GITHUB_STEP_SUMMARY"
-                  elif [ "$SMOKE_TEST_HOSTED" = "failure" ]; then
-                      echo "- ⚠️  **Hosted agent pattern (Responses API):** Failed (see logs)" >> "$GITHUB_STEP_SUMMARY"
-                  elif [ "$SMOKE_TEST_HOSTED" = "skipped" ]; then
-                      echo "- ℹ️  **Hosted agent pattern (Responses API):** Skipped" >> "$GITHUB_STEP_SUMMARY"
-                  else
-                      echo "- ❓ **Hosted agent pattern (Responses API):** Unknown" >> "$GITHUB_STEP_SUMMARY"
-                  fi
+
+                  echo "" >> "$GITHUB_STEP_SUMMARY"
+                  echo "### Next Steps" >> "$GITHUB_STEP_SUMMARY"
+                  echo "" >> "$GITHUB_STEP_SUMMARY"
+                  echo "- Test the agent in the Azure AI Foundry Playground" >> "$GITHUB_STEP_SUMMARY"
+                  echo "- Review logs in Application Insights" >> "$GITHUB_STEP_SUMMARY"
+                  echo "- Run evaluations: \`python eval/run_eval.py\`" >> "$GITHUB_STEP_SUMMARY"

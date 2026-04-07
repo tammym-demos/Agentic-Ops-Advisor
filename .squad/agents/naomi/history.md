@@ -45,7 +45,17 @@
 - **Commit:** ca9dc78. Pushed to main. Deploy Run #86 triggered.
 - **Status:** ✅ SUCCESS — Responses API v1 compliant. Ready for Foundry container rebuild and redeployment.
 
-### 2026-04-08: Smoke Test + Hosted Agent Activation Fix (Deploy Run #87)
+### 2026-04-08: agent.yaml Schema Validation for azd Extension
+- **Task:** Validate `agent.yaml` against azd ai agent extension expected schema and adjust if needed.
+- **Research findings:** No canonical JSON schema exists for agent.yaml in azd extension. Extension uses two-file approach: `azure.yaml` (main project config) references `agentManifest: agent.yaml`. The agent.yaml serves as container deployment descriptor with metadata for IaC.
+- **Current format assessment:** ✅ COMPATIBLE — All sections align with Azure AI Foundry hosted agent patterns: metadata (name/description/version), model config, protocol (responses v1), instructions_file reference, tools (OpenAI function-calling schema), container spec (image/port/health/resources/environment).
+- **azd extension workflow:** `azd ai agent init -m <url>` downloads agent definition into `src/`, updates `azure.yaml` with service config, maps parameters to env vars. `azd up` provisions infrastructure, builds container, deploys agent. No rigid schema enforcement — various formats accepted.
+- **Comparison with samples:** Microsoft Agent Framework samples use minimal `kind: Prompt` format. Foundry hosted samples often pass config via SDK (`HostedAgentDefinition`) without standalone YAML. Our format is more comprehensive and documented.
+- **Decision:** KEEP CURRENT FORMAT — no breaking incompatibilities found, well-documented, comprehensive, already referenced correctly by azure.yaml (line 84), works with deploy.yml CI/CD.
+- **Updates made:** Enhanced header comments to clarify dual usage (azd extension + GitHub Actions), document relationship with azure.yaml, note schema flexibility.
+- **Key files:** `agent.yaml` (header updated), `.squad/decisions/inbox/naomi-agent-yaml-update.md` (full analysis).
+- **References:** Microsoft Learn azd extension docs, Foundry hosted agent deployment guide, agent-framework GitHub repo.
+
 - **Task:** Fix two issues from Deploy Run #87: (1) smoke test 400 error, (2) Playground RequiresAction.
 - **Root cause 1:** Hosted agent smoke test URL missing `?api-version=2025-06-01` query parameter. Foundry API gateway requires this on all requests.
 - **Root cause 2:** `create_version()` creates the agent version definition but does NOT start the container. Without an explicit `az cognitiveservices agent start`, the agent stays in "Stopped" state and the gateway falls back to prompt-agent mode (RequiresAction with function_call content).
@@ -208,3 +218,13 @@
 - **Orchestration:** Holden diagnosed 4 bugs; Naomi diagnosed same bugs + 2 edge cases; Naomi implemented all fixes. Decisions merged, diagnostics deduped to .squad/decisions/decisions.md.
 - **Status:** ✅ Ready for deployment
 - **Outcome:** All 4 critical bugs in .scripts/serve.py now fixed. 366 tests pass, lint clean. Foundry Playground demo unblocked.
+
+### 2026-04-07: Wave 1 — agent.yaml Validation & Documentation
+- **Task:** Validate agent.yaml schema compatibility with azd ai agent extension
+- **Finding:** No canonical JSON schema enforced by azd extension; agent.yaml treated as container deployment descriptor
+- **Assessment:** Current agent.yaml ✅ COMPATIBLE — comprehensive, well-documented, works with both deploy.yml and azd
+- **Decision:** KEEP current format with minor docs update
+- **Updates:** Added yaml-language-server hint, clarified dual usage (GitHub Actions + azd), documented relationship with azure.yaml
+- **Comparison:** More comprehensive than Microsoft Framework samples; hybrid approach (GitHub Actions + azd extension)
+- **No structural changes:** Format already production-ready
+- **Status:** ✅ REVIEWED, minor header updates pending

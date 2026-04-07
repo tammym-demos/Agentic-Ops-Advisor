@@ -5,12 +5,20 @@
 # Ops Advisor on Azure AI Foundry Agent Service.
 #
 # Usage:
-#   az ai agent create --file agent.yaml
+#   1. Referenced by azure.yaml (line 84: agentManifest: agent.yaml)
+#      for azd ai agent extension deployments via `azd up`
+#   2. Used by .github/workflows/deploy.yml for GitHub Actions CI/CD
+#   3. Serves as source of truth for agent capabilities and container config
 #
 # Prerequisites:
 #   - Container image pushed to ACR
 #   - Azure OpenAI deployment (gpt-4.1) provisioned
 #   - Environment variables configured (see env section below)
+#
+# Schema Notes:
+#   - No canonical JSON schema exists for agent.yaml in azd extension
+#   - Format follows Azure AI Foundry hosted agent patterns
+#   - Compatible with both azd workflows and direct SDK deployment
 # =============================================================================
 
 # ---------------------------------------------------------------------------

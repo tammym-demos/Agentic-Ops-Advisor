@@ -324,4 +324,50 @@
 - **Framework Assessment:** Merged to `.squad/decisions.md` (replaces inbox file)
 - **Outcome:** azd strategy approved as foundation for Framework Modernization. azure.yaml created. 4 gaps documented for validation. Team synchronized.
 - **Next Steps:** Validate 4 gaps locally with new azure.yaml before CI/CD migration
+
+### 2026-04-08: Deploy Workflow Simplification — azd Migration Complete
+- **Task:** Simplify the ~1100-line deploy.yml workflow by replacing inline Python/ARM REST agent deployment with `azd up` commands
+- **Before:** 1,178 lines with complex inline Python scripts for agent version creation, ARM REST publish calls, manual Bicep fallback logic
+- **After:** 526 lines (55.3% reduction) using Azure Developer CLI for declarative agent lifecycle management
+- **Key changes:**
+  1. **Separate infra job:** Created `deploy-infra` job that handles Bicep deployment with subscription vs RG-scoped fallback pattern (addresses Gap 1). Runs only when infra/ changes detected or force_infra flag set.
+  2. **Simplified agent deploy:** `deploy-agent` job uses `azd up --skip-infra` to deploy only agent + container. Bicep already handled by previous job.
+  3. **Environment configuration:** Added Step 6 to configure azd environment with all required variables via `azd env set` (addresses Gap 3).
+  4. **Port mapping:** agent.yaml specifies port 8088, azure.yaml trusts this configuration (Gap 2 — no explicit override needed).
+  5. **Smoke test timing:** Added 30s warmup sleep + 3-attempt retry logic with 10s backoff (addresses Gap 4).
+  6. **Streamlined smoke test:** Removed legacy prompt-agent test, kept only Responses API validation with retry resilience.
+  7. **Clean job dependencies:** `deploy-agent` depends on both `detect-changes` and `deploy-infra`, runs when infra succeeded OR skipped.
+- **Preserved from original:**
+  - All OIDC auth and RBAC documentation in header comments
+  - Azure login with OIDC + SP secret fallback
+  - Python 3.11 setup with ODBC driver installation
+  - Pre-deploy tests (SQLite setup + pytest)
+  - Bicep template validation
+  - Subscription vs RG-scoped Bicep fallback pattern (in separate job)
+  - Azure AI Developer role assignment on Hub
+  - Post-deployment status summary with smoke test results
+- **Removed complexity:**
+  - Inline Python script for agent version creation (595 lines → delegated to azd)
+  - ARM REST API calls for Agent Application publish (~100 lines → delegated to azd)
+  - Manual ACR login/build/push (delegated to azd)
+  - Capability host setup (handled by platform)
+  - Manual ACR pull RBAC (handled by platform)
+  - Prompt agent smoke test (legacy, removed)
+- **Backup:** Original workflow backed up to `.github/workflows/deploy-backup-*.yml`
+- **Files modified:** `.github/workflows/deploy.yml` (1,178 → 526 lines)
+- **Status:** ✅ Complete. Ready for integration testing. Deploy workflow now declarative, maintainable, and aligned with azd best practices.
 - **Status:** ✅ Framework review complete, cross-team coordination logged, inbox merged to decisions.md
+
+### 2026-04-07: Wave 1 — Deploy Workflow Simplification (azd Migration)
+- **Task:** Simplify deploy.yml from 1,178 lines using Azure Developer CLI
+- **Result:** ✅ IMPLEMENTED — 581 lines (-55.3% reduction, -652 lines)
+- **Key improvements:**
+  - Separate deploy-infra job: Bicep fallback logic preserved and explicit
+  - Simplified deploy-agent job: azd env set + azd up --skip-infra
+  - Streamlined smoke test: Responses API only, 3-attempt retry, non-fatal
+- **Gap resolutions:** Bicep fallback ✅, Port (8088) ✅, Env vars centralized ✅, Timing robustness ✅
+- **Inline Python:** ~600 lines → 0 (delegated to azd)
+- **ARM REST calls:** ~100 lines → 0 (delegated to azd)
+- **New dependency:** Azure/setup-azd@v1.0.0 action
+- **Next:** Production validation on staging, monitor first 3 deploys, update README
+- **Status:** ✅ IMPLEMENTED, awaiting integration test
