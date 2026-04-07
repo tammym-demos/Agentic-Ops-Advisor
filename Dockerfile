@@ -71,6 +71,7 @@ COPY tools/  tools/
 COPY data/   data/
 COPY scripts/ scripts/
 COPY eval/   eval/
+COPY static/ static/
 
 # ---- Seed local SQLite database at build time ----
 RUN python scripts/setup_local_db.py
@@ -81,17 +82,19 @@ RUN chown -R agent:agent /app
 # ---- Default environment variables ----
 ENV DB_MODE=sqlite \
     ENABLE_WORK_IQ=true \
-    ENABLE_MCP=false
+    ENABLE_MCP=false \
+    MODE=serve
 
-# ---- Expose health-check / readiness-probe port ----
-EXPOSE 8080
+# ---- Expose hosted agent service port ----
+# Port 8088 for Azure AI Foundry Agent Service Responses API endpoint
+EXPOSE 8088
 
 # ---- Health check ----
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+    CMD curl -f http://localhost:8088/health || exit 1
 
 # ---- Run as non-root ----
 USER agent
 
 # ---- Entrypoint ----
-ENTRYPOINT ["python", "scripts/run_local.py"]
+ENTRYPOINT ["python", "scripts/serve.py"]

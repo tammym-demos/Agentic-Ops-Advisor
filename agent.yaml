@@ -33,6 +33,13 @@ model:
   api_version: "2025-01-01-preview"
 
 # ---------------------------------------------------------------------------
+# Protocol version for hosted agent
+# ---------------------------------------------------------------------------
+protocol:
+  type: responses
+  version: v1
+
+# ---------------------------------------------------------------------------
 # System prompt
 # ---------------------------------------------------------------------------
 # The system prompt is loaded from a file to keep this manifest readable.
@@ -180,8 +187,8 @@ container:
   # ACR image reference — uses variable substitution for CI/CD flexibility.
   image: ${ACR_LOGIN_SERVER}/agentic-ops-advisor:${CONTAINER_IMAGE_TAG}
 
-  # Port the container exposes for the agent HTTP server.
-  port: 8080
+  # Port the container exposes for the hosted agent HTTP server.
+  port: 8088
 
   # Health check endpoint used by the platform to verify container readiness.
   health:

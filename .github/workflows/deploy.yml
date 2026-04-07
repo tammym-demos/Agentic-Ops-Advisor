@@ -532,16 +532,64 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 5e — Deploy container agent to Foundry Agent Service
+            # Step 5d.1 — Ensure capability host exists
             # ------------------------------------------------------------------
-            - name: Deploy container agent to Foundry Agent Service
+            - name: Ensure capability host exists
+              run: |
+                  echo "::group::Capability host setup"
+                  # Create capability host with public hosting enabled (idempotent PUT)
+                  HUB_RESOURCE_ID=$(az resource list --resource-group "$AZURE_RESOURCE_GROUP" \
+                    --resource-type "Microsoft.CognitiveServices/accounts" \
+                    --query "[?kind=='AIServices'].id" -o tsv | head -1)
+                  
+                  if [ -z "$HUB_RESOURCE_ID" ]; then
+                    echo "⚠️  No AI Hub found — skipping capability host setup"
+                  else
+                    echo "Setting up capability host on: $HUB_RESOURCE_ID"
+                    az rest --method PUT \
+                      --url "${HUB_RESOURCE_ID}/capabilityHosts/accountcaphost?api-version=2025-10-01-preview" \
+                      --body '{"properties": {"enablePublicHostingEnvironment": true}}' \
+                      || echo "⚠️  Capability host setup returned non-zero (may already exist)"
+                  fi
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 5d.2 — Grant ACR pull to project identity
+            # ------------------------------------------------------------------
+            - name: Grant ACR pull to project identity
+              run: |
+                  echo "::group::ACR pull permissions"
+                  # Get project managed identity
+                  PROJECT_MI=$(az resource list --resource-group "$AZURE_RESOURCE_GROUP" \
+                    --resource-type "Microsoft.CognitiveServices/accounts/projects" \
+                    --query "[0].identity.principalId" -o tsv 2>/dev/null)
+                  
+                  ACR_ID=$(az acr show --name "${ACR_NAME}" --query id -o tsv 2>/dev/null)
+                  
+                  if [ -n "$PROJECT_MI" ] && [ -n "$ACR_ID" ]; then
+                    az role assignment create \
+                      --assignee-object-id "$PROJECT_MI" \
+                      --assignee-principal-type ServicePrincipal \
+                      --role "AcrPull" \
+                      --scope "$ACR_ID" 2>/dev/null \
+                      || echo "ℹ️  ACR pull role already assigned or insufficient permissions"
+                    echo "✅ ACR pull permissions configured"
+                  else
+                    echo "⚠️  Could not determine project MI or ACR ID — skipping"
+                  fi
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 5e — Deploy hosted agent to Foundry Agent Service
+            # ------------------------------------------------------------------
+            - name: Deploy hosted agent to Foundry Agent Service
               run: |
                   echo "::group::Agent deployment"
                   python - <<'EOF'
-                  import os, sys
+                  import os, sys, time
                   sys.path.insert(0, os.getcwd())
-                  from azure.ai.agents import AgentsClient
-                  from azure.ai.agents.models import FunctionTool, ToolSet
+                  from azure.ai.projects import AIProjectClient
+                  from azure.ai.projects.models import HostedAgentDefinition
                   from azure.identity import DefaultAzureCredential
 
                   endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
@@ -552,12 +600,16 @@ jobs:
                   deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
                   container_image = os.environ.get("CONTAINER_IMAGE", "")
                   
+                  if not container_image:
+                      print("⚠️  CONTAINER_IMAGE not set — cannot deploy hosted agent.")
+                      sys.exit(1)
+                  
                   print(f"🔧 Configuration:")
                   print(f"   Endpoint: {endpoint}")
                   print(f"   Model deployment: {deployment_name}")
-                  print(f"   Container image: {container_image or 'none'}")
+                  print(f"   Container image: {container_image}")
 
-                  client = AgentsClient(
+                  client = AIProjectClient(
                       endpoint=endpoint,
                       credential=DefaultAzureCredential(),
                   )
@@ -569,70 +621,79 @@ jobs:
                       "root-cause and change-context reasoning over infrastructure telemetry."
                   )
 
-                  # Build toolset so tool schemas are registered with the agent definition.
-                  # This ensures the LLM knows which tools it can call at runtime.
+                  # Build tool schemas for the hosted agent definition
+                  # The hosted agent container handles tool dispatch, but the platform
+                  # needs the schemas to pass to the LLM for function calling.
                   from agent.agent import _build_function_set
                   enable_work_iq = os.environ.get("ENABLE_WORK_IQ", "true").lower() not in ("false", "0", "no")
                   function_set = _build_function_set(enable_work_iq)
-                  agent_toolset = ToolSet()
-                  agent_toolset.add(FunctionTool(functions=function_set))
+                  
+                  # Convert function set to tool definitions format expected by hosted agent
+                  tools = [{"type": "function", "function": f} for f in function_set]
 
-                  # Upsert agent: list existing, update if found, create if not
+                  # Create hosted agent definition with container image reference
+                  agent_definition = HostedAgentDefinition(
+                      model=deployment_name,
+                      instructions=system_prompt,
+                      tools=tools,
+                      container={
+                          "image": container_image,
+                          "port": 8088,
+                      },
+                  )
+
+                  agent_name = "agentic-ops-advisor"
+                  agent_description = "Agentic Ops Advisor — hosted agent for infrastructure telemetry & change-context reasoning"
+
                   # Retry with backoff to handle RBAC propagation delays
-                  import time
                   MAX_RETRIES = 5
-                  existing = None
+                  agent_version = None
                   for attempt in range(MAX_RETRIES):
                       try:
-                          agents = client.list_agents()
-                          existing = next((a for a in agents if a.name == "agentic-ops-advisor"), None)
+                          print(f"Creating/updating hosted agent version (attempt {attempt + 1}/{MAX_RETRIES})...")
+                          agent_version = client.agents.create_version(
+                              agent_name=agent_name,
+                              definition=agent_definition,
+                              description=agent_description,
+                              metadata={"container_image": container_image, "deployment_type": "hosted"},
+                          )
+                          print(f"✅ Hosted agent version created: {agent_version.name}/{agent_version.version}")
                           break
                       except Exception as e:
                           if "PermissionDenied" in str(e) and attempt < MAX_RETRIES - 1:
                               wait = 30 * (attempt + 1)
                               print(f"⏳ RBAC not propagated yet (attempt {attempt + 1}/{MAX_RETRIES}), waiting {wait}s...")
                               time.sleep(wait)
+                          elif attempt < MAX_RETRIES - 1:
+                              # For other transient errors, retry with shorter backoff
+                              wait = 10 * (attempt + 1)
+                              print(f"⚠️  Agent creation failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+                              print(f"   Retrying in {wait}s...")
+                              time.sleep(wait)
                           else:
-                              print(f"❌ Failed to list agents: {e}")
+                              error_msg = str(e)
+                              print(f"❌ Failed to create hosted agent: {error_msg}")
                               print("\n🔍 Troubleshooting:")
                               print("   1. Verify AZURE_AI_AGENTS_ENDPOINT is correct")
                               print("   2. Check that the SP has 'Azure AI Developer' role on the Hub")
-                              print("   3. Ensure the Hub and project are accessible")
+                              print("   3. Ensure capability host is configured (previous step)")
+                              print("   4. Verify ACR pull permissions (previous step)")
+                              if "invalid_engine_error" in error_msg or "Failed to resolve model info" in error_msg:
+                                  print(f"\n   Model resolution failure:")
+                                  print(f"   Requested model: {deployment_name}")
+                                  print("   Check the 'Diagnose model deployments' step for available deployments")
                               sys.exit(1)
 
-                  agent_kwargs = dict(
-                      model=deployment_name,
-                      name="agentic-ops-advisor",
-                      instructions=system_prompt,
-                      toolset=agent_toolset,
-                      description="Agentic Ops Advisor — containerised agent for infrastructure telemetry & change-context reasoning",
-                      metadata={"container_image": container_image} if container_image else {},
-                  )
-
-                  try:
-                      if existing:
-                          agent_obj = client.update_agent(agent_id=existing.id, **agent_kwargs)
-                          print(f"✅ Updated agent: {agent_obj.id}")
-                      else:
-                          agent_obj = client.create_agent(**agent_kwargs)
-                          print(f"✅ Created agent: {agent_obj.id}")
-                  except Exception as e:
-                      error_msg = str(e)
-                      print(f"❌ Failed to create/update agent: {error_msg}")
-                      
-                      if "invalid_engine_error" in error_msg or "Failed to resolve model info" in error_msg:
-                          print("\n🔍 Model resolution failure detected:")
-                          print(f"   Requested model: {deployment_name}")
-                          print("   Cause: The model deployment name doesn't match what's accessible from the project endpoint")
-                          print("\n🔧 Fix:")
-                          print("   1. Check the 'Diagnose model deployments' step above for available deployments")
-                          print("   2. Update AZURE_OPENAI_DEPLOYMENT secret to match one of the listed deployment names")
-                          print("   3. Ensure the deployment is created on the Hub (hub-agentops-prod)")
+                  if not agent_version:
+                      print("❌ Failed to create agent version after all retries")
                       sys.exit(1)
 
-                  # Persist agent ID for subsequent steps
+                  # Persist agent name and version for subsequent steps
+                  agent_id = f"{agent_version.name}/{agent_version.version}"
                   with open(os.environ["GITHUB_ENV"], "a") as f:
-                      f.write(f"DEPLOYED_AGENT_ID={agent_obj.id}\n")
+                      f.write(f"DEPLOYED_AGENT_ID={agent_id}\n")
+                  
+                  print(f"\n✅ Hosted agent deployed successfully: {agent_id}")
                   EOF
                   echo "::endgroup::"
 
@@ -649,11 +710,15 @@ jobs:
             # deployment itself (steps 1-5e) is independent of the smoke test.
             # If the smoke test fails, the deployment is still considered successful
             # and the issue should be investigated separately.
-            - name: Smoke test
-              id: smoke_test
+            
+            # Step 6a — Smoke test: Prompt agent pattern (legacy)
+            # Validates that the agent can still be invoked via the prompt agent API
+            # with client-side tool dispatch for backward compatibility.
+            - name: Smoke test (prompt agent pattern)
+              id: smoke_test_prompt
               continue-on-error: true
               run: |
-                  echo "::group::Smoke test"
+                  echo "::group::Smoke test — prompt agent pattern"
                   python - <<'EOF'
                   import os, sys
                   sys.path.insert(0, os.getcwd())
@@ -727,7 +792,96 @@ jobs:
                       print(f"⚠️  Could not extract response preview: {e}")
                       preview = "[response received but preview extraction failed]"
 
-                  print(f"✅ Smoke test PASSED\nResponse preview: {preview}")
+                  print(f"✅ Smoke test PASSED (prompt agent)\nResponse preview: {preview}")
+                  EOF
+                  echo "::endgroup::"
+            
+            # Step 6b — Smoke test: Hosted agent pattern (Foundry Responses API)
+            # Validates that the container is running and responding to HTTP requests
+            # via the /responses endpoint with server-side tool dispatch.
+            - name: Smoke test (hosted agent pattern)
+              id: smoke_test_hosted
+              continue-on-error: true
+              run: |
+                  echo "::group::Smoke test — hosted agent pattern (Foundry Responses API)"
+                  python - <<'EOF'
+                  import os, sys, json
+                  sys.path.insert(0, os.getcwd())
+
+                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
+                  agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
+
+                  if not endpoint or not agent_id:
+                      print("⚠️  Smoke test skipped — agent not deployed (endpoint or agent ID missing).")
+                      sys.exit(0)
+
+                  from azure.identity import DefaultAzureCredential
+                  import requests
+
+                  # Get Azure access token for authentication
+                  credential = DefaultAzureCredential()
+                  token = credential.get_token("https://cognitiveservices.azure.com/.default")
+                  
+                  # The hosted agent is accessible via the Foundry endpoint
+                  # Pattern: {endpoint}/agents/{agent_name}/responses
+                  # NOTE: We use agent name "agentic-ops-advisor" not agent_id
+                  responses_url = f"{endpoint.rstrip('/')}/agents/agentic-ops-advisor/responses"
+                  
+                  probe = "What is the GPU utilization trend for the last 24 hours?"
+                  print(f"Probe query: {probe}")
+                  print(f"Endpoint: {responses_url}")
+                  
+                  try:
+                      response = requests.post(
+                          responses_url,
+                          json={"input": probe, "stream": False},
+                          headers={
+                              "Authorization": f"Bearer {token.token}",
+                              "Content-Type": "application/json",
+                          },
+                          timeout=180,  # Hosted agents may take time to cold-start + run tool loops
+                      )
+                      
+                      response.raise_for_status()
+                      data = response.json()
+                      
+                      # Validate Foundry Responses API format
+                      if not isinstance(data, dict):
+                          print(f"❌ Smoke test FAILED — invalid response format (expected dict, got {type(data).__name__})")
+                          sys.exit(1)
+                      
+                      if "status" not in data or "output" not in data:
+                          print(f"❌ Smoke test FAILED — missing required fields (status/output)")
+                          sys.exit(1)
+                      
+                      if data.get("status") != "completed":
+                          print(f"❌ Smoke test FAILED — status: {data.get('status')}")
+                          if "error" in data:
+                              print(f"   Error: {data['error']}")
+                          sys.exit(1)
+                      
+                      # Extract assistant message from output
+                      output_messages = data.get("output", [])
+                      assistant_msg = next((m for m in output_messages if m.get("role") == "assistant"), None)
+                      
+                      if not assistant_msg or not assistant_msg.get("content"):
+                          print("❌ Smoke test FAILED — no assistant response in output.")
+                          sys.exit(1)
+                      
+                      preview = str(assistant_msg["content"])[:300]
+                      print(f"✅ Smoke test PASSED (hosted agent)\nResponse preview: {preview}")
+                  
+                  except requests.exceptions.RequestException as e:
+                      print(f"❌ Smoke test FAILED — HTTP request error: {e}")
+                      if hasattr(e, 'response') and e.response is not None:
+                          print(f"   Status: {e.response.status_code}")
+                          print(f"   Body: {e.response.text[:500]}")
+                      sys.exit(1)
+                  except Exception as e:
+                      print(f"❌ Smoke test FAILED — unexpected error: {e}")
+                      import traceback
+                      traceback.print_exc()
+                      sys.exit(1)
                   EOF
                   echo "::endgroup::"
 
@@ -744,7 +898,8 @@ jobs:
                   TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
                   AGENT_ID="${DEPLOYED_AGENT_ID:-not deployed}"
                   CONTAINER="${CONTAINER_IMAGE:-not built}"
-                  SMOKE_TEST_OUTCOME="${{ steps.smoke_test.outcome }}"
+                  SMOKE_TEST_PROMPT="${{ steps.smoke_test_prompt.outcome }}"
+                  SMOKE_TEST_HOSTED="${{ steps.smoke_test_hosted.outcome }}"
 
                   echo "## 🚀 Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
                   echo "" >> "$GITHUB_STEP_SUMMARY"
@@ -769,12 +924,27 @@ jobs:
                   echo "" >> "$GITHUB_STEP_SUMMARY"
                   
                   # Smoke test status (non-fatal)
-                  if [ "$SMOKE_TEST_OUTCOME" = "success" ]; then
-                      echo "✅ **Smoke test passed.** The agent responded successfully to a probe query." >> "$GITHUB_STEP_SUMMARY"
-                  elif [ "$SMOKE_TEST_OUTCOME" = "failure" ]; then
-                      echo "⚠️  **Smoke test failed.** The agent is deployed but did not respond correctly. Check the 'Smoke test' step for details." >> "$GITHUB_STEP_SUMMARY"
-                  elif [ "$SMOKE_TEST_OUTCOME" = "skipped" ]; then
-                      echo "ℹ️  **Smoke test skipped.** Agent not deployed or smoke test not run." >> "$GITHUB_STEP_SUMMARY"
+                  echo "### Smoke Test Results" >> "$GITHUB_STEP_SUMMARY"
+                  echo "" >> "$GITHUB_STEP_SUMMARY"
+                  
+                  # Prompt agent pattern test
+                  if [ "$SMOKE_TEST_PROMPT" = "success" ]; then
+                      echo "- ✅ **Prompt agent pattern:** Passed" >> "$GITHUB_STEP_SUMMARY"
+                  elif [ "$SMOKE_TEST_PROMPT" = "failure" ]; then
+                      echo "- ⚠️  **Prompt agent pattern:** Failed (see logs)" >> "$GITHUB_STEP_SUMMARY"
+                  elif [ "$SMOKE_TEST_PROMPT" = "skipped" ]; then
+                      echo "- ℹ️  **Prompt agent pattern:** Skipped" >> "$GITHUB_STEP_SUMMARY"
                   else
-                      echo "ℹ️  **Smoke test status unknown.**" >> "$GITHUB_STEP_SUMMARY"
+                      echo "- ❓ **Prompt agent pattern:** Unknown" >> "$GITHUB_STEP_SUMMARY"
+                  fi
+                  
+                  # Hosted agent pattern test
+                  if [ "$SMOKE_TEST_HOSTED" = "success" ]; then
+                      echo "- ✅ **Hosted agent pattern (Responses API):** Passed" >> "$GITHUB_STEP_SUMMARY"
+                  elif [ "$SMOKE_TEST_HOSTED" = "failure" ]; then
+                      echo "- ⚠️  **Hosted agent pattern (Responses API):** Failed (see logs)" >> "$GITHUB_STEP_SUMMARY"
+                  elif [ "$SMOKE_TEST_HOSTED" = "skipped" ]; then
+                      echo "- ℹ️  **Hosted agent pattern (Responses API):** Skipped" >> "$GITHUB_STEP_SUMMARY"
+                  else
+                      echo "- ❓ **Hosted agent pattern (Responses API):** Unknown" >> "$GITHUB_STEP_SUMMARY"
                   fi

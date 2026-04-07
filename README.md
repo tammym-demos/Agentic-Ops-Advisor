@@ -87,6 +87,8 @@ python scripts/run_local.py
 
 Full LLM-powered reasoning with GPT-4.1. The agent correlates telemetry with change context and provides root-cause analysis with confidence scores.
 
+#### B1. Interactive CLI Mode
+
 ```bash
 # 1. Log in to Azure (for DefaultAzureCredential)
 az login --tenant <your-tenant-id>
@@ -99,18 +101,33 @@ az login --tenant <your-tenant-id>
 python scripts/run_local.py
 ```
 
+#### B2. HTTP Server Mode (matches production)
+
+Runs the hosted agent HTTP server locally — same code path as production deployment.
+
+```bash
+# Start the server (includes chat UI at http://localhost:8088)
+python scripts/serve.py
+```
+
+Then:
+- **Open browser:** `http://localhost:8088` — interactive chat UI
+- **Or send requests:** `POST http://localhost:8088/responses` — Foundry Responses API
+
+> **💡 Tip:** HTTP server mode is the best way to test the production deployment locally. The chat UI (`static/index.html`) provides the same experience as the Foundry portal.
+
 > For details on how Agent mode works (function-calling, confidence scores, evidence citations), see [Step 6 — Run the agent](#step-6--run-the-agent) in Local Setup.
 
 ### Option C — Azure AI Foundry (Cloud Deployment)
 
-The full production deployment — the agent runs as a container in Azure AI Foundry Agent Service with a baked-in SQLite database.
+The full production deployment — the agent runs as a **hosted agent** container in Azure AI Foundry Agent Service. The container implements the Foundry Responses API and includes a baked-in SQLite database with synthetic telemetry.
 
 1. **Trigger a deploy** — push to `main` or manually dispatch the `deploy.yml` workflow
-2. **Open the Foundry portal** — [ai.azure.com](https://ai.azure.com) → your project → **Agents**
+2. **Open the Foundry portal** — [ai.azure.com](https://ai.azure.com) → your project → **Agents** → **agentic-ops-advisor**
 3. **Chat with the agent** — use the built-in chat UI to ask questions
 4. **View traces** — see [Monitoring Setup](#10-monitoring-setup) for Foundry and Application Insights trace viewing
 
-> **How it works:** The Docker build runs `python scripts/setup_local_db.py` at image build time, baking a fresh SQLite database (with current timestamps) into the container. The agent queries this database via `tools/sql_telemetry.py` with `DB_MODE=sqlite`. No external database needed.
+> **How it works:** The agent runs as a hosted agent (protocol: `responses` in `agent.yaml`). The Docker build seeds a fresh SQLite database at image build time. The container's HTTP server (`scripts/serve.py`) handles all requests via POST `/responses` on port 8088. Tool dispatch happens server-side inside the container — no client-side coordination needed.
 
 ### Demo Query Suggestions
 
@@ -133,7 +150,7 @@ The full production deployment — the agent runs as a container in Azure AI Fou
 
 The **Agentic Ops Advisor** is an AI agent that helps ops engineers diagnose infrastructure issues by combining two signals: **telemetry** (GPU utilization, network latency, cost, incidents) and **operator intent** (change events, decisions, runbooks, ownership). Instead of manually cross-referencing dashboards and change logs, you ask the agent a natural-language question and it does the correlation work for you—citing evidence at every step.
 
-The agent is designed as a **production-readiness showcase**: it integrates OpenTelemetry tracing, offline + continuous evaluation, CI-gated regression detection, and a one-command local setup. It is deployed to Azure AI Foundry Agent Service, giving you Foundry's built-in trace viewer, evaluation comparison UI, and Azure Monitor dashboards out of the box.
+The agent is designed as a **production-readiness showcase**: it integrates OpenTelemetry tracing, offline + continuous evaluation, CI-gated regression detection, and a one-command local setup. It is deployed to **Azure AI Foundry Agent Service as a hosted agent**, implementing the Foundry Responses API for server-side tool dispatch and stateless request handling.
 
 ### Architecture Diagram
 
@@ -191,7 +208,8 @@ graph TD
 | Layer | Technology |
 |---|---|
 | Language | Python 3.11+ |
-| Agent Framework | Azure AI Agent Service SDK (`azure-ai-projects`) |
+| Agent Framework | Azure AI Agent Service SDK (`azure-ai-projects`) — hosted agent pattern |
+| Deployment Pattern | Hosted agent implementing Foundry Responses API (server-side tool dispatch) |
 | LLM | GPT-4.1 via Azure OpenAI |
 | Local Database | SQLite (dev) / Azure SQL (production) |
 | Evaluation | `azure-ai-evaluation` + custom evaluators |
@@ -493,11 +511,20 @@ Open the [Azure AI Foundry portal](https://ai.azure.com), navigate to your proje
 
 ## 7. Container Deployment
 
-The agent and all three custom tool surfaces are packaged into a Docker container for production deployment. This ensures the deployed agent has access to the same tools available during local development.
+The agent is deployed as a **hosted agent** implementing the **Azure AI Foundry Responses API**. The container includes the agent code, all three custom tool surfaces, and a seeded SQLite database with synthetic telemetry. The hosted agent pattern provides server-side tool dispatch, stateless request handling, and seamless integration with Foundry's observability features.
+
+### Hosted Agent Pattern
+
+Unlike prompt agents (which require client-side tool dispatch), hosted agents:
+
+- **Handle tool calls server-side** — the container runs the full agent loop (LLM → tool dispatch → LLM → response)
+- **Expose a REST API** — POST `/responses` on port 8088 (Foundry Responses API standard)
+- **Are stateless** — each request is independent; no session state persists between calls
+- **Include all dependencies** — tools, data, and runtime are packaged together in the container
 
 ### Why containers?
 
-The prompt-agent model (SDK-only deployment) registers the agent definition with Foundry but does not deploy the custom Python tool code (`tools/sql_telemetry.py`, `tools/work_context_stub.py`, `tools/action_stub.py`). Container deployment solves this by packaging everything together.
+The hosted agent pattern requires all tool code to be deployed with the agent. Container deployment solves this by packaging the agent definition, custom Python tools (`tools/sql_telemetry.py`, `tools/work_context_stub.py`, `tools/action_stub.py`), and a pre-seeded SQLite database into a single deployable unit.
 
 ### Container architecture
 
@@ -507,16 +534,17 @@ The prompt-agent model (SDK-only deployment) registers the agent definition with
 │  ┌──────────────────────────────────┐   │
 │  │  Python 3.11 + ODBC Driver 18   │   │
 │  ├──────────────────────────────────┤   │
-│  │  agent/     → Agent definition   │   │
+│  │  scripts/serve.py → HTTP server │   │
+│  │  agent/     → System prompt      │   │
 │  │  tools/     → 3 tool surfaces    │   │
 │  │  data/      → Seeded SQLite DB   │   │
-│  │  scripts/   → Entrypoint         │   │
 │  │  eval/      → Evaluators         │   │
 │  └──────────────────────────────────┘   │
-│  Port 8080 · Health check · Non-root   │
+│  Port 8088 · Health check · Non-root   │
 └─────────────────────────────────────────┘
          ↕
    Azure AI Foundry Agent Service
+   (invokes container via Responses API)
          ↕
    GPT-4.1 (Azure OpenAI)
 ```
@@ -526,34 +554,73 @@ The prompt-agent model (SDK-only deployment) registers the agent definition with
 | File | Purpose |
 |---|---|
 | `Dockerfile` | Production container image definition |
-| `agent.yaml` | Foundry container agent manifest |
+| `agent.yaml` | Foundry hosted agent manifest (protocol: responses, port: 8088) |
+| `scripts/serve.py` | HTTP server implementing Foundry Responses API |
+| `static/index.html` | Local chat UI for testing the hosted agent |
 | `.dockerignore` | Excludes secrets, docs, and build artifacts from image |
 
-### Building locally
+### Local development modes
+
+The agent supports two local run modes:
+
+#### 1. Interactive CLI mode (default)
+```bash
+python scripts/run_local.py
+```
+- Interactive prompt for queries
+- Great for manual testing and demos
+- Runs the agent loop locally (no HTTP server)
+
+#### 2. HTTP server mode (matches production)
+```bash
+python scripts/serve.py
+```
+- Starts aiohttp server on port 8088
+- Implements POST `/responses` endpoint (Foundry Responses API)
+- GET `/health` for health checks
+- GET `/` serves `static/index.html` (chat UI)
+- Matches production behavior exactly
+
+Then open `http://localhost:8088` in your browser to use the chat UI, or POST requests directly:
+
+```bash
+curl -X POST http://localhost:8088/responses \
+  -H "Content-Type: application/json" \
+  -d '{"input": "What is GPU utilization for the last 24 hours?", "stream": false}'
+```
+
+### Building and testing locally
 
 ```bash
 # Build the image
 docker build -t agentic-ops-advisor:local .
 
-# Run locally (demo mode — no Azure credentials needed)
-docker run -p 8080:8080 agentic-ops-advisor:local
-
-# Run with Azure credentials (agent mode)
-docker run -p 8080:8080 \
+# Run the container
+docker run -p 8088:8088 \
   -e AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/ \
   -e AZURE_OPENAI_DEPLOYMENT=gpt-4.1 \
-  -e AZURE_AI_PROJECT_CONNECTION_STRING=your-connection-string \
   agentic-ops-advisor:local
+
+# Open in browser or send a request
+curl -X POST http://localhost:8088/responses \
+  -H "Content-Type: application/json" \
+  -d '{"input": "What is GPU utilization?", "stream": false}'
 ```
 
 ### CI/CD container deployment
 
 The GitHub Actions workflow (`.github/workflows/deploy.yml`) automatically:
 
-1. Builds the Docker image tagged with the commit SHA
-2. Pushes to Azure Container Registry (ACR)
-3. Deploys the container agent to Foundry Agent Service
-4. Runs a smoke test to verify the deployed agent responds correctly
+1. **Builds the Docker image** — tagged with commit SHA
+2. **Pushes to Azure Container Registry (ACR)** — centralized image storage
+3. **Deploys the hosted agent to Foundry** — registers the container with agent.yaml manifest
+4. **Runs smoke tests** — validates both prompt agent and hosted agent patterns
+   - **Prompt agent pattern** — client-side tool dispatch (legacy compatibility)
+   - **Hosted agent pattern** — server-side tool dispatch via Responses API (production pattern)
+
+The hosted agent is then accessible via:
+- **Foundry portal** — ai.azure.com → your project → Agents → agentic-ops-advisor
+- **REST API** — `{endpoint}/agents/agentic-ops-advisor/responses`
 
 ### Pushing to ACR manually
 
