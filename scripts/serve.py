@@ -35,6 +35,7 @@ import os
 import sqlite3
 import asyncio
 import sys
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -262,17 +263,26 @@ async def _responses_handler(request) -> object:
     if isinstance(input_data, str):
         messages = [{"role": "user", "content": input_data}]
     elif isinstance(input_data, list):
-        # Foundry Responses API v1 sends input as array of message objects
+        # Foundry Responses API v1 sends input as array of typed items.
+        # We only convert "message" items; function_call / function_call_output
+        # and other internal types are skipped (our container handles tools).
         messages = []
         for item in input_data:
-            if isinstance(item, dict):
-                role = item.get("role", "user")
-                content = item.get("content", "")
-                # Content may be a string or array of content parts
-                if isinstance(content, list):
-                    text_parts = [p.get("text", "") for p in content if p.get("type") in ("input_text", "text")]
-                    content = " ".join(text_parts)
-                messages.append({"role": role, "content": content})
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type", "message")
+            # Skip non-message items (function_call, function_call_output, etc.)
+            if item_type not in ("message",):
+                continue
+            role = item.get("role", "user")
+            content = item.get("content", "")
+            # Content may be a string or array of content parts
+            if isinstance(content, list):
+                text_parts = [p.get("text", "") for p in content if p.get("type") in ("input_text", "text")]
+                content = " ".join(text_parts)
+            if not content:
+                continue
+            messages.append({"role": role, "content": content})
     elif isinstance(input_data, dict) and "messages" in input_data:
         messages = input_data["messages"]
     else:
@@ -291,11 +301,21 @@ async def _responses_handler(request) -> object:
             {
                 "id": f"resp_{uuid.uuid4().hex}",
                 "object": "response",
+                "created_at": int(time.time()),
+                "model": deployment,
                 "output": [
                     {
                         "type": "message",
+                        "id": f"msg_{uuid.uuid4().hex}",
+                        "status": "failed",
                         "role": "assistant",
-                        "content": "AZURE_OPENAI_ENDPOINT not configured. Agent cannot run."
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": "AZURE_OPENAI_ENDPOINT not configured. Agent cannot run.",
+                                "annotations": [],
+                            }
+                        ],
                     }
                 ],
                 "status": "failed",
@@ -314,11 +334,15 @@ async def _responses_handler(request) -> object:
         return web.json_response({
             "id": response_id,
             "object": "response",
+            "created_at": int(time.time()),
+            "model": deployment,
             "output": [
                 {
                     "type": "message",
+                    "id": f"msg_{uuid.uuid4().hex}",
+                    "status": "failed",
                     "role": "assistant",
-                    "content": [{"type": "output_text", "text": f"Error: {result['error']}"}],
+                    "content": [{"type": "output_text", "text": f"Error: {result['error']}", "annotations": []}],
                 }
             ],
             "status": "failed",
@@ -327,11 +351,15 @@ async def _responses_handler(request) -> object:
     return web.json_response({
         "id": response_id,
         "object": "response",
+        "created_at": int(time.time()),
+        "model": deployment,
         "output": [
             {
                 "type": "message",
+                "id": f"msg_{uuid.uuid4().hex}",
+                "status": "completed",
                 "role": "assistant",
-                "content": [{"type": "output_text", "text": result["content"]}],
+                "content": [{"type": "output_text", "text": result["content"], "annotations": []}],
             }
         ],
         "status": "completed",
