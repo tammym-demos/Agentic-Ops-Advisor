@@ -697,6 +697,62 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
+            # Step 5e.1 — Start the hosted agent version
+            # Creating a version does NOT auto-start the container. The agent
+            # stays in "Stopped" state until explicitly started, causing the
+            # gateway to fall back to prompt-agent mode (RequiresAction).
+            # See: https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent
+            # ------------------------------------------------------------------
+            - name: Start hosted agent version
+              continue-on-error: true
+              run: |
+                  echo "::group::Start hosted agent deployment"
+
+                  AGENT_ID="${DEPLOYED_AGENT_ID:-}"
+                  if [ -z "$AGENT_ID" ]; then
+                      echo "⚠️  No agent deployed — skipping start."
+                      echo "::endgroup::"
+                      exit 0
+                  fi
+
+                  ENDPOINT="${AZURE_AI_AGENTS_ENDPOINT:-}"
+                  if [ -z "$ENDPOINT" ]; then
+                      echo "⚠️  AZURE_AI_AGENTS_ENDPOINT not set — skipping start."
+                      echo "::endgroup::"
+                      exit 0
+                  fi
+
+                  # Parse account and project from AZURE_AI_AGENTS_ENDPOINT
+                  # Format: https://<account>.services.ai.azure.com/api/projects/<project>
+                  ACCOUNT_NAME=$(echo "$ENDPOINT" | sed -E 's|https://([^.]+)\..*|\1|')
+                  FOUNDRY_PROJECT=$(echo "$ENDPOINT" | sed -E 's|.*/projects/([^/]+).*|\1|')
+                  AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
+                  AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
+
+                  echo "Account: $ACCOUNT_NAME"
+                  echo "Project: $FOUNDRY_PROJECT"
+                  echo "Agent: $AGENT_NAME v$AGENT_VERSION"
+
+                  # Ensure cognitiveservices CLI extension is up to date
+                  az extension add --name cognitiveservices --upgrade --yes 2>/dev/null || true
+
+                  echo "Starting hosted agent version $AGENT_VERSION..."
+                  az cognitiveservices agent start \
+                      --account-name "$ACCOUNT_NAME" \
+                      --project-name "$FOUNDRY_PROJECT" \
+                      --name "$AGENT_NAME" \
+                      --agent-version "$AGENT_VERSION" \
+                      --min-replicas 1 \
+                      --max-replicas 2 \
+                      2>&1 || echo "⚠️  'az cognitiveservices agent start' failed — agent may already be running or CLI extension outdated."
+
+                  # Wait briefly for container startup before smoke tests
+                  echo "Waiting 30s for container to initialize..."
+                  sleep 30
+
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
             # Step 5f — Seed local SQLite DB (required for smoke-test tool calls)
             # ------------------------------------------------------------------
             - name: Set up local SQLite DB for smoke test
@@ -822,9 +878,10 @@ jobs:
                   token = credential.get_token("https://ai.azure.com/.default")
                   
                   # The hosted agent is accessible via the Foundry endpoint
-                  # Pattern: {endpoint}/agents/{agent_name}/responses
+                  # Pattern: {endpoint}/agents/{agent_name}/responses?api-version=...
                   # NOTE: We use agent name "agentic-ops-advisor" not agent_id
-                  responses_url = f"{endpoint.rstrip('/')}/agents/agentic-ops-advisor/responses"
+                  # The Foundry API gateway requires api-version on all requests.
+                  responses_url = f"{endpoint.rstrip('/')}/agents/agentic-ops-advisor/responses?api-version=2025-06-01"
                   
                   probe = "What is the GPU utilization trend for the last 24 hours?"
                   print(f"Probe query: {probe}")
