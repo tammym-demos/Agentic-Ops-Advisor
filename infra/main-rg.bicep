@@ -46,6 +46,9 @@ param sqlDatabaseSku string = 'Basic'
 @description('Override location for Azure SQL (use when primary region has capacity constraints).')
 param sqlLocation string = location
 
+@description('Enable Azure SQL deployment. Set to false when MCAPS policy blocks SQL or for SQLite-only demos.')
+param enableSql bool = false
+
 @description('Azure OpenAI GPT-4.1 model deployment capacity (1 000 TPM units).')
 param openAiCapacity int = 10
 
@@ -108,9 +111,9 @@ module appInsights 'modules/appinsights.bicep' = {
   }
 }
 
-// ---- Azure SQL Server + Database ------------------------------
+// ---- Azure SQL Server + Database (conditional) -----------------
 
-module sql 'modules/sql.bicep' = {
+module sql 'modules/sql.bicep' = if (enableSql) {
   name: 'sql'
   params: {
     serverName: sqlServerName
@@ -155,8 +158,8 @@ output openAiDeployment string = aiFoundry.outputs.modelDeploymentName
 @description('Application Insights connection string.')
 output appInsightsConnectionString string = appInsights.outputs.connectionString
 
-@description('Azure SQL ODBC connection string (ActiveDirectoryDefault — no password).')
-output sqlConnectionString string = sql.outputs.connectionString
+@description('Azure SQL ODBC connection string (empty when SQL is disabled).')
+output sqlConnectionString string = enableSql ? sql.outputs.connectionString : ''
 
 @description('Resource group name (from parameter, for deploy script compatibility).')
 output resourceGroupName string = resourceGroupName
