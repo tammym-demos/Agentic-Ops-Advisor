@@ -56,6 +56,10 @@ hooks:
 # =============================================================================
 # Services — Define containerized agent service
 # =============================================================================
+# NOTE: Deployment is handled by CI/CD (Docker + SDK + ARM), NOT azd deploy.
+# azd v1.23.14 does not support Foundry hosted agents (`host: containerapp`
+# targets Container Apps, which is the wrong resource type).
+# This section is retained for documentation and potential future azd support.
 services:
   agent:
     # Path to the agent source (root directory contains Dockerfile, agent/, tools/)
@@ -64,23 +68,19 @@ services:
     # Language runtime
     language: py
     
-    # Hosting platform: Container Apps for hosted agent service
-    host: containerapp
+    # NOTE: host is intentionally omitted — azd deploy is not used.
+    # Deployment goes through az acr build + Python SDK create_version + ARM REST.
     
     # Docker configuration
     docker:
-      # Image name (matches ACR convention: crhub{project}{env}/agentic-ops-advisor)
+      # Image name (matches ACR convention)
       image: agentic-ops-advisor
-      
-      # Use ACR remote build for optimized container layer caching
-      remoteBuild: true
       
       # Dockerfile is at repo root
       path: .
       context: .
     
-    # Agent manifest reference (required by azd ai agent extension)
-    # The agent.yaml file defines the agent's protocol, tools, and container runtime config
+    # Agent manifest reference
     agentManifest: agent.yaml
 
 # =============================================================================

@@ -379,3 +379,25 @@
 - **Pipeline:** Run #96 failed (dependency conflict); Run #97 in progress (expected to pass)
 - **Cross-team note:** Naomi completed legacy cleanup (329 tests passing). Drummer added Framework Modernization issues to GitHub Project board.
 - **Orchestration:** All team deliverables logged to .squad/orchestration-log/ — sprint consolidation complete
+
+### 2026-07-27: Hybrid Deploy Fix — Correct SDK Params, Extract deploy_agent.py, Fix azure.yaml
+- **Problem:** Run #101 hybrid deploy (commit 1741a86) had several issues:
+  1. SDK `create_version()` used wrong param `body=` instead of `definition=` (from old working deploy)
+  2. `ProtocolVersionRecord` used `protocol_name/protocol_version` instead of `protocol/version`
+  3. `az cognitiveservices account agent start` used wrong syntax (should be `az cognitiveservices agent start` with `--project-name`, `--name`, `--agent-version`, `--min-replicas`, `--max-replicas`)
+  4. `azure.yaml` still had `host: containerapp` which would break any accidental `azd deploy`
+  5. Inline Python was 70+ lines; no retry logic
+  6. Workflow was 727 lines (over 650 limit)
+- **Solution:**
+  1. Created `scripts/deploy_agent.py` — standalone deploy script with retry (5 attempts with backoff), proper SDK params, GITHUB_ENV + GITHUB_OUTPUT export
+  2. Fixed SDK: `definition=agent_definition` (not `body=`), `ProtocolVersionRecord(protocol=..., version=...)` (not `protocol_name/protocol_version`)
+  3. Fixed agent start: `az cognitiveservices agent start --account-name --project-name --name --agent-version --min-replicas --max-replicas` (matching old working deploy)
+  4. Removed `host: containerapp` from azure.yaml, added note explaining CI/CD handles deployment
+  5. Combined start + publish into single step (was separate steps 8+9)
+  6. Removed `resolve_names` step — ACR name from `AZURE_CONTAINER_REGISTRY_NAME` env var (default: `cragenticopsdemo`)
+  7. Added `AZURE_CONTAINER_REGISTRY_NAME` to env block
+  8. ARM REST publish body: no `authorizationPolicy` (causes errors per task spec)
+- **Line count:** 644 lines (under 650 limit, down from 727)
+- **Tests:** 329 passed
+- **Files modified:** `.github/workflows/deploy.yml`, `azure.yaml`, `scripts/deploy_agent.py` (new)
+- **Status:** ✅ Complete. Ready for deploy run.
