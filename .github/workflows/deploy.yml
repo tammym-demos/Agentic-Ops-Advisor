@@ -609,13 +609,13 @@ jobs:
                   print(f"   Model deployment: {deployment_name}")
                   print(f"   Container image: {container_image}")
 
-                  # Hosted agents is a preview feature — must opt-in with a custom header
-                  preview_headers = {"Foundry-Features": "HostedAgents=V1Preview"}
-
+                  # Hosted agents is a preview feature — must opt-in via allow_preview
+                  # This causes the SDK to send the Foundry-Features header automatically
+                  # on create_version() and other preview-gated operations.
                   client = AIProjectClient(
                       endpoint=endpoint,
                       credential=DefaultAzureCredential(),
-                      headers=preview_headers,
+                      allow_preview=True,
                   )
 
                   # Create hosted agent definition with container image reference
@@ -654,9 +654,16 @@ jobs:
                               definition=agent_definition,
                               description=agent_description,
                               metadata={"container_image": container_image, "deployment_type": "hosted"},
-                              headers=preview_headers,
                           )
                           print(f"✅ Hosted agent version created: {agent_version.name}/{agent_version.version}")
+
+                          # Log version details for debugging
+                          print(f"   Version ID: {agent_version.id}")
+                          print(f"   Created at: {agent_version.created_at}")
+                          if hasattr(agent_version, 'definition') and agent_version.definition:
+                              defn = agent_version.definition
+                              print(f"   Definition kind: {getattr(defn, 'kind', 'unknown')}")
+                              print(f"   Image: {getattr(defn, 'image', 'N/A')}")
                           break
                       except Exception as e:
                           if "PermissionDenied" in str(e) and attempt < MAX_RETRIES - 1:
@@ -697,27 +704,26 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 5e.1 — Start the hosted agent version
-            # Creating a version does NOT auto-start the container. The agent
-            # stays in "Stopped" state until explicitly started, causing the
-            # gateway to fall back to prompt-agent mode (RequiresAction).
-            # See: https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent
+            # Step 5e.1 — Verify hosted agent deployment status
+            # After create_version, check the agent status and list versions.
+            # A healthy hosted agent shows status: Started.
+            # See: https://learn.microsoft.com/azure/foundry/agents/how-to/deploy-hosted-agent
             # ------------------------------------------------------------------
-            - name: Start hosted agent version
+            - name: Verify hosted agent deployment
               continue-on-error: true
               run: |
-                  echo "::group::Start hosted agent deployment"
+                  echo "::group::Verify hosted agent deployment"
 
                   AGENT_ID="${DEPLOYED_AGENT_ID:-}"
                   if [ -z "$AGENT_ID" ]; then
-                      echo "⚠️  No agent deployed — skipping start."
+                      echo "⚠️  No agent deployed — skipping verification."
                       echo "::endgroup::"
                       exit 0
                   fi
 
                   ENDPOINT="${AZURE_AI_AGENTS_ENDPOINT:-}"
                   if [ -z "$ENDPOINT" ]; then
-                      echo "⚠️  AZURE_AI_AGENTS_ENDPOINT not set — skipping start."
+                      echo "⚠️  AZURE_AI_AGENTS_ENDPOINT not set — skipping verification."
                       echo "::endgroup::"
                       exit 0
                   fi
@@ -727,27 +733,101 @@ jobs:
                   ACCOUNT_NAME=$(echo "$ENDPOINT" | sed -E 's|https://([^.]+)\..*|\1|')
                   FOUNDRY_PROJECT=$(echo "$ENDPOINT" | sed -E 's|.*/projects/([^/]+).*|\1|')
                   AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
-                  AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
 
                   echo "Account: $ACCOUNT_NAME"
                   echo "Project: $FOUNDRY_PROJECT"
-                  echo "Agent: $AGENT_NAME v$AGENT_VERSION"
+                  echo "Agent: $AGENT_NAME"
 
                   # Ensure cognitiveservices CLI extension is up to date
                   az extension add --name cognitiveservices --upgrade --yes 2>/dev/null || true
 
-                  echo "Starting hosted agent version $AGENT_VERSION..."
-                  az cognitiveservices agent start \
+                  echo "--- Agent details ---"
+                  az cognitiveservices agent show \
                       --account-name "$ACCOUNT_NAME" \
                       --project-name "$FOUNDRY_PROJECT" \
                       --name "$AGENT_NAME" \
-                      --agent-version "$AGENT_VERSION" \
-                      --min-replicas 1 \
-                      --max-replicas 2 \
-                      2>&1 || echo "⚠️  'az cognitiveservices agent start' failed — agent may already be running or CLI extension outdated."
+                      2>&1 || echo "⚠️  'az cognitiveservices agent show' not available — CLI extension may not support agents yet."
 
-                  # Wait briefly for container startup before smoke tests
-                  echo "Waiting 30s for container to initialize..."
+                  echo ""
+                  echo "--- List all agents (check for stale prompt agents) ---"
+                  az cognitiveservices agent list \
+                      --account-name "$ACCOUNT_NAME" \
+                      --project-name "$FOUNDRY_PROJECT" \
+                      2>&1 || echo "⚠️  'az cognitiveservices agent list' not available."
+
+                  # Also verify via SDK — get_version provides deployment status
+                  echo ""
+                  echo "--- SDK version check ---"
+                  python - <<'PYEOF'
+                  import os, sys
+                  sys.path.insert(0, os.getcwd())
+
+                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
+                  agent_id = os.environ.get("DEPLOYED_AGENT_ID", "")
+                  if not endpoint or not agent_id:
+                      print("Skipped — no agent deployed.")
+                      sys.exit(0)
+
+                  from azure.ai.projects import AIProjectClient
+                  from azure.identity import DefaultAzureCredential
+
+                  client = AIProjectClient(
+                      endpoint=endpoint,
+                      credential=DefaultAzureCredential(),
+                      allow_preview=True,
+                  )
+
+                  agent_name = agent_id.split("/")[0]
+
+                  # List all versions to find stale prompt-agent versions
+                  print(f"Versions for agent '{agent_name}':")
+                  try:
+                      versions = client.agents.list_versions(agent_name=agent_name)
+                      for v in versions:
+                          defn = getattr(v, 'definition', None)
+                          kind = getattr(defn, 'kind', 'unknown') if defn else 'unknown'
+                          img = getattr(defn, 'image', 'N/A') if defn else 'N/A'
+                          print(f"  v{v.version}: kind={kind}, created={v.created_at}, image={img}")
+                  except Exception as e:
+                      print(f"  list_versions failed: {e}")
+
+                  # Get the deployed version details
+                  version_num = agent_id.split("/")[1]
+                  try:
+                      ver = client.agents.get_version(agent_name=agent_name, agent_version=version_num)
+                      print(f"\nDeployed version {version_num} details:")
+                      print(f"  ID: {ver.id}")
+                      print(f"  Name: {ver.name}")
+                      print(f"  Version: {ver.version}")
+                      print(f"  Created: {ver.created_at}")
+                      defn = getattr(ver, 'definition', None)
+                      if defn:
+                          print(f"  Kind: {getattr(defn, 'kind', 'unknown')}")
+                          print(f"  Image: {getattr(defn, 'image', 'N/A')}")
+                          print(f"  CPU: {getattr(defn, 'cpu', 'N/A')}")
+                          print(f"  Memory: {getattr(defn, 'memory', 'N/A')}")
+                          proto = getattr(defn, 'container_protocol_versions', None)
+                          if proto:
+                              print(f"  Protocols: {[f'{p.protocol}:{p.version}' for p in proto]}")
+                      # Dump raw dict for full visibility
+                      print(f"\n  Raw: {ver.as_dict()}")
+                  except Exception as e:
+                      print(f"  get_version failed: {e}")
+
+                  # Also get the top-level agent details
+                  try:
+                      agent = client.agents.get(agent_name=agent_name)
+                      print(f"\nTop-level agent details:")
+                      print(f"  Name: {agent.name}")
+                      print(f"  Versions: {getattr(agent, 'versions', 'N/A')}")
+                      print(f"  Raw: {agent.as_dict()}")
+                  except Exception as e:
+                      print(f"  get agent failed: {e}")
+                  PYEOF
+
+                  # Brief wait for container warmup before smoke tests
+                  echo ""
+                  echo "Waiting 30s for container warmup..."
                   sleep 30
 
                   echo "::endgroup::"

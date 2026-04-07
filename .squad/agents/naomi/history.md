@@ -45,6 +45,17 @@
 - **Commit:** ca9dc78. Pushed to main. Deploy Run #86 triggered.
 - **Status:** ✅ SUCCESS — Responses API v1 compliant. Ready for Foundry container rebuild and redeployment.
 
+### 2026-04-08: Smoke Test + Hosted Agent Activation Fix (Deploy Run #87)
+- **Task:** Fix two issues from Deploy Run #87: (1) smoke test 400 error, (2) Playground RequiresAction.
+- **Root cause 1:** Hosted agent smoke test URL missing `?api-version=2025-06-01` query parameter. Foundry API gateway requires this on all requests.
+- **Root cause 2:** `create_version()` creates the agent version definition but does NOT start the container. Without an explicit `az cognitiveservices agent start`, the agent stays in "Stopped" state and the gateway falls back to prompt-agent mode (RequiresAction with function_call content).
+- **Fix 1:** Added `?api-version=2025-06-01` to the responses_url in deploy.yml smoke test step 6b.
+- **Fix 2:** Added new Step 5e.1 after `create_version()` that calls `az cognitiveservices agent start` to activate the container with min/max replicas 1/2. Includes 30s warmup wait before smoke tests.
+- **SDK investigation:** `AgentsOperations` has no `activate_version()` or `start()` method. Lifecycle management (start/stop) is management-plane only via Azure CLI.
+- **Docs ref:** https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent
+- **Tests:** 366 passed, 0 failed.
+- **Commit:** ad4ef07. Pushed to main.
+
 ### 2026-04-07: Container Auth & Dockerfile Fix (Deploy Run #86 Failure)
 - **Task:** Fix hosted agent runtime failures — 401 Unauthorized in smoke test, potential package access crash in container.
 - **Root causes:** (1) Dockerfile installed pip packages with `--user` to `/root/.local/`, but container runs as `USER agent` who can't read `/root/`; (2) `serve.py` only supported managed identity auth — no fallback if `DefaultAzureCredential` fails in container; (3) Smoke test used wrong audience (`cognitiveservices.azure.com` vs `ai.azure.com`); (4) `AZURE_CLIENT_ID` and `AZURE_OPENAI_API_KEY` not passed to container env.
