@@ -12,6 +12,7 @@ A **governed, production-style AI agent** that performs root-cause + change-cont
 
 ## Table of Contents
 
+- [🎬 Running the Demo](#-running-the-demo)
 1. [Project Overview & Architecture](#1-project-overview--architecture)
 2. [Prerequisites](#2-prerequisites)
 3. [Local Setup](#3-local-setup)
@@ -53,6 +54,97 @@ python -m pytest tests/ -q
 ```
 
 > **Demo mode** runs without Azure OpenAI — queries hit the local tools directly. Set `AZURE_OPENAI_ENDPOINT` in `.env` to enable full **Agent mode** with LLM-powered reasoning.
+
+---
+
+## 🎬 Running the Demo
+
+Three ways to run the Agentic Ops Advisor, from simplest to full cloud:
+
+### Option A — Local Demo Mode (No Azure Required)
+
+The fastest way to see the agent's tool surface in action. No LLM, no cloud — queries run directly against the local SQLite database.
+
+```bash
+# 1. Install dependencies (if not done)
+pip install -r requirements.txt
+
+# 2. Seed the database (generates 30 days of synthetic telemetry)
+python scripts/setup_local_db.py
+
+# 3. Clear the Azure endpoint to force demo mode
+#    (your .env may have AZURE_OPENAI_ENDPOINT set)
+
+# Linux/macOS:
+unset AZURE_OPENAI_ENDPOINT
+
+# Windows PowerShell:
+$env:AZURE_OPENAI_ENDPOINT = ""
+
+# 4. Run the agent
+python scripts/run_local.py
+```
+
+You'll see 4 suggested queries — type a number or ask your own question. Results include:
+- **Telemetry data** — GPU utilization, network latency, cost trends, incidents
+- **Work IQ context** — change events, decisions, ownership, runbooks (simulated)
+
+> **💡 Tip:** If the agent crashes with `Missing credentials`, your `.env` file has `AZURE_OPENAI_ENDPOINT` set. Clear it as shown above to use demo mode.
+
+### Option B — Local Agent Mode (Azure OpenAI)
+
+Full LLM-powered reasoning with GPT-4.1. The agent correlates telemetry with change context and provides root-cause analysis with confidence scores.
+
+```bash
+# 1. Log in to Azure (for DefaultAzureCredential)
+az login --tenant <your-tenant-id>
+
+# 2. Ensure .env has these variables set:
+#    AZURE_OPENAI_ENDPOINT=https://hub-agentops-prod.openai.azure.com
+#    AZURE_OPENAI_DEPLOYMENT=gpt-4.1
+
+# 3. Run the agent
+python scripts/run_local.py
+```
+
+The agent will:
+- Parse your natural-language question
+- Call the SQL telemetry tool (function calling)
+- Call the Work IQ context tool
+- Synthesize a root-cause analysis with evidence citations
+- Include a **Confidence: High/Med/Low** line and **Next best question**
+
+### Option C — Azure AI Foundry (Cloud Deployment)
+
+The full production deployment — the agent runs as a container in Azure AI Foundry Agent Service with a baked-in SQLite database.
+
+1. **Trigger a deploy** — push to `main` or manually dispatch the `deploy.yml` workflow
+2. **Open the Foundry portal** — [ai.azure.com](https://ai.azure.com) → your project → **Agents**
+3. **Chat with the agent** — use the built-in chat UI to ask questions
+4. **View traces** — select **Tracing** in the left pane to see the full tool-call waterfall
+
+> **How it works:** The Docker build runs `python scripts/setup_local_db.py` at image build time, baking a fresh SQLite database (with current timestamps) into the container. The agent queries this database via `tools/sql_telemetry.py` with `DB_MODE=sqlite`. No external database needed.
+
+### Demo Query Suggestions
+
+| # | Query | What It Shows |
+|---|-------|---------------|
+| 1 | "Why did GPU utilization drop in the last 24h?" | Telemetry correlation + anomaly detection |
+| 2 | "What changed right before the latency spike?" | Change-context reasoning (Work IQ) |
+| 3 | "Is this a known issue or a change-caused incident?" | Incident + change event cross-referencing |
+| 4 | "What's the safest remediation plan?" | Risk-aware action proposals |
+
+### Planted Anomalies in the Synthetic Data
+
+The seed data contains three planted anomalies for demo storytelling:
+
+| ~Day | Anomaly | What the Agent Should Find |
+|------|---------|---------------------------|
+| 18 | GPU utilization drop | `cluster-a` / `node-1` collapses to < 15% |
+| 22 | Network latency spike | `site-west` latency exceeds 180 ms, packet loss spikes |
+| 25 | Cost surge | `cluster-a` spend jumps 5–7× baseline (open incident) |
+
+> For the full 7-step regression demo script (inject fault → detect → fix → recover), see [Regression Demo Walkthrough](#8-regression-demo-walkthrough).
 
 ---
 
