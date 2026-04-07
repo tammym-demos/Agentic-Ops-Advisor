@@ -95,7 +95,7 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-11-01-pr
 
 // ---- AI Foundry Hub (CognitiveServices AIServices) ------------
 
-resource aiHub 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
+resource aiHub 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   name: hubName
   location: location
   kind: 'AIServices'
@@ -120,7 +120,7 @@ resource aiHub 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
 
 // ---- GPT-4.1 deployment (native to Hub) -----------------------
 
-resource gpt41Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource gpt41Deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: aiHub
   name: deploymentName
   sku: {
@@ -138,7 +138,7 @@ resource gpt41Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-
 
 // ---- AI Foundry Project (CognitiveServices project) -----------
 
-resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2024-10-01' = {
+resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   parent: aiHub
   name: projectName
   location: location
@@ -151,7 +151,7 @@ resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2024-10-01' = 
     }
   }
   properties: {
-    friendlyName: projectName
+    displayName: projectName
     description: 'Agentic Ops Advisor — AI Foundry Project'
   }
 }
