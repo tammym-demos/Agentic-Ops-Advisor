@@ -622,8 +622,8 @@ jobs:
                       container_protocol_versions=[
                           ProtocolVersionRecord(protocol="responses", version="v1"),
                       ],
-                      cpu="4",
-                      memory="16GB",
+                      cpu="2",
+                      memory="4Gi",
                       image=container_image,
                       environment_variables={
                           "AZURE_OPENAI_ENDPOINT": os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
