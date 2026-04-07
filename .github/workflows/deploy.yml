@@ -378,26 +378,20 @@ jobs:
                   echo "✅ azd environment configured"
 
             # ------------------------------------------------------------------
-            # Step 7 — Deploy agent using azd up
+            # Step 7 — Deploy agent (skip provisioning, already done in deploy-infra job)
             # ------------------------------------------------------------------
-            # azd up performs:
-            #   1. Package: Builds the container image
-            #   2. Provision: Deploys infra (we skip this since deploy-infra job handled it)
-            #   3. Deploy: Creates/updates the hosted agent + publishes application
+            # `azd deploy` performs package + deploy without provisioning:
+            #   - Builds and pushes the container image to ACR
+            #   - Creates/updates the hosted agent version
+            #   - Publishes the Agent Application
             # ------------------------------------------------------------------
             - name: Deploy agent with azd
               run: |
-                  echo "::group::azd up"
+                  echo "::group::azd deploy"
                   
-                  # Use --skip-infra to skip Bicep provisioning (already done in deploy-infra job)
-                  # azd will handle:
-                  #   - Building and pushing the container image to ACR
-                  #   - Creating/updating the hosted agent version
-                  #   - Publishing the Agent Application
-                  azd up \
+                  azd deploy \
                       --environment production \
-                      --no-prompt \
-                      --skip-infra
+                      --no-prompt
                   
                   echo "✅ Agent deployed via azd"
                   echo "::endgroup::"
