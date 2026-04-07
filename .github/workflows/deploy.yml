@@ -133,7 +133,7 @@ jobs:
         env:
             AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
             AZURE_RESOURCE_GROUP: rg-agentic-ops-advisor
-            AZURE_LOCATION: eastus2
+            AZURE_LOCATION: eastus
             AZURE_AI_AGENTS_ENDPOINT: ${{ secrets.AZURE_AI_AGENTS_ENDPOINT }}
             AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
             AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
