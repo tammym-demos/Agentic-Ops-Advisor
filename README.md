@@ -30,6 +30,8 @@ A **governed, production-style AI agent** that performs root-cause + change-cont
 
 ## Quick Start
 
+### For Local Development (No Azure)
+
 ```bash
 # 1. Clone and enter the repo
 git clone https://github.com/tammym-demos/Agentic-Ops-Advisor.git
@@ -54,6 +56,26 @@ python -m pytest tests/ -q
 ```
 
 > **Demo mode** runs without Azure OpenAI — queries hit the local tools directly. Set `AZURE_OPENAI_ENDPOINT` in `.env` to enable full **Agent mode** with LLM-powered reasoning.
+
+### For Production Deployment to Azure (azd-based)
+
+**Prerequisites:** Azure CLI, [azd CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd), Python 3.11+
+
+```bash
+# 1. Install the Azure AI Agents extension
+azd ext install azure.ai.agents
+
+# 2. Log in to Azure
+azd auth login
+
+# 3. Deploy infrastructure + agent (one command)
+azd up
+
+# 4. Open the Foundry portal
+# Navigate to ai.azure.com → your project → Agents → agentic-ops-advisor
+```
+
+> **What `azd up` does:** Provisions Azure AI Foundry, Azure OpenAI, Azure SQL, Application Insights, and deploys the agent as a containerized hosted agent. Configuration is declarative in `azure.yaml` and `agent.yaml`. See [Deploying to Azure](#6-deploying-to-azure) for details.
 
 ---
 
@@ -228,6 +250,7 @@ Before you begin, ensure you have the following installed and configured:
 |---|---|
 | Python | 3.11 or higher |
 | Azure CLI (`az`) | [Install guide](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) — must be authenticated (`az login`) |
+| Azure Developer CLI (`azd`) | [Install guide](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/install-azd) — required for `azd up` deployment |
 | GitHub CLI (`gh`) | [Install guide](https://cli.github.com/) — for CI/CD operations |
 | Git | Any recent version |
 | Azure Subscription | With access to create AI Foundry, Azure OpenAI, and Azure SQL resources |
@@ -244,7 +267,7 @@ az provider register --namespace Microsoft.KeyVault
 az provider register --namespace Microsoft.ContainerRegistry
 ```
 
-**Required Azure resources** (provisioned via `infra/deploy.sh` — see [Deploying to Azure](#6-deploying-to-azure)):
+**Required Azure resources** (provisioned automatically via `azd up` — see [Deploying to Azure](#6-deploying-to-azure)):
 
 - Azure AI Foundry project (includes Azure OpenAI)
 - Azure SQL Database (production) or SQLite (local dev — no setup needed)
@@ -453,65 +476,77 @@ Evaluations run automatically on every pull request via the `.github/workflows/c
 
 ## 6. Deploying to Azure
 
-### Step 1 — Log in to Azure
+### Quick Deploy (Recommended)
+
+The simplest way to deploy is using the Azure Developer CLI (`azd`), which automates infrastructure provisioning and agent deployment:
 
 ```bash
+# 1. Install the azure.ai.agents extension
+azd ext install azure.ai.agents
+
+# 2. Log in to Azure
+azd auth login
+
+# 3. Deploy everything in one command
+azd up
+```
+
+This automatically:
+- Provisions Azure AI Foundry project and Azure OpenAI (gpt-4.1)
+- Creates Azure SQL database with telemetry schema
+- Deploys the agent as a containerized hosted agent to Azure Container Apps
+- Configures Application Insights for observability
+- Sets up managed identity and role assignments
+
+> The deployment is declarative and idempotent. See `azure.yaml` (infrastructure config) and `agent.yaml` (agent manifest) in the repo root.
+
+### What Gets Deployed
+
+| Component | Purpose | Config File |
+|---|---|---|
+| Azure AI Foundry project | Agent hosting + Azure OpenAI | `azure.yaml` (services section) |
+| Agent container (Responses API v1) | Hosted agent at `scripts/serve.py` | `agent.yaml` (container section) |
+| Azure SQL Database | Production telemetry storage | `infra/main-rg.bicep` |
+| Application Insights | Observability + trace export | `infra/main-rg.bicep` |
+| Azure Container Registry (ACR) | Container image storage | `azure.yaml` (docker section) |
+
+### Verify Deployment
+
+Once `azd up` completes:
+
+1. **Open Azure AI Foundry portal:** Navigate to [ai.azure.com](https://ai.azure.com) → your project → **Agents**
+2. **Find the agent:** Look for **agentic-ops-advisor** in the agents list
+3. **Test it:** Use the built-in chat UI in Foundry to ask questions
+
+### Manual Deployment (Advanced)
+
+For customization or troubleshooting, you can also provision infrastructure and deploy separately:
+
+```bash
+# 1. Log in
 az login
 az account set --subscription <YOUR_SUBSCRIPTION_ID>
-```
 
-### Step 2 — Provision infrastructure
-
-The Bicep templates in `infra/` create all required Azure resources:
-
-```bash
+# 2. Provision infrastructure using Bicep
 cd infra
 ./deploy.sh
-```
 
-This creates:
-- Azure AI Foundry project (+ Azure OpenAI with `gpt-4.1` deployment)
-- Azure SQL Database with the telemetry schema
-- Application Insights workspace
-- Managed Identity with required role assignments
+# 3. Update .env with outputs
+# (Copy connection strings from deploy.sh output)
 
-> Deployment takes approximately 10–15 minutes.
-
-### Step 3 — Update `.env` with Azure connection strings
-
-After `deploy.sh` completes, it prints the connection strings. Copy them to `.env`:
-
-```dotenv
-AZURE_AI_PROJECT_CONNECTION_STRING=<from Bicep output>
-AZURE_OPENAI_ENDPOINT=<from Bicep output>
-DB_MODE=azure_sql
-DB_CONNECTION_STRING=<from Bicep output>
-APPLICATIONINSIGHTS_CONNECTION_STRING=<from Bicep output>
-```
-
-### Step 4 — Configure the database
-
-> **Note:** The current deployment uses SQLite baked into the Docker image. For Azure SQL production deployments, set `DB_MODE=azure_sql` and `DB_CONNECTION_STRING` in your environment. See the [Environment Variables Reference](#9-environment-variables-reference) for details.
-
-### Step 5 — Deploy the agent to Foundry Agent Service
-
-```bash
+# 4. Deploy agent to Foundry (optional — azd up includes this)
 python scripts/deploy_agent.py
 ```
 
-This registers the agent definition (system prompt + tool schemas) with the Foundry Agent Service endpoint specified in `AZURE_AI_PROJECT_CONNECTION_STRING`.
-
-### Step 6 — Verify deployment
-
-Open the [Azure AI Foundry portal](https://ai.azure.com), navigate to your project, and select **Agents** in the left pane. You should see the **Agentic Ops Advisor** agent listed and ready to test.
-
-> 📦 For **container-based deployment** (recommended for production with custom tools), see [Container Deployment](#7-container-deployment) below.
+> **Note on `agent/agent.py`:** This is legacy code used for local CLI testing only. The production deployment uses `scripts/serve.py` (hosted agent HTTP server implementing the Foundry Responses API v1). The `agent/agent.py` file will be removed in a future release per the framework modernization decision.
 
 ---
 
 ## 7. Container Deployment
 
-The agent is deployed as a **hosted agent** implementing the **Azure AI Foundry Responses API**. The container includes the agent code, all three custom tool surfaces, and a seeded SQLite database with synthetic telemetry. The hosted agent pattern provides server-side tool dispatch, stateless request handling, and seamless integration with Foundry's observability features.
+The agent is deployed as a **hosted agent** implementing the **Azure AI Foundry Responses API v1**. The container includes the agent code, all three custom tool surfaces, and a seeded SQLite database with synthetic telemetry. The hosted agent pattern provides server-side tool dispatch, stateless request handling, and seamless integration with Foundry's observability features.
+
+> **Production Server:** `scripts/serve.py` is the HTTP server that handles all production requests. It implements the Responses API v1 and is automatically deployed in the Docker container. For local testing, you can run it directly with `python scripts/serve.py` (see [Local development modes](#local-development-modes)).
 
 ### Hosted Agent Pattern
 
@@ -544,7 +579,7 @@ The hosted agent pattern requires all tool code to be deployed with the agent. C
 └─────────────────────────────────────────┘
          ↕
    Azure AI Foundry Agent Service
-   (invokes container via Responses API)
+   (invokes container via Responses API v1)
          ↕
    GPT-4.1 (Azure OpenAI)
 ```
@@ -554,8 +589,9 @@ The hosted agent pattern requires all tool code to be deployed with the agent. C
 | File | Purpose |
 |---|---|
 | `Dockerfile` | Production container image definition |
-| `agent.yaml` | Foundry hosted agent manifest (protocol: responses, port: 8088) |
-| `scripts/serve.py` | HTTP server implementing Foundry Responses API |
+| `agent.yaml` | Foundry hosted agent manifest (protocol: responses v1, port: 8088) — referenced by `azd up` |
+| `azure.yaml` | Infrastructure and deployment config for `azd up` |
+| `scripts/serve.py` | HTTP server implementing Foundry Responses API v1 — **production entrypoint** |
 | `static/index.html` | Local chat UI for testing the hosted agent |
 | `.dockerignore` | Excludes secrets, docs, and build artifacts from image |
 
@@ -576,7 +612,7 @@ python scripts/run_local.py
 python scripts/serve.py
 ```
 - Starts aiohttp server on port 8088
-- Implements POST `/responses` endpoint (Foundry Responses API)
+- Implements POST `/responses` endpoint (Foundry Responses API v1)
 - GET `/health` for health checks
 - GET `/` serves `static/index.html` (chat UI)
 - Matches production behavior exactly
@@ -614,9 +650,7 @@ The GitHub Actions workflow (`.github/workflows/deploy.yml`) automatically:
 1. **Builds the Docker image** — tagged with commit SHA
 2. **Pushes to Azure Container Registry (ACR)** — centralized image storage
 3. **Deploys the hosted agent to Foundry** — registers the container with agent.yaml manifest
-4. **Runs smoke tests** — validates both prompt agent and hosted agent patterns
-   - **Prompt agent pattern** — client-side tool dispatch (legacy compatibility)
-   - **Hosted agent pattern** — server-side tool dispatch via Responses API (production pattern)
+4. **Runs smoke tests** — validates the hosted agent pattern (server-side tool dispatch via Responses API v1)
 
 The hosted agent is then accessible via:
 - **Foundry portal** — ai.azure.com → your project → Agents → agentic-ops-advisor
