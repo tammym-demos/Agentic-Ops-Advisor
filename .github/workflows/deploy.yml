@@ -609,9 +609,13 @@ jobs:
                   print(f"   Model deployment: {deployment_name}")
                   print(f"   Container image: {container_image}")
 
+                  # Hosted agents is a preview feature — must opt-in with a custom header
+                  preview_headers = {"Foundry-Features": "HostedAgents=V1Preview"}
+
                   client = AIProjectClient(
                       endpoint=endpoint,
                       credential=DefaultAzureCredential(),
+                      headers=preview_headers,
                   )
 
                   # Create hosted agent definition with container image reference
@@ -648,6 +652,7 @@ jobs:
                               definition=agent_definition,
                               description=agent_description,
                               metadata={"container_image": container_image, "deployment_type": "hosted"},
+                              headers=preview_headers,
                           )
                           print(f"✅ Hosted agent version created: {agent_version.name}/{agent_version.version}")
                           break
