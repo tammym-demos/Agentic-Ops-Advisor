@@ -172,3 +172,8 @@
 - **Validation:** 366 tests pass, ruff lint clean, import smoke test confirms both functions are coroutines.
 - **Key files:** `scripts/serve.py`.
 - **Pattern:** For `openai.AzureOpenAI` auth, always use `azure.identity.DefaultAzureCredential` + `get_bearer_token_provider` — never rely on env var auto-detection.
+
+### 2026-04-10: serve.py Cross-Agent Coordination — Complete
+- **Orchestration:** Holden diagnosed 4 bugs; Naomi diagnosed same bugs + 2 edge cases; Naomi implemented all fixes. Decisions merged, diagnostics deduped to .squad/decisions/decisions.md.
+- **Status:** ✅ Ready for deployment
+- **Outcome:** All 4 critical bugs in .scripts/serve.py now fixed. 366 tests pass, lint clean. Foundry Playground demo unblocked.

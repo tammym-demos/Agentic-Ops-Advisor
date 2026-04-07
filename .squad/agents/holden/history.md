@@ -155,3 +155,16 @@
 - **Deploy.yml observation:** `HostedAgentDefinition` correctly omits tool definitions (container handles them), but doesn't set `AZURE_OPENAI_API_KEY` env var (intentional — should use managed identity, but serve.py doesn't implement that).
 - **Assignment:** Naomi (Backend), ~2.5h total.
 - **Decision written to:** `.squad/decisions/inbox/holden-serve-review.md`
+
+### 2026-04-10: serve.py Fixes — Implementation Complete (Naomi)
+- **Status:** ✅ IMPLEMENTED & VERIFIED
+- **Cross-team outcome:** Naomi (Backend) completed all 4 bug fixes in `scripts/serve.py` to unblock Foundry Playground demo.
+- **Fixes verified:**
+  - ✅ Auth: Added `get_bearer_token_provider(DefaultAzureCredential())` with `azure_ad_token_provider=token_provider`. Wrapped in try/except.
+  - ✅ Event loop: Converted `_call_tool()` and `_run_agent_conversation()` to async. Direct import of async `query_telemetry`. `asyncio.to_thread()` for sync OpenAI calls. Exception handler widened to `except Exception`.
+  - ✅ Response format: Wrapped content in content block array per Foundry spec.
+  - ✅ Input format: Added `elif isinstance(input_data, list)` case with proper Foundry Responses API v1 parsing.
+- **Quality:** 366 tests pass, lint clean, async functions verified.
+- **Known low-severity issue (out of scope):** `agent.yaml` parameter name mismatch (`change_id` + `approver` vs `change_request_id`).
+- **Next steps:** Container rebuild, Foundry redeployment, demo with real queries.
+- **Decision merged to:** `.squad/decisions/decisions.md` (deduped with Naomi's diagnostic)

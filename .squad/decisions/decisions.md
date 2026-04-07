@@ -113,6 +113,65 @@ Rewrote Bicep templates (`aifoundry.bicep`, `openai.bicep`, `main.bicep`) to mat
 
 ---
 
+## serve.py Critical Bug Fixes — Hosted Agent Tool Execution
+
+**Date:** 2026-04-07  
+**Authors:** Holden (Lead review), Naomi (Backend Dev — diagnosis & implementation)  
+**Status:** ✅ IMPLEMENTED — ready for deployment  
+**Severity:** 🔴 CRITICAL — blocks Foundry Playground demo
+
+### Context
+Hosted agent deployed to Foundry Playground (Run #84, agent ID: agentic-ops-advisor/1) passes health check but returns tool descriptions instead of executed results. Root cause: 4 compounding bugs in `scripts/serve.py`.
+
+### Root Causes (Holden + Naomi diagnosis, deduped)
+
+**Bug #1: Missing Azure OpenAI Authentication (FATAL)**
+- `AzureOpenAI()` constructor has no credentials parameter
+- `openai` library doesn't auto-detect `DefaultAzureCredential` (that's Azure SDK pattern)
+- Constructor raises `OpenAIError("Missing credentials...")` uncaught → 500 error
+- **Fix:** Use `get_bearer_token_provider(DefaultAzureCredential())` with `azure_ad_token_provider` parameter
+
+**Bug #2: Event Loop Conflict in Tool Execution (FATAL)**
+- aiohttp runs sync `_run_agent_conversation()` inside event loop
+- When LLM returns tool_calls, dispatch chain: `_call_tool()` → `_sync_query_telemetry()` → `asyncio.run()`
+- Python 3.11 detects running event loop, raises `RuntimeError: asyncio.run() cannot be called from a running event loop`
+- Exception not caught (handler only catches `JSONDecodeError, TypeError, ValueError, FileNotFoundError, OSError`) → 500 error
+- **Fix:** Convert `_run_agent_conversation()` and `_call_tool()` to async. Use `asyncio.to_thread()` for sync OpenAI calls. Widen exception handler to `except Exception`
+
+**Bug #3: Foundry Responses API Input Format Mismatch (MODERATE)**
+- Parser only handles string and dict with `messages` key
+- Foundry Responses API v1 sends input as array of message objects → 400 error
+- **Fix:** Add `elif isinstance(input_data, list)` case
+
+**Bug #4: Foundry Responses API Output Format Mismatch (MODERATE)**
+- Current: `"content": "plain string"`
+- Foundry expects: `"content": [{"type": "output_text", "text": "..."}]` (array of content blocks)
+- May cause empty/malformed rendering in Playground
+- **Fix:** Wrap content in content block array
+
+### Implementation (Naomi)
+
+All fixes in `scripts/serve.py`:
+- ✅ Added Azure identity imports, `get_bearer_token_provider()` setup, try/except around auth
+- ✅ Converted `_call_tool()` and `_run_agent_conversation()` to async
+- ✅ Import async `query_telemetry` directly; use `asyncio.to_thread()` for sync OpenAI calls
+- ✅ Widened exception handler to `except Exception`
+- ✅ Added list input handling with proper Foundry format parsing
+- ✅ Wrapped response content in content block array
+
+### Verification
+- **Tests:** 366 passed, 0 failed
+- **Lint:** `ruff check scripts/serve.py` clean
+- **Smoke test:** Import verified, both functions confirmed as async (coroutine)
+- **Known issue (out of scope):** `agent.yaml` parameter name mismatch (`change_id` + `approver` vs `change_request_id`) — low severity, doesn't block demo
+
+### Next Steps
+1. Container rebuild and Foundry redeployment
+2. Test in Foundry Playground with real queries
+3. Tammy runs demo
+
+---
+
 ## Branch Cleanup — Merge Strategy for Stale copilot/* Branches
 
 **Date:** 2026-04-06  
