@@ -113,6 +113,7 @@ resource aiHub 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
     customSubDomainName: hubName
     publicNetworkAccess: 'Enabled'
     allowProjectManagement: true
+    disableLocalAuth: false
     networkAcls: {
       defaultAction: 'Allow'
     }

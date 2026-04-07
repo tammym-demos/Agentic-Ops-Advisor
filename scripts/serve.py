@@ -473,13 +473,19 @@ def main() -> None:
     logger.info("AZURE_OPENAI_ENDPOINT: %s", os.environ.get("AZURE_OPENAI_ENDPOINT", "(not set)"))
     logger.info("AZURE_OPENAI_API_KEY: %s", "set" if os.environ.get("AZURE_OPENAI_API_KEY") else "not set")
     logger.info("AZURE_CLIENT_ID: %s", "set" if os.environ.get("AZURE_CLIENT_ID") else "not set")
-    try:
-        from azure.identity import DefaultAzureCredential
-        cred = DefaultAzureCredential()
-        cred.get_token("https://cognitiveservices.azure.com/.default")
-        logger.info("Managed identity auth: SUCCESS")
-    except Exception as diag_exc:
-        logger.warning("Managed identity auth: FAILED (%s)", diag_exc)
+    # Skip managed identity probe at startup when API key is available.
+    # DefaultAzureCredential().get_token() probes IMDS at 169.254.169.254,
+    # which hangs ~2 min when no MI is configured — blocking server startup.
+    if not os.environ.get("AZURE_OPENAI_API_KEY"):
+        try:
+            from azure.identity import DefaultAzureCredential
+            cred = DefaultAzureCredential()
+            cred.get_token("https://cognitiveservices.azure.com/.default")
+            logger.info("Managed identity auth: SUCCESS")
+        except Exception as diag_exc:
+            logger.warning("Managed identity auth: FAILED (%s)", diag_exc)
+    else:
+        logger.info("API key available — skipping managed identity probe at startup")
 
     # Ensure DB exists before starting server
     try:
