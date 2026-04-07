@@ -578,16 +578,27 @@ jobs:
                   agent_toolset.add(FunctionTool(functions=function_set))
 
                   # Upsert agent: list existing, update if found, create if not
-                  try:
-                      agents = client.list_agents()
-                      existing = next((a for a in agents if a.name == "agentic-ops-advisor"), None)
-                  except Exception as e:
-                      print(f"❌ Failed to list agents: {e}")
-                      print("\n🔍 Troubleshooting:")
-                      print("   1. Verify AZURE_AI_AGENTS_ENDPOINT is correct")
-                      print("   2. Check that the SP has 'Azure AI Developer' role on the Hub")
-                      print("   3. Ensure the Hub and project are accessible")
-                      sys.exit(1)
+                  # Retry with backoff to handle RBAC propagation delays
+                  import time
+                  MAX_RETRIES = 5
+                  existing = None
+                  for attempt in range(MAX_RETRIES):
+                      try:
+                          agents = client.list_agents()
+                          existing = next((a for a in agents if a.name == "agentic-ops-advisor"), None)
+                          break
+                      except Exception as e:
+                          if "PermissionDenied" in str(e) and attempt < MAX_RETRIES - 1:
+                              wait = 30 * (attempt + 1)
+                              print(f"⏳ RBAC not propagated yet (attempt {attempt + 1}/{MAX_RETRIES}), waiting {wait}s...")
+                              time.sleep(wait)
+                          else:
+                              print(f"❌ Failed to list agents: {e}")
+                              print("\n🔍 Troubleshooting:")
+                              print("   1. Verify AZURE_AI_AGENTS_ENDPOINT is correct")
+                              print("   2. Check that the SP has 'Azure AI Developer' role on the Hub")
+                              print("   3. Ensure the Hub and project are accessible")
+                              sys.exit(1)
 
                   agent_kwargs = dict(
                       model=deployment_name,
