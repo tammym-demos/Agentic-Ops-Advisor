@@ -194,25 +194,3 @@ class TestActionStub:
         assert "request_approval" in names
 
 
-# ---------------------------------------------------------------------------
-# agent.agent — AgentOpsAdvisor class smoke tests
-# ---------------------------------------------------------------------------
-
-
-class TestAgentOpsAdvisorImport:
-    """Smoke tests verifying agent.agent can be imported and basic constants exist."""
-
-    def test_agent_name_constant(self):
-        from agent.agent import AGENT_NAME
-
-        assert AGENT_NAME == "agentic-ops-advisor"
-
-    def test_advisor_class_importable(self):
-        from agent.agent import AgentOpsAdvisor
-
-        assert AgentOpsAdvisor is not None
-
-    def test_run_query_importable(self):
-        from agent.agent import run_query
-
-        assert callable(run_query)

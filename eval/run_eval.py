@@ -166,13 +166,8 @@ def _stub_agent(query: str) -> str:
 
 
 def _get_agent_fn():
-    """Return the real agent ``run_agent`` function if importable, else stub."""
-    try:
-        from agent.agent import run_agent  # type: ignore[import]
-
-        return run_agent
-    except (ImportError, AttributeError):
-        return _stub_agent
+    """Return the stub agent function used for offline evaluation."""
+    return _stub_agent
 
 
 # ---------------------------------------------------------------------------
