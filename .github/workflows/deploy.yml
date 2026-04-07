@@ -347,7 +347,10 @@ jobs:
             # Step 5 — Install Azure Developer CLI (azd)
             # ------------------------------------------------------------------
             - name: Install azd
-              uses: Azure/setup-azd@v1.0.0
+              run: |
+                  curl -fsSL https://aka.ms/install-azd.sh | bash
+                  echo "$HOME/.azd/bin" >> "$GITHUB_PATH"
+                  azd version
 
             # ------------------------------------------------------------------
             # Step 6 — Configure azd environment
