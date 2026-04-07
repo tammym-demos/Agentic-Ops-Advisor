@@ -1,8 +1,8 @@
 # Agentic Ops Advisor
 
-> ⚠️ **Synthetic Data Only** — This demo uses entirely synthetic data. No real infrastructure, customer, or Microsoft internal data is included.
+> ⚠️ **Synthetic Data Only** — This demo uses entirely synthetic data. No real infrastructure, customer, or Microsoft internal data is included. (See [Disclaimers](#11-disclaimers))
 
-> ℹ️ **Work IQ Notice** — We're simulating Work IQ outputs in this demo. Work IQ is in public preview and requires Microsoft 365 Copilot licensing + admin consent for tenant data access.
+> ℹ️ **Work IQ Notice** — We're simulating Work IQ outputs in this demo. Work IQ is in public preview and requires Microsoft 365 Copilot licensing + admin consent for tenant data access. (See [Disclaimers](#11-disclaimers))
 
 A **governed, production-style AI agent** that performs root-cause + change-context reasoning over infrastructure telemetry and operator intent. Built for deployment to **Azure AI Foundry Agent Service**, this demo showcases agentic ops, hybrid governance, and self-driving operations aligned with the Azure AI Foundry platform.
 
@@ -65,15 +65,11 @@ Three ways to run the Agentic Ops Advisor, from simplest to full cloud:
 
 The fastest way to see the agent's tool surface in action. No LLM, no cloud — queries run directly against the local SQLite database.
 
+Follow the [Quick Start](#quick-start) steps 1–4 above, then clear the Azure endpoint to force demo mode:
+
 ```bash
-# 1. Install dependencies (if not done)
-pip install -r requirements.txt
-
-# 2. Seed the database (generates 30 days of synthetic telemetry)
-python scripts/setup_local_db.py
-
-# 3. Clear the Azure endpoint to force demo mode
-#    (your .env may have AZURE_OPENAI_ENDPOINT set)
+# Clear the Azure endpoint to force demo mode
+# (your .env may have AZURE_OPENAI_ENDPOINT set)
 
 # Linux/macOS:
 unset AZURE_OPENAI_ENDPOINT
@@ -81,13 +77,9 @@ unset AZURE_OPENAI_ENDPOINT
 # Windows PowerShell:
 $env:AZURE_OPENAI_ENDPOINT = ""
 
-# 4. Run the agent
+# Run the agent
 python scripts/run_local.py
 ```
-
-You'll see 4 suggested queries — type a number or ask your own question. Results include:
-- **Telemetry data** — GPU utilization, network latency, cost trends, incidents
-- **Work IQ context** — change events, decisions, ownership, runbooks (simulated)
 
 > **💡 Tip:** If the agent crashes with `Missing credentials`, your `.env` file has `AZURE_OPENAI_ENDPOINT` set. Clear it as shown above to use demo mode.
 
@@ -107,12 +99,7 @@ az login --tenant <your-tenant-id>
 python scripts/run_local.py
 ```
 
-The agent will:
-- Parse your natural-language question
-- Call the SQL telemetry tool (function calling)
-- Call the Work IQ context tool
-- Synthesize a root-cause analysis with evidence citations
-- Include a **Confidence: High/Med/Low** line and **Next best question**
+> For details on how Agent mode works (function-calling, confidence scores, evidence citations), see [Step 6 — Run the agent](#step-6--run-the-agent) in Local Setup.
 
 ### Option C — Azure AI Foundry (Cloud Deployment)
 
@@ -121,7 +108,7 @@ The full production deployment — the agent runs as a container in Azure AI Fou
 1. **Trigger a deploy** — push to `main` or manually dispatch the `deploy.yml` workflow
 2. **Open the Foundry portal** — [ai.azure.com](https://ai.azure.com) → your project → **Agents**
 3. **Chat with the agent** — use the built-in chat UI to ask questions
-4. **View traces** — select **Tracing** in the left pane to see the full tool-call waterfall
+4. **View traces** — see [Monitoring Setup](#10-monitoring-setup) for Foundry and Application Insights trace viewing
 
 > **How it works:** The Docker build runs `python scripts/setup_local_db.py` at image build time, baking a fresh SQLite database (with current timestamps) into the container. The agent queries this database via `tools/sql_telemetry.py` with `DB_MODE=sqlite`. No external database needed.
 
@@ -136,13 +123,7 @@ The full production deployment — the agent runs as a container in Azure AI Fou
 
 ### Planted Anomalies in the Synthetic Data
 
-The seed data contains three planted anomalies for demo storytelling:
-
-| ~Day | Anomaly | What the Agent Should Find |
-|------|---------|---------------------------|
-| 18 | GPU utilization drop | `cluster-a` / `node-1` collapses to < 15% |
-| 22 | Network latency spike | `site-west` latency exceeds 180 ms, packet loss spikes |
-| 25 | Cost surge | `cluster-a` spend jumps 5–7× baseline (open incident) |
+> See [Planted Anomalies](#planted-anomalies) in Local Setup for the full table of injected anomalies and their expected agent behavior.
 
 > For the full 7-step regression demo script (inject fault → detect → fix → recover), see [Regression Demo Walkthrough](#8-regression-demo-walkthrough).
 
@@ -300,7 +281,7 @@ AZURE_OPENAI_DEPLOYMENT=gpt-4.1
 AZURE_AI_PROJECT_CONNECTION_STRING=your-project-connection-string
 ```
 
-> See [Environment Variables Reference](#8-environment-variables-reference) for the full table.
+> See [Environment Variables Reference](#9-environment-variables-reference) for the full table.
 
 ### Step 5 — Seed the local database
 
@@ -365,16 +346,9 @@ The runner detects your environment and starts in one of two modes:
 | **Agent mode** | `AZURE_OPENAI_ENDPOINT` is set | Full reasoning loop powered by GPT-4.1 with function-calling against the local SQLite database. Requires Azure OpenAI credentials. |
 | **Demo mode** | No Azure credentials | Tool-only mode — queries are executed directly against the local database and results are printed as JSON. No LLM required; useful for validating the data layer. |
 
-The 4 core demo queries are presented as numbered suggestions at startup:
+> See [Demo Query Suggestions](#demo-query-suggestions) for the full list with descriptions.
 
-```
-  [1] Why did GPU utilization drop in the last 24h?
-  [2] What changed right before the latency spike?
-  [3] Is this a known issue or a change-caused incident?
-  [4] What's the safest remediation plan? Provide options and tradeoffs.
-```
-
-Type a number (1–4) to run that query, or type your own question. Type `quit` or press `Ctrl+C` to exit.
+Type a number (1–4) to run a suggested query, or type your own question. Type `quit` or press `Ctrl+C` to exit.
 
 **Health endpoint:** The runner also starts a health check server on port 8080. You can verify it's running:
 
@@ -399,11 +373,11 @@ All **346 tests** should pass with 0 failures.
 
 Feature flags are controlled via environment variables in `.env`. They let you scope the demo to what you want to show.
 
-| Flag | Default | Description |
-|---|---|---|
-| `ENABLE_WORK_IQ` | `true` | Enable the Work IQ context tool (synthetic change events, decisions, ownership, runbooks). Set to `false` to run telemetry-only mode. |
-| `ENABLE_MCP` | `false` | Enable the MCP server wrapper for Work IQ context. Requires additional setup. Set to `true` to use the MCP transport layer instead of the direct stub. |
-| `AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED` | `false` | When `true`, prompt and completion content is included in OpenTelemetry traces. **Leave `false` for demos** to avoid recording sensitive query content. |
+> These flags are documented in the [Environment Variables Reference](#9-environment-variables-reference). Key flags for demos:
+
+- **`ENABLE_WORK_IQ`** (`true`) — Enable/disable the Work IQ context tool
+- **`ENABLE_MCP`** (`false`) — Enable/disable the MCP server wrapper
+- **`AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED`** (`false`) — Record prompt/completion content in traces
 
 ---
 
@@ -497,13 +471,9 @@ DB_CONNECTION_STRING=<from Bicep output>
 APPLICATIONINSIGHTS_CONNECTION_STRING=<from Bicep output>
 ```
 
-### Step 4 — Seed the Azure SQL database
+### Step 4 — Configure the database
 
-```bash
-python scripts/setup_local_db.py --db "<your-azure-sql-connection-string>" --force
-```
-
-> **Note:** For Azure SQL production deployments, you may need to use a separate migration script or apply the DDL from `data/seed_telemetry.py` directly. The `setup_local_db.py` script is optimized for SQLite.
+> **Note:** The current deployment uses SQLite baked into the Docker image. For Azure SQL production deployments, set `DB_MODE=azure_sql` and `DB_CONNECTION_STRING` in your environment. See the [Environment Variables Reference](#9-environment-variables-reference) for details.
 
 ### Step 5 — Deploy the agent to Foundry Agent Service
 
