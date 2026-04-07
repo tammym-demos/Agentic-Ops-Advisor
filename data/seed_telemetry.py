@@ -23,9 +23,10 @@ from pathlib import Path
 
 RANDOM_SEED = 42
 
-# Fixed base date so generated data is reproducible
-BASE_DATE = datetime(2025, 3, 1, 0, 0, 0, tzinfo=timezone.utc)
+# Dynamic base date so generated data ends near "now" (queries using datetime('now', ...) will return results)
+# BASE_DATE = start of data generation, set so that last day ends ~today
 DAYS = 30
+BASE_DATE = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=DAYS - 1)
 
 CLUSTERS = ["cluster-a", "cluster-b", "cluster-c"]
 NODES_PER_CLUSTER = ["node-1", "node-2", "node-3", "node-4"]

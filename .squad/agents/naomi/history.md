@@ -119,3 +119,15 @@
 - **Validation:** 11 sections balanced, 95 div tags balanced, no duplicate IDs, all nav anchors valid.
 - **Key files:** `docs/index.html`.
 
+### 2026-04-07: Critical Demo Fix — Dynamic Seed Dates
+- **Task:** Fix seed data generator to use dynamic timestamps so time-windowed queries return data for tomorrow's demo.
+- **Problem:** `data/seed_telemetry.py` hardcoded `BASE_DATE = datetime(2025, 3, 1, ...)`. All telemetry data had March 2025 timestamps. Today is April 2026, so aggregate queries using `datetime('now', '-1 hour')` and `datetime('now', '-24 hours')` returned 0 rows — demo would show empty results.
+- **Solution:** Changed `BASE_DATE` to dynamic: `datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=DAYS - 1)`. This makes the last day of generated data end "today" so recent time windows return rows.
+- **Reproducibility preserved:** `RANDOM_SEED = 42` remains unchanged. Random values are deterministic; only timestamps shift.
+- **Anomaly logic intact:** GPU drop (day 18), latency spike (day 22), cost surge (day 25), and correlated incidents all preserved.
+- **Database regenerated:** Ran `python data/seed_telemetry.py` to regenerate `data/telemetry.db` and `data/seed_data.sql` with new date range (2026-03-09 → 2026-04-07).
+- **Verification:** All critical queries return data: gpu_avg_util_1h (288 rows), gpu_avg_util_24h (576 rows), net_avg_latency_1h (72 rows), cost_by_service_24h (144 rows), open_incidents (2 rows), recent_incidents_24h (1 row).
+- **Tests passed:** All 348 pytest tests still pass after changes.
+- **Gitignore updated:** Added `data/seed_data.sql` to `.gitignore` with comment explaining it's a 1.2 MB generated file with dynamic timestamps that changes every run. SQLite DB already gitignored.
+- **Key files:** `data/seed_telemetry.py` (line 27), `.gitignore` (line 45-47).
+

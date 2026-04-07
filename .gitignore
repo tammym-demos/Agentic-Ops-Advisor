@@ -41,6 +41,10 @@ env/
 *.sqlite
 *.sqlite3
 
+# Seed data SQL file (generated from seed_telemetry.py with dynamic timestamps)
+# This is a 1.2 MB file that changes every run and should not be tracked
+data/seed_data.sql
+
 # OS
 .DS_Store
 Thumbs.db
