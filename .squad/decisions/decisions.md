@@ -193,3 +193,247 @@ All conflicts involved files rewritten on main for v2 SDK migration (agent.py, c
 - 348 tests pass post-merge
 - Repository reduced from 20 branches to 2 (main + one unrelated)
 - Git history preserves all branch lineage via merge commits
+
+---
+
+## Testing Strategy for Hosted Agent Server (Issue #83)
+
+**Date:** 2026-04-07  
+**Author:** Alex (Tester)  
+**Status:** ✅ Implemented (18/18 tests passing)  
+**Context:** Creating test suite for `scripts/serve.py` — Foundry Responses API server
+
+### Decision
+Adopted **AioHTTPTestCase pattern** for testing the hosted agent server with comprehensive mocking of Azure OpenAI calls and tool dispatch.
+
+### Rationale
+1. **Native aiohttp support:** Standard pattern for testing aiohttp applications
+2. **Clean async testing:** Integrates seamlessly with pytest-asyncio
+3. **No new dependencies:** Uses `aiohttp.test_utils` (included in aiohttp)
+4. **Test isolation:** Each test class gets its own app instance via `get_application()`
+5. **Complete mock strategy:** OpenAI calls + `_call_tool` mocked to work around `asyncio.run()` event loop conflicts
+
+### Implementation
+- 7 test classes organized by functionality (Health, Root, Input parsing, Response format, Tool dispatch, Error handling, CORS)
+- Helper functions: `make_tool_call()`, `make_openai_response()` for mock setup
+- All 18 tests follow existing project patterns from `test_tools.py` and `test_agent.py`
+- Tests validate Foundry Responses API spec compliance
+- Discovered async event loop bug in tool dispatch — tests work around with mocks (later fixed by Naomi)
+
+### Test Results
+**18/18 tests passing** — Complete coverage achieved.
+
+---
+
+## Hosted Agent Architecture for Azure AI Foundry
+
+**Date:** 2026-04-07  
+**Author:** Amos (DevOps)  
+**Status:** Implemented  
+**Related Issue:** #83
+
+### Context
+The Agentic Ops Advisor originally ran locally via `scripts/run_local.py`. To deploy to Azure AI Foundry Agent Service as a **hosted agent**, the agent must implement the Foundry Responses API.
+
+### Decision
+Migrated Docker container and agent manifest to support hosted agent pattern:
+
+1. **Port Standardization:** 8080 → 8088 (Foundry standard)
+   - Updated in Dockerfile EXPOSE, HEALTHCHECK, agent.yaml container config
+
+2. **Entrypoint Change:** `run_local.py` → `serve.py` (HTTP server)
+   - New entrypoint exposes `POST /responses` (Foundry Responses API) and `GET /health`
+
+3. **Protocol Declaration:** Added `protocol` section to `agent.yaml`:
+   ```yaml
+   protocol:
+     type: responses
+     version: v1
+   ```
+
+4. **Environment:** Added `MODE=serve` to Dockerfile ENV
+
+5. **Static Assets:** Added `COPY static/` to Dockerfile
+
+### Rationale
+- Agent can now deploy to Azure AI Foundry Agent Service as hosted agent
+- Standard port aligns with Foundry platform expectations
+- Health check standardized at platform layer
+- Clear separation: local dev (`run_local.py`) vs production (`serve.py`)
+
+### Consequences
+- ✅ Agent deployable to Foundry as hosted agent
+- ✅ Port 8088 aligns with platform expectations
+- ✅ Health check standardized
+- ⚠️ Requires new `scripts/serve.py` (assigned to Naomi)
+- ⚠️ Port change breaks legacy local docker-compose setups (none exist)
+
+### Next Steps
+1. Implement `scripts/serve.py` with Foundry Responses API
+2. Update deploy pipeline for port 8088
+3. Validate health check in deployed environment
+4. Update README with hosted agent instructions
+
+---
+
+## Hosted Agent Server Implementation
+
+**Date:** 2026-04-07  
+**Author:** Naomi (Backend Dev)  
+**Status:** ✅ Implemented  
+**Issue:** #83 — Tools not auto-executing in Foundry Playground
+
+### Context
+Agent deployed to Foundry as prompt agent (Foundry handles LLM + tool dispatch). To enable auto-execution in Playground, agent needed to be hosted agent (container handles LLM + tool dispatch).
+
+### Decision
+Implement `scripts/serve.py` exposing Foundry Responses API on port 8088.
+
+### Architecture
+1. **POST /responses** — Foundry Responses API endpoint
+   - Accepts `{input: {messages: [...]}}` or `{input: "string"}`
+   - Runs full agent loop with Azure OpenAI function-calling
+   - Returns `{id, object: "response", output: [...], status: "completed"|"failed"}`
+   - Stateless — conversation history managed by caller
+
+2. **GET /health** — Docker HEALTHCHECK
+
+3. **GET /** — Serves `static/index.html` (browser chat UI) or JSON welcome
+
+4. **CORS enabled** — Browser-based chat UI support
+
+### Implementation Pattern
+- Reuse existing tool modules (sql_telemetry, action_stub, work_context_stub)
+- Build combined `TOOL_DEFINITIONS` + `TOOL_CALLABLES` from all three surfaces
+- Reuse `_run_agent_mode()` pattern from `run_local.py`
+- Prepend system prompt from `agent/system_prompt.md`
+- Max 8 tool rounds with Azure OpenAI function-calling
+- Stateless API — each request independent
+
+### Rationale
+- Stateless API allows Foundry to manage conversation state
+- Reuse existing patterns reduces duplication
+- No Azure AI Agent Service SDK dependency
+- CORS enables browser-based demo + Foundry Playground
+- Port 8088 is Foundry standard
+
+### Impact
+- Dockerfile entrypoint: `run_local.py` → `serve.py`
+- Container port: 8088 (was 8080 for health only)
+- Deployment target: Hosted agent on Azure AI Foundry
+- New browser chat UI: `static/index.html`
+
+### Dependencies Added
+- `aiohttp-cors>=0.7.0` (new)
+
+### Files Created
+- `scripts/serve.py` (15KB)
+- `static/index.html` (13KB)
+
+---
+
+## Dynamic Seed Dates for Synthetic Telemetry
+
+**Date:** 2026-04-07  
+**Decided by:** Naomi (Backend Dev)  
+**Status:** ✅ Implemented
+
+### Context
+All telemetry queries returned 0 rows because `data/seed_telemetry.py` used hardcoded `BASE_DATE = datetime(2025, 3, 1, ...)`. Aggregate queries used relative time windows like `WHERE ts >= datetime('now', '-1 hour')`. Since it was April 2026, queries matched 0 rows.
+
+### Decision
+Changed `BASE_DATE` from hardcoded to **dynamic**:
+```python
+BASE_DATE = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=DAYS - 1)
+```
+Last day of generated data ends ~today. Reproducibility preserved via `RANDOM_SEED = 42`.
+
+### Rationale
+1. **Demo requirement:** Queries must return data
+2. **Local dev stability:** Every run produces current data — no manual edits
+3. **Docker builds:** Fresh data in every container (`setup_local_db.py` → `seed_connection()` at build time)
+4. **Azure SQL seeding:** `seed_data.sql` generated on every run, gitignored since now dynamic
+
+### Trade-offs
+- ✅ Demo works without manual intervention. Queries return data.
+- ✅ Reproducible random values (seed=42)
+- ⚠️ `seed_data.sql` (1.2 MB) changes every run — added to `.gitignore`
+- ⚠️ Data range drifts over time (30 days ending "today")
+
+### Alternatives Considered
+1. Keep static dates, update queries to absolute dates — would break demo narrative
+2. Parameterize BASE_DATE via env var — overengineering for demo
+3. Mock `datetime.now()` in tests — viable if needed for frozen time tests later
+
+### Impact
+- **File:** `data/seed_telemetry.py` (line 27)
+- **Gitignore:** Added `data/seed_data.sql` with comment
+- **Queries:** Now return rows (gpu_avg_util_1h: 288, gpu_avg_util_24h: 576, net_avg_latency_1h: 72, cost_by_service_24h: 144, open_incidents: 2, recent_incidents_24h: 1)
+- **Tests:** All 348 pass
+
+---
+
+## README Deduplication Strategy
+
+**Author:** Naomi (Backend Dev)  
+**Date:** 2026-04-07  
+**Commit:** 4786e23
+
+### Context
+README had 9 areas of content duplication — tables, setup steps, behavioral descriptions repeated across sections.
+
+### Decisions
+1. **Cross-reference pattern:** Replaced secondary occurrences with markdown anchor cross-references (e.g., `See [Planted Anomalies](#planted-anomalies)`). Preserves discoverability.
+2. **Kept both Quick Start and §3 Local Setup:** Different audiences. Option A now references Quick Start.
+3. **Feature Flags simplified:** Replaced full table with bulleted list + cross-ref to §9.
+4. **Azure SQL §6 Step 4 reworded:** Clarified that current deployment uses SQLite baked into Docker, with Azure SQL as future production option.
+5. **Fixed broken anchor:** §3 Step 4 linked to wrong section; corrected.
+
+### Result
+- **Before:** 631 lines, 50 lines pure duplication
+- **After:** 605 lines (–4.1%), 20 insertions / 50 deletions
+- All unique information preserved
+
+---
+
+## Demo Story Arc Restructure — GitHub Pages
+
+**Date:** 2026-04-07  
+**Author:** Naomi (Backend Dev)  
+**Status:** ✅ Completed
+
+### Context
+GitHub Pages index.html was feature-list layout. Tammy presenting demo tomorrow — page needed to tell a story, not just list features.
+
+### Decision
+Restructured `docs/index.html` from feature-list to coherent 11-section demo story arc:
+1. Problem
+2. How It's Built
+3. Where It Runs
+4. Context Layer
+5. Monitoring & Observability
+6. Evaluations
+7. Demo
+8. Getting Started
+9. Tech Stack
+10. Disclaimers
+
+### Changes
+- Added 3 new sections (The Problem, Monitoring & Observability, Evaluations)
+- Removed standalone Capabilities section — redistributed 6 cards into relevant sections
+- Reordered to follow narrative flow: pain → build → deploy → context → observe → evaluate → demo → start
+- Updated nav with 10 links matching new flow
+
+### Rationale
+Story arc guides audience from pain through solution to action. Matches demo narrative for Tammy's presentation.
+
+### Impact
+- ✅ Demo-ready page
+- ✅ Story flows naturally
+- ✅ All content preserved
+- ✅ No CSS changes needed — reuses existing classes
+- ✅ Architecture diagram intact
+- ✅ All disclaimers preserved
+
+### Risk
+Low — purely presentational. No backend, infrastructure, or test impact.

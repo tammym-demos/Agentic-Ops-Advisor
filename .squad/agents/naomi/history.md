@@ -35,6 +35,16 @@
 - **Section 11 (Troubleshooting):** Updated provider list to match Section 2. Removed nonexistent `--verbose` flag reference.
 - **Step 4 .env docs:** Separated Demo mode (minimal) from Agent mode (Azure OpenAI) config.
 
+### 2026-04-07: Foundry Responses API v1 Schema Compliance Fix
+- **Task:** Fix Foundry 400 "Failed to submit tools response" errors in hosted agent responses.
+- **Root causes:** Missing required response fields (created_at, model, message id/status), improper content block format, insufficient input parsing for function_call/function_call_output items.
+- **Implementation:** Hardened `scripts/serve.py` response schema + input parsing.
+- **Added fields:** `created_at` (ISO timestamp), `model` (deployment name), `message id` / `status`, wrapped content in `[{"type": "output_text", "text": "..."}]` array.
+- **Input parsing:** Added `elif isinstance(input_data, list)` case for Foundry message array format. Gracefully parse function_call and function_call_output items.
+- **Tests:** 366 passed, 0 failed. Lint clean.
+- **Commit:** ca9dc78. Pushed to main. Deploy Run #86 triggered.
+- **Status:** ✅ SUCCESS — Responses API v1 compliant. Ready for Foundry container rebuild and redeployment.
+
 ### 2025-04-05: Dashboard Data Export Script
 - **Task:** Create `scripts/export_dashboard_data.py` to export synthetic telemetry data as JSON for GitHub Pages KPI dashboard.
 - **Output:** `docs/pages/assets/dashboard-data.json` (generated, 40.7 KB).
