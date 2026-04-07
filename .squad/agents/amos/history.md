@@ -371,3 +371,11 @@
 - **New dependency:** Azure/setup-azd@v1.0.0 action
 - **Next:** Production validation on staging, monitor first 3 deploys, update README
 - **Status:** ✅ IMPLEMENTED, awaiting integration test
+
+### 2026-04-07T21:57:59Z: Scribe Cross-Agent Consolidation Update
+- **Status:** ✅ OpenAI dependency conflict resolved. Updated pin: <2.0.0 → >=2.8.0,<3.0.0
+- **Root cause:** azure-ai-projects dependency requires OpenAI 2.8.0+
+- **Commit:** b1c735a
+- **Pipeline:** Run #96 failed (dependency conflict); Run #97 in progress (expected to pass)
+- **Cross-team note:** Naomi completed legacy cleanup (329 tests passing). Drummer added Framework Modernization issues to GitHub Project board.
+- **Orchestration:** All team deliverables logged to .squad/orchestration-log/ — sprint consolidation complete
