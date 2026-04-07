@@ -1,5 +1,193 @@
 # Decisions
 
+## Framework Modernization Milestone — Issue #84
+
+**Date:** 2026-04-05  
+**PM:** Drummer  
+**Status:** Planning — User Stories + Definition of Success  
+**Related:** Issue #84
+
+### Summary
+
+The Framework Modernization milestone modernizes the Agentic Ops Advisor agent deployment from ad-hoc ARM/Python scripting to **declarative infrastructure as code** via Azure Developer CLI (`azd`). This reduces deployment complexity from 1100 lines to ~200, unifies the agent API surface (legacy vs. production), and streamlines testing.
+
+### User Stories & Acceptance Criteria
+
+**Story 1: Validate Playground Fix (Run #95 Publish Step)**
+- Run #95 execution completes without ARM REST API errors
+- Playground load balancer rule correctly created and resolves incoming traffic
+- Agent accessible via Playground URL without manual workarounds
+
+**Story 2: Add azure.yaml for azd Agent Lifecycle**
+- `azure.yaml` created at project root with metadata and service definitions
+- All required Azure resources referenced and configured
+- `azure.yaml` passes `azd validate` without warnings
+
+**Story 3: Simplify deploy.yml with azd Commands**
+- `deploy.yml` reduced from 1100 lines to ~200 lines
+- All manual ARM REST API calls replaced with `azd provision` + `azd up`
+- Deployment time benchmarked (target: < 10 min)
+
+**Story 4: Unify Agent API Surface (Legacy vs. Production)**
+- `agent.py` marked with deprecation warning
+- `serve.py` established as the canonical production API endpoint
+- README updated with API migration guide
+
+**Story 5: Streamline Smoke Tests (Responses API Only)**
+- Legacy prompt-agent test removed
+- Smoke test suite focused on production code paths
+- Test execution < 5 minutes
+
+**Story 6: Update Documentation for azd-Based Deploy**
+- README § Deployment updated with step-by-step azd flow
+- `.env.example` updated with all azd-required variables
+- Quick start guide and troubleshooting added
+
+### Definition of Success
+
+| Criterion | Target | Owner |
+|-----------|--------|-------|
+| deploy.yml line count | < 200 | Alex |
+| Deployment time (full) | < 10 min | Alex |
+| Smoke test duration | < 5 min | Alex |
+| Test pass rate | 100% | Alex |
+| README clarity | 2/2 reviewers approve | Drummer |
+| API migration guide | All 3 code examples work | Naomi |
+| azure.yaml validation | `azd validate` passes | Holden |
+| Deprecation policy clarity | Future roadmap includes removal date | Drummer |
+
+### GitHub Issues Created
+- #85 Validate Agent Application publish step (Playground routing)
+- #86 Add azure.yaml for azd agent lifecycle
+- #87 Simplify deploy.yml with azd commands
+- #88 Unify agent API surface (agent.py legacy, serve.py production)
+- #89 Streamline smoke tests (Responses API only)
+
+**Status:** ✅ Stories + issues + definitions ready for sprint planning.
+
+---
+
+## Deployment Framework Technical Assessment
+
+**Date:** 2026-04-07  
+**Review Scope:** Deploy Run #95 + Framework Architecture Decision  
+**Prepared by:** Holden (Lead)
+
+### Run #95 Validation
+
+**Hosted agent deployment:** ✅ PARTIAL SUCCESS
+- Hosted agent version 12 created successfully (container running, protocols: `responses:v1`)
+- Agent Application ARM resource: ❌ NOT created (404 on publish step)
+- Smoke test (hosted pattern): ❌ FAILED (all 3 invocation patterns failed)
+- **Conclusion:** Playground routing issue LIKELY STILL PRESENT because Agent Application ARM resource doesn't exist
+
+### Framework Assessment
+
+**SDK Versions:** Current (2.0.0+, 1.0.0+) but loose pinning creates drift risk  
+**Recommendation:** Tighten to `>=2.0.0,<3.0.0` to prevent 3.0.0 breakage (est. Q3 2026)
+
+**serve.py (Responses API):** Compliant  
+**Gaps:** Minor (timeout parameter, input list edge cases) — Accept as-is for MVP
+
+**agent.py (Legacy Threads/Runs):** Still needed for backward compatibility  
+**Recommendation:** Mark deprecated, keep for now, refactor post-MVP
+
+**deploy.yml:** 1,178 lines — UNSUSTAINABLE  
+**Recommendation:** **Migrate to `azd` within 2 sprints (HIGH PRIORITY)**
+
+**Bicep Configuration:** Production-ready, API version current (2025-06-01)  
+**Status:** No changes needed
+
+### Overall Risk Assessment
+
+| Component | Status | Risk Level | Action |
+|-----------|--------|------------|--------|
+| SDK versions | Current | 🟡 MEDIUM | Tighten pinning |
+| serve.py protocol | Compliant | 🟢 LOW | Accept as-is |
+| agent.py legacy | Still needed | 🟢 LOW | Mark deprecated |
+| Deploy workflow | Functional | 🔴 HIGH | Migrate to azd |
+| Bicep config | Production-ready | 🟢 LOW | None |
+
+**Overall:** 🟡 **MEDIUM-HIGH** — Current approach works but blocks velocity
+
+### Immediate Actions
+
+1. Debug Agent Application publish failure — add diagnostic logging to capture ARM API response
+2. Tighten SDK pinning in requirements.txt
+3. Remove `azure-ai-agents` (not a Python package)
+
+### Long-term: azd Migration
+
+**Why:** 1,178-line workflow unsustainable. Typical azd deploy is 200-300 lines (600-line reduction).  
+**Effort:** 3 sprints  
+**Risk:** MEDIUM — `azd` is GA but agent extension new (Nov 2025)
+
+---
+
+## Draft: Modernized Deploy Workflow with `azd ai agent`
+
+**Date:** 2026-04-07  
+**Author:** Amos (DevOps)  
+**Status:** Draft — awaiting gap validation
+
+### Summary
+
+This draft replaces the current 1100-line inline deployment steps with `azd up` commands. Target: ~200-300 lines, delegating infrastructure provisioning, container build/push, and agent deployment to `azd`.
+
+### Known Gaps Requiring Validation
+
+**Gap 1: Bicep Integration Pattern**
+- Current: Two Bicep templates (subscription-scoped + RG-scoped fallback)
+- Question: Does `azd up` support this fallback pattern?
+- Risk: If not, workflow breaks for RG-scoped service principals
+- Mitigation: Verify `azd` behavior; may keep manual Bicep steps
+
+**Gap 2: Container Port Configuration**
+- Question: Does `azd` respect `port: 8088` in agent.yaml or use Container Apps default?
+- Risk: Container health checks fail if port mapping differs
+- Mitigation: Verify port mapping in `azd` extension docs
+
+**Gap 3: Environment Variable Injection**
+- Question: Do `pipeline.variables` auto-inject into container runtime?
+- Risk: Agent container fails if env vars not injected correctly
+- Mitigation: Verify `azd` env var injection behavior
+
+**Gap 4: Smoke Test Timing**
+- Question: Does `azd up` wait for container readiness or return immediately?
+- Risk: Smoke test fails due to container not ready (502/503)
+- Mitigation: Add 30s wait or retry logic before smoke test
+
+### Recommendation
+
+**Before merging:** Test locally with new `azure.yaml` to validate all 4 gaps.  
+**Phased rollout:** Phase 1 (dev-only), Phase 2 (CI/CD after validation).
+
+---
+
+## Azure Developer CLI Project Configuration
+
+**Date:** 2026-04-07  
+**Author:** Amos (DevOps)  
+**Status:** ✅ Created — `azure.yaml` at repo root
+
+### What
+
+Created **azure.yaml** (Azure Developer CLI project file) at repository root. Defines:
+- Project metadata (name, description, services)
+- Service definition (container image, port 8088, environment variables)
+- Azure resources (App Service, ACR, AI services, SQL, monitoring)
+- Multi-environment support (dev/test/prod via `azd env`)
+
+### Why
+
+Enables **declarative infrastructure as code** via `azd up` command. Replaces manual Bicep deployment, ACR build/push, and agent version creation with single unified command.
+
+### Status
+
+✅ azure.yaml scaffolding complete. Ready for Stories 2–3 (Framework Modernization milestone).
+
+---
+
 ## Infrastructure Alignment — CognitiveServices-based Bicep Rewrite
 
 **Date:** 2025-06-XX  

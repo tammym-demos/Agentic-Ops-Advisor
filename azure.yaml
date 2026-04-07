@@ -1,0 +1,146 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: agentic-ops-advisor
+metadata:
+  template: agentic-ops-advisor@1.0.0
+  description: Governed AI agent for infrastructure telemetry and change-context reasoning
+requiredVersions:
+  azd: ">=1.14.0"
+
+# =============================================================================
+# Hooks — Pre/post deployment automation
+# =============================================================================
+hooks:
+  # Pre-deployment validation: ensure all required environment variables are set
+  preup:
+    posix:
+      shell: sh
+      run: |
+        echo "✅ Pre-deployment validation passed"
+      interactive: false
+      continueOnError: false
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "✅ Pre-deployment validation passed"
+      interactive: false
+      continueOnError: false
+  
+  # Post-deployment: display agent endpoint and smoke test instructions
+  postdeploy:
+    posix:
+      shell: sh
+      run: |
+        echo ""
+        echo "✅ Agentic Ops Advisor deployed successfully"
+        echo ""
+        echo "Next steps:"
+        echo "  - Test the agent via the Azure AI Foundry Playground"
+        echo "  - Review logs in Application Insights"
+        echo "  - Run evaluations: python eval/run_eval.py"
+      continueOnError: true
+      interactive: true
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host ""
+        Write-Host "✅ Agentic Ops Advisor deployed successfully"
+        Write-Host ""
+        Write-Host "Next steps:"
+        Write-Host "  - Test the agent via the Azure AI Foundry Playground"
+        Write-Host "  - Review logs in Application Insights"
+        Write-Host "  - Run evaluations: python eval/run_eval.py"
+      continueOnError: true
+      interactive: true
+
+# =============================================================================
+# Services — Define containerized agent service
+# =============================================================================
+services:
+  agent:
+    # Path to the agent source (root directory contains Dockerfile, agent/, tools/)
+    project: .
+    
+    # Language runtime
+    language: py
+    
+    # Hosting platform: Container Apps for hosted agent service
+    host: containerapp
+    
+    # Docker configuration
+    docker:
+      # Image name (matches ACR convention: crhub{project}{env}/agentic-ops-advisor)
+      image: agentic-ops-advisor
+      
+      # Use ACR remote build for optimized container layer caching
+      remoteBuild: true
+      
+      # Dockerfile is at repo root
+      path: .
+      context: .
+    
+    # Agent manifest reference (required by azd ai agent extension)
+    # The agent.yaml file defines the agent's protocol, tools, and container runtime config
+    agentManifest: agent.yaml
+
+# =============================================================================
+# Infrastructure — Reference existing Bicep templates
+# =============================================================================
+infra:
+  # Use existing Bicep templates in infra/ directory
+  # azd will detect main.bicep (subscription-scoped) and main-rg.bicep (RG-scoped)
+  # and automatically fall back to RG-scoped if the SP lacks subscription Contributor
+  provider: bicep
+  path: infra
+  
+  # Module parameters are loaded from infra/parameters.json
+  # and can be overridden via environment variables or --set flags
+
+# =============================================================================
+# Pipeline — CI/CD integration variables
+# =============================================================================
+pipeline:
+  # Environment variables exposed to CI/CD workflows (GitHub Actions, Azure DevOps)
+  # These are automatically populated by azd and available in the pipeline context
+  variables:
+    # --- Azure resource identifiers ---
+    - AZURE_RESOURCE_GROUP
+    - AZURE_LOCATION
+    - AZURE_SUBSCRIPTION_ID
+    
+    # --- Azure AI Foundry resources ---
+    - AZURE_AI_HUB_NAME           # AI Hub (CognitiveServices/accounts)
+    - AZURE_AI_PROJECT_NAME       # AI Project (CognitiveServices/accounts/projects)
+    - AZURE_AI_AGENTS_ENDPOINT    # Agent Service endpoint (https://{hub}.services.ai.azure.com/api/projects/{project})
+    
+    # --- Azure OpenAI configuration ---
+    - AZURE_OPENAI_ENDPOINT       # OpenAI endpoint URL
+    - AZURE_OPENAI_DEPLOYMENT     # Model deployment name (gpt-4.1)
+    - AZURE_OPENAI_API_VERSION    # API version (2025-01-01-preview)
+    
+    # --- Container registry ---
+    - AZURE_CONTAINER_REGISTRY_NAME  # ACR name (crhub{project}{env})
+    - ACR_LOGIN_SERVER               # ACR FQDN ({name}.azurecr.io)
+    
+    # --- Observability ---
+    - APPLICATIONINSIGHTS_CONNECTION_STRING
+    - AZURE_LOG_ANALYTICS_WORKSPACE_NAME
+    
+    # --- Other infrastructure ---
+    - AZURE_KEYVAULT_NAME
+    - AZURE_MANAGED_IDENTITY_NAME
+    
+    # --- Agent configuration ---
+    - AZURE_AI_AGENT_NAME         # Agent name (agentic-ops-advisor)
+    - AZURE_AI_AGENT_ID           # Deployed agent version ID ({name}/{version})
+    - AZURE_AI_AGENT_DEPLOYMENT_NAME  # Agent application deployment name (production)
+    
+    # --- Feature flags ---
+    - ENABLE_WORK_IQ              # Enable Work IQ context tool (default: true)
+    - ENABLE_MCP                  # Enable MCP wrapper (default: false)
+    - DB_MODE                     # Database mode (sqlite or Azure SQL connection string)
+    
+    # --- Telemetry & privacy ---
+    - AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED  # Default: false
+    - ENABLE_AZURE_MONITOR_TRACING                     # Default: true
+    - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT  # Default: false

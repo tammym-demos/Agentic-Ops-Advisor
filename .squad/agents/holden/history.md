@@ -183,3 +183,38 @@
 - **Post-demo recommendation:** Add explicit Azure AI Developer role assignment to managed identity on Hub in Bicep (security hardening; not blocking).
 - **Decision written to:** `.squad/decisions/inbox/holden-container-auth-review.md`
 - **Confidence:** HIGH (95%) — Trivial fix with clear evidence.
+
+### 2026-04-07: Framework Assessment — Deploy Run #95 & Architecture Review (Issue #84)
+- **Context:** Deploy Run #95 merged PR #84 (Agent Application publish fix). Tammy requested dual review: (1) validate that ARM Agent Application resource was created and hosted agent smoke test invoked container, (2) assess current deployment framework (SDK versions, serve.py, agent.py, workflow maintainability, Bicep config) for azd migration decision.
+- **Run #95 Validation:**
+  - ✅ **Hosted agent deployment:** Version 12 created successfully, container running, protocols: `responses:v1`
+  - ❌ **Agent Application publish:** `az rest PUT` succeeded but ARM resource NOT created — smoke test got 404 on `/applications/agentic-ops-advisor/protocols/openai/responses`. Root cause: RBAC or API version issue (both 2026-01-15-preview and 2025-10-01-preview tried, no error from az rest).
+  - ❌ **Smoke test (hosted pattern):** All 3 invocation patterns failed (404, 404, Connection error). Container is running but not accessible via published endpoint.
+  - **Verdict:** Playground routing issue LIKELY STILL PRESENT because the Agent Application ARM resource doesn't exist.
+- **Framework Assessment Findings:**
+  1. **SDK versions:** Current (`azure-ai-projects>=2.0.0`, `azure-ai-agents>=1.0.0`). Latest stable: 2.0.1 (March 2026), 1.1.0 (.NET). **Issue:** `azure-ai-agents` is a .NET package, NOT Python. Loose pinning creates drift risk (3.0.0 will break in Q3 2026). **Recommendation:** Remove azure-ai-agents, tighten pinning to `>=2.0.0,<3.0.0`.
+  2. **serve.py Responses API:** ✅ **Compliant** with Foundry spec (v1). Minor gaps: no `timeout` parameter support, content parsing only handles text types. **Risk:** LOW — Accept as-is for MVP.
+  3. **agent.py legacy pattern:** Still needed for backward compat (smoke test validates threads/runs SDK pattern). **Risk:** LOW — Keep for now, mark as deprecated, refactor shared logic to core.py post-MVP.
+  4. **Deploy workflow:** 🔴 **1,178 lines** — functional but unsustainable. 7 env var blocks, 4 RBAC steps, 3 API version fallback loops, 51 total steps. **Risk:** HIGH — Blocks velocity and team onboarding. **Recommendation:** Migrate to azd within 2 sprints (3-phase plan: provision, deploy, CI/CD integration). Estimated 600-line reduction (1,178 → 200-300 lines).
+  5. **Bicep config:** ✅ **Production-ready**. API version 2025-06-01 is latest stable for CognitiveServices (confirmed April 2026). No gaps identified.
+- **Overall Risk:** 🟡 **MEDIUM-HIGH** — Current approach maintainable for demos but blocks production velocity.
+- **Critical Path Issues:** (1) Agent Application not created (Run #95), (2) 1,178-line workflow blocks onboarding, (3) Loose SDK pinning will break Q3 2026.
+- **Key Architecture Insight:** Azure Developer CLI (azd) with `azure.ai.agents` extension (GA Nov 2025) is purpose-built for this: single `azd up` command provisions infra + deploys agent + configures RBAC. Typical azd agent deploy: 200-300 lines total (vs 1,178 current).
+- **Open Questions:** (1) Why did `az rest PUT` succeed but resource not created? Need ARM activity logs. (2) Is "Azure AI Project Manager" role assignment visible in Portal? (3) Does agent work in Playground when manually tested? (4) Team appetite for azd migration risk?
+- **Recommendations:**
+  - **Immediate (this sprint):** Debug Agent Application publish (add ARM API response logging), tighten SDK pinning, remove azure-ai-agents.
+  - **Short-term (next sprint):** Mark agent.py deprecated, add timeout parameter to serve.py, create azd migration plan (3 sprints).
+  - **Long-term (Q2 2026):** Migrate to azd, add staging environment, refactor agent core.
+- **Decision written to:** `.squad/decisions/inbox/holden-framework-assessment.md`
+- **Confidence:** HIGH (90%) on findings, MEDIUM (70%) on azd migration timeline (depends on extension stability).
+
+### 2026-04-08: Framework Review Session — Orchestration & Cross-Agent Coordination
+- **Session Role:** Technical Lead — validated framework assessment findings, confirmed azd migration as critical path for Stories 2–3 (Framework Modernization milestone)
+- **Coordination:**
+  - **Drummer (PM):** Orchestrated 6 user stories with acceptance criteria and definition of success. Created GitHub issues #85–#89. Framework modernization milestone ready for sprint planning.
+  - **Amos (DevOps):** Created azure.yaml + drafted azd-based deploy.yml (~250 lines, 600-line reduction target). Identified 4 gaps requiring validation before production merge.
+- **Orchestration logs:** Written to `.squad/orchestration-log/2026-04-07T21-33-holden.md`
+- **Session summary:** Written to `.squad/log/2026-04-07T21-33-framework-review.md`
+- **Framework Assessment:** Merged to `.squad/decisions.md` (replaces inbox file)
+- **Outcome:** Team synchronized on framework modernization priorities. Run #95 issue identified as critical blocker for Playground demo. azd migration timeline confirmed (2–3 sprints).
+- **Status:** ✅ Framework review complete, cross-team coordination logged, inbox merged to decisions.md

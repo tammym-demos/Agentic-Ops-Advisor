@@ -48,3 +48,38 @@
   - List items: `gh project item-list 13 --owner tmcclell`
   - Add issue: `gh project item-add 13 --owner tmcclell --url https://github.com/tammym-demos/Agentic-Ops-Advisor/issues/{N}`
 - **Board reference also saved in:** `.squad/team.md` under `## GitHub Project Board`
+
+### 2026-04-05: Framework Modernization Milestone — User Stories & GitHub Issues
+- **Milestone:** Framework Modernization (Issue #84)
+- **Deliverable:** 6 user stories with acceptance criteria, definition of success, + 5 GitHub issues
+- **Document location:** `.squad/decisions/inbox/drummer-framework-modernization.md`
+- **GitHub Issues created:**
+  - #85 Validate Agent Application publish step (Playground routing)
+  - #86 Add azure.yaml for azd agent lifecycle
+  - #87 Simplify deploy.yml with azd commands
+  - #88 Unify agent API surface (agent.py legacy, serve.py production)
+  - #89 Streamline smoke tests (Responses API only)
+  - (Documentation update in README as follow-up)
+- **User stories cover:**
+  1. Playground fix validation (Run #95 publish step)
+  2. azure.yaml declarative config
+  3. deploy.yml simplification (1100 → 200 lines)
+  4. API surface unification (deprecation + migration guide)
+  5. Smoke test streamlining (focus on production paths)
+  6. Documentation updates (azd setup, quick start)
+- **Definition of Success:** 7 measurable criteria (deployment time, test duration, line count, team sign-off, demo readiness checklist)
+- **Pattern:** Each issue references #84 ("Related to #84"), has clear acceptance criteria, and dependencies mapped
+- **Tool:** Used `gh issue create` with PowerShell to batch-create issues, avoiding manual GitHub UI
+- **Note:** "test" label not found on repo; issue #89 created without it (used "enhancement" only)
+
+### 2026-04-08: Framework Review Session — Orchestration & Cross-Agent Coordination
+- **Session Role:** Program Manager — orchestrated Framework Modernization milestone with Holden (architecture assessment) and Amos (azd strategy research)
+- **Deliverables:**
+  1. **Framework Modernization Milestone (Issue #84):** 6 user stories with acceptance criteria, definition of success (7 measurable criteria), GitHub issues #85–#89
+  2. **Cross-team sync:** Drummer (stories), Holden (framework assessment + risk mitigation), Amos (azure.yaml + azd draft)
+  3. **Orchestration logs:** Written to `.squad/orchestration-log/2026-04-07T21-33-drummer.md`
+  4. **Session summary:** Written to `.squad/log/2026-04-07T21-33-framework-review.md`
+- **Framework Assessment Merge:** Holden's assessment merged to `.squad/decisions.md` (replaces inbox file). Identifies critical gaps and azd migration as priority.
+- **Outcome:** Framework modernization milestone ready for sprint planning. Team synchronized on priorities (Playground fix → azure.yaml → deploy.yml simplification → API unification → smoke test streamlining → documentation).
+- **Confidence:** HIGH — All stories have clear acceptance criteria and measurable success definitions. GitHub issues provide tracking.
+- **Status:** ✅ Framework review complete, team orchestration logged, decisions merged, sprint planning ready

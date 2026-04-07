@@ -98,6 +98,33 @@
   - 10 were already deleted from remote before this task (pruned on fetch)
   - 3 remaining deleted: `copilot/add-configuration-feature-flag-module`, `copilot/create-deployment-workflow`, `copilot/create-synthetic-context-data`
 - **Phase 2 — Merged 7 unmerged local branches into main:**
+
+### 2026-04-06: azd ai agent Extension Research + azure.yaml Creation
+- **Task:** Research `azd ai agent` extension format and create `azure.yaml` file for modernized deployment workflow
+- **Files created:**
+  - `azure.yaml` (repo root) — azd project configuration with agent manifest reference, Bicep infra path, container service definition
+  - `.squad/decisions/inbox/amos-azd-deploy-draft.md` — Draft simplified deploy workflow using `azd up` (~250 lines vs current 1100 lines)
+- **Key azd patterns discovered:**
+  1. **Minimal schema:** `name` + `services` (with `project`, `language`, `host`) are required fields
+  2. **Agent manifest reference:** `services.agent.agentManifest: agent.yaml` links to existing agent definition
+  3. **Bicep integration:** `infra.provider: bicep` + `infra.path: infra` reuses existing templates
+  4. **Hooks:** `preup`/`postdeploy` for validation and post-deploy messaging
+  5. **Pipeline variables:** 30+ env vars exposed to CI/CD context (AZURE_RESOURCE_GROUP, AZURE_AI_AGENTS_ENDPOINT, etc.)
+  6. **Docker config:** `services.agent.docker.remoteBuild: true` leverages ACR build caching
+- **Reference repos analyzed:**
+  - Azure-Samples/get-started-with-ai-agents — production azd template with hooks, Container Apps hosting
+  - azd schema docs — official field reference for azure.yaml v1.0
+- **Key gaps identified (documented in draft):**
+  1. **Bicep fallback pattern:** Current deploy.yml uses sub-scoped main.bicep with RG-scoped main-rg.bicep fallback. Unclear if `azd up` supports this or requires sub Contributor role.
+  2. **Port mapping:** agent.yaml specifies port 8088, but azd Container Apps hosting may use different port. Need to verify health check compatibility.
+  3. **Env var injection:** Unclear if `pipeline.variables` auto-inject into container runtime or only exist in CI/CD context.
+  4. **Deployment readiness:** Current workflow waits 30-60s for container warmup before smoke test. Need to verify if `azd up` waits for readiness.
+- **Draft workflow changes:**
+  - ✅ Kept: OIDC auth, tests, Bicep validation, container build/push (delegated to azd), smoke test structure
+  - 🔄 Replaced: Manual Bicep deploy (Step 4), Python agent deploy script (Step 5e), ARM REST publish (Step 5e.2) → `azd up`
+  - ❌ Removed: Capability host setup, ACR pull RBAC, prompt agent smoke test (kept Responses API only)
+- **Recommendation:** Test `azd up` locally before merging draft — validate Bicep fallback, port mapping, env vars, and readiness behavior
+- **Status:** ✅ azure.yaml created, draft workflow ready for review at `.squad/decisions/inbox/amos-azd-deploy-draft.md`. Do NOT merge until gaps validated.
   - `copilot/add-opentelemetry-instrumentation` — **conflict** (tests/test_tools.py) → resolved with --ours
   - `copilot/create-agent-orchestration` — **conflict** (agent/agent.py, tests/test_agent.py) → resolved with --ours
   - `copilot/create-local-development-scripts` — **conflict** (scripts/run_local.py, scripts/setup_local_db.py, tests/test_local_scripts.py) → resolved with --ours
@@ -267,3 +294,34 @@
 - **RBAC note:** After publishing, the agent gets a NEW identity. Tool permissions (Azure OpenAI, etc.) may need reassignment to the application's identity. For our case, the container uses env var API key, so this is non-blocking.
 - **Files modified:** `.github/workflows/deploy.yml`
 - **Status:** ✓ Complete. Ready for deploy run.
+
+### 2026-04-08: Framework Modernization Research — azd Migration Strategy
+- **Deliverable 1: azure.yaml Created at Repo Root**
+  - Declarative Azure Developer CLI project file defining services, resources, and multi-environment support
+  - Ready for Stories 2–3 (Framework Modernization milestone)
+  - Enables `azd up` command for unified infrastructure + container + agent deployment
+- **Deliverable 2: Modernized deploy.yml Draft (~250 lines)**
+  - Replaces 1,178-line current workflow
+  - Uses `azd up` to delegate Bicep, ACR build/push, agent deployment
+  - Target: 600-line reduction (1,178 → ~200–300)
+  - Status: Draft with 4 gaps documented (not yet production-ready)
+- **4 Gaps Identified Requiring Validation:**
+  1. Bicep Integration Pattern — Does `azd up` support RG-scoped SP fallback?
+  2. Container Port Configuration — Does `azd` respect port 8088?
+  3. Environment Variable Injection — Do `pipeline.variables` auto-inject into container?
+  4. Smoke Test Timing — Does `azd up` wait for container readiness?
+- **Recommendation:** Phased rollout (Phase 1: dev-only, Phase 2: CI/CD after validation)
+- **Document:** `.squad/decisions/inbox/amos-azd-deploy-draft.md` (merged to decisions.md)
+- **Status:** ✅ azure.yaml + draft ready. Awaiting gap validation before production merge.
+
+### 2026-04-08: Framework Review Session — Cross-Team Orchestration
+- **Session Role:** DevOps Engineer — researched azd migration strategy, created azure.yaml scaffold, drafted modernized deploy workflow
+- **Coordination:**
+  - **Drummer (PM):** Orchestrated 6 user stories; Framework Modernization milestone ready for sprint planning
+  - **Holden (Lead):** Validated framework assessment findings; confirmed azd as critical path for Stories 2–3
+- **Orchestration logs:** Written to `.squad/orchestration-log/2026-04-07T21-33-amos.md`
+- **Session summary:** Written to `.squad/log/2026-04-07T21-33-framework-review.md`
+- **Framework Assessment:** Merged to `.squad/decisions.md` (replaces inbox file)
+- **Outcome:** azd strategy approved as foundation for Framework Modernization. azure.yaml created. 4 gaps documented for validation. Team synchronized.
+- **Next Steps:** Validate 4 gaps locally with new azure.yaml before CI/CD migration
+- **Status:** ✅ Framework review complete, cross-team coordination logged, inbox merged to decisions.md
