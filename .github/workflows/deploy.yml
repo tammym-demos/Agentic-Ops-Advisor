@@ -589,7 +589,7 @@ jobs:
                   import os, sys, time
                   sys.path.insert(0, os.getcwd())
                   from azure.ai.projects import AIProjectClient
-                  from azure.ai.projects.models import HostedAgentDefinition
+                  from azure.ai.projects.models import HostedAgentDefinition, ProtocolVersionRecord
                   from azure.identity import DefaultAzureCredential
 
                   endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
@@ -614,31 +614,23 @@ jobs:
                       credential=DefaultAzureCredential(),
                   )
 
-                  # Read system prompt from file
-                  prompt_path = "agent/system_prompt.md"
-                  system_prompt = open(prompt_path).read() if os.path.exists(prompt_path) else (
-                      "You are the Agentic Ops Advisor — a governed AI agent for "
-                      "root-cause and change-context reasoning over infrastructure telemetry."
-                  )
-
-                  # Build tool schemas for the hosted agent definition
-                  # The hosted agent container handles tool dispatch, but the platform
-                  # needs the schemas to pass to the LLM for function calling.
-                  from agent.agent import _build_function_set
-                  enable_work_iq = os.environ.get("ENABLE_WORK_IQ", "true").lower() not in ("false", "0", "no")
-                  function_set = _build_function_set(enable_work_iq)
-                  
-                  # Convert function set to tool definitions format expected by hosted agent
-                  tools = [{"type": "function", "function": f} for f in function_set]
-
                   # Create hosted agent definition with container image reference
+                  # The container handles its own LLM calls, tool dispatch, and system prompt
+                  # via the Foundry Responses API (POST /responses on port 8088).
                   agent_definition = HostedAgentDefinition(
-                      model=deployment_name,
-                      instructions=system_prompt,
-                      tools=tools,
-                      container={
-                          "image": container_image,
-                          "port": 8088,
+                      kind="hosted",
+                      container_protocol_versions=[
+                          ProtocolVersionRecord(protocol="responses", version="v1"),
+                      ],
+                      cpu="4",
+                      memory="16GB",
+                      image=container_image,
+                      environment_variables={
+                          "AZURE_OPENAI_ENDPOINT": os.environ.get("AZURE_OPENAI_ENDPOINT", ""),
+                          "AZURE_OPENAI_DEPLOYMENT": deployment_name,
+                          "DB_MODE": "sqlite",
+                          "ENABLE_WORK_IQ": os.environ.get("ENABLE_WORK_IQ", "true"),
+                          "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED": "false",
                       },
                   )
 
