@@ -352,6 +352,15 @@ jobs:
                   echo "$HOME/.azd/bin" >> "$GITHUB_PATH"
                   azd version
 
+            # Authenticate azd using the same OIDC identity used by az login
+            - name: Authenticate azd
+              run: |
+                  azd auth login \
+                      --client-id "${{ secrets.AZURE_CLIENT_ID }}" \
+                      --federated-credential-provider "github" \
+                      --tenant-id "${{ secrets.AZURE_TENANT_ID }}"
+                  echo "✅ azd authenticated"
+
             # ------------------------------------------------------------------
             # Step 6 — Configure azd environment
             # ------------------------------------------------------------------
