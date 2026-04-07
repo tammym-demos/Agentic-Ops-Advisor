@@ -7,7 +7,7 @@
 // it via `az group create` before running this template.
 //
 // Deploy with:
-//   az group create --name rg-agentic-ops-advisor --location eastus2
+//   az group create --name rg-agentic-ops-advisor --location eastus
 //   az deployment group create \
 //     --resource-group rg-agentic-ops-advisor \
 //     --template-file infra/main-rg.bicep \

@@ -20,6 +20,9 @@
     "sqlDatabaseSku": {
       "value": "Basic"
     },
+    "sqlLocation": {
+      "value": "eastus2"
+    },
     "openAiCapacity": {
       "value": 10
     },

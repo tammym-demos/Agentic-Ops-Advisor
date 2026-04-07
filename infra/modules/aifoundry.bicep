@@ -141,6 +141,7 @@ resource gpt41Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-
 resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2024-10-01' = {
   parent: aiHub
   name: projectName
+  location: location
   tags: tags
   dependsOn: [kvReaderAssignment]
   identity: {
