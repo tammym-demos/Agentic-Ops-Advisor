@@ -241,3 +241,29 @@
 - **Pattern:** Hosted agents must expose POST /responses (Foundry Responses API) and GET /health on port 8088. The entrypoint (scripts/serve.py) implements this — Naomi is creating that file in parallel.
 - **Files modified:** Dockerfile (+4/-3), gent.yaml (+8/-1)
 - **Status:** ✓ Complete. Docker config and manifest now ready for hosted agent deployment pattern.
+
+### 2026-04-11: Issue #84 — Foundry Playground 404 Fix (Publish Agent Application)
+- **Problem:** Playground shows raw function-call JSON because it routes through legacy Agents API (threads/runs) instead of Responses API to the container. Smoke test on `/applications/agentic-ops-advisor/protocols/openai/responses` returns 404.
+- **Root cause:** `create_version()` creates a hosted agent version inside the project, but does NOT publish it as an **Agent Application**. The `/applications/` endpoint only exists after a separate ARM-level publish step.
+- **Key discovery:** Publishing creates two ARM resources:
+  1. `Microsoft.CognitiveServices/accounts/projects/applications/{name}` — the application wrapper with stable endpoint and RBAC
+  2. `Microsoft.CognitiveServices/accounts/projects/applications/{name}/agentDeployments/{name}` — the deployment referencing the agent version
+- **Fix (deploy.yml):**
+  1. Added **Step 5e.2** "Publish Agent Application" after `create_version()` and verification
+  2. Uses `az rest --method PUT` to create/update the Agent Application and Agent Deployment via ARM REST API
+  3. Application config: `authorizationPolicy: Default` (RBAC-based), `agents: [{agentName}]`
+  4. Deployment config: `deploymentType: Hosted`, `minReplicas: 1`, `maxReplicas: 2`, `protocols: [{protocol: Responses, version: 1.0}]`
+  5. Grants `Azure AI User` role on the application to the deploy SP for smoke test invocation
+  6. API version fallback: tries `2025-10-01-preview` then `2025-12-01`
+  7. `continue-on-error: true` — publish failure doesn't block the deploy
+- **Smoke test update (Step 6b):**
+  1. Added SDK-based `openai.responses.create` with `agent_reference` as third invocation pattern
+  2. Uses `project.get_openai_client()` — project-level invocation, doesn't require publishing
+  3. Original HTTP attempts (`/applications/` and `/agents/`) kept as first two attempts
+- **Reference docs:**
+  - https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
+  - https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent
+  - ARM template: `Microsoft.CognitiveServices/accounts/projects/applications`
+- **RBAC note:** After publishing, the agent gets a NEW identity. Tool permissions (Azure OpenAI, etc.) may need reassignment to the application's identity. For our case, the container uses env var API key, so this is non-blocking.
+- **Files modified:** `.github/workflows/deploy.yml`
+- **Status:** ✓ Complete. Ready for deploy run.

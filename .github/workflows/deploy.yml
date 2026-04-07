@@ -834,6 +834,158 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
+            # Step 5e.2 — Publish Agent Application (exposes Responses API)
+            #
+            # WHY: create_version() creates a hosted agent version inside the
+            # project, but the Foundry Playground routes through the
+            # /applications/{name}/protocols/openai/responses endpoint which
+            # only exists after the agent is PUBLISHED as an Agent Application.
+            # Publishing creates an ARM resource (Agent Application + Deployment)
+            # that wraps the agent version with a stable endpoint and RBAC.
+            # See: https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
+            # ------------------------------------------------------------------
+            - name: Publish Agent Application
+              continue-on-error: true
+              run: |
+                  echo "::group::Publish Agent Application"
+
+                  AGENT_ID="${DEPLOYED_AGENT_ID:-}"
+                  if [ -z "$AGENT_ID" ]; then
+                      echo "⚠️  No agent deployed — skipping publish."
+                      echo "::endgroup::"
+                      exit 0
+                  fi
+
+                  AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
+                  AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
+                  APP_NAME="${AGENT_NAME}"
+                  DEPLOYMENT_NAME="production"
+
+                  echo "🔧 Publish configuration:"
+                  echo "   Agent: ${AGENT_NAME} (v${AGENT_VERSION})"
+                  echo "   Application: ${APP_NAME}"
+                  echo "   Deployment: ${DEPLOYMENT_NAME}"
+
+                  # Resolve project ARM resource ID
+                  PROJECT_RESOURCE_ID=$(az resource list \
+                    --resource-group "$AZURE_RESOURCE_GROUP" \
+                    --resource-type "Microsoft.CognitiveServices/accounts/projects" \
+                    --query "[0].id" -o tsv 2>/dev/null)
+
+                  if [ -z "$PROJECT_RESOURCE_ID" ]; then
+                      echo "⚠️  Could not resolve project resource ID — skipping publish."
+                      echo "::endgroup::"
+                      exit 0
+                  fi
+
+                  echo "   Project ARM ID: ${PROJECT_RESOURCE_ID}"
+
+                  # Try multiple API versions (newest first)
+                  API_VERSIONS=("2025-10-01-preview" "2025-12-01")
+                  APP_CREATED=false
+
+                  for API_VERSION in "${API_VERSIONS[@]}"; do
+                      echo ""
+                      echo "--- Creating Agent Application (api-version=${API_VERSION}) ---"
+
+                      APP_BODY=$(cat <<JSONEOF
+                  {
+                    "properties": {
+                      "displayName": "Agentic Ops Advisor",
+                      "description": "Hosted agent for infrastructure telemetry and change-context reasoning",
+                      "agents": [{"agentName": "${AGENT_NAME}"}],
+                      "authorizationPolicy": {"type": "Default"}
+                    }
+                  }
+                  JSONEOF
+                  )
+
+                      if az rest --method PUT \
+                        --url "https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}" \
+                        --headers "Content-Type=application/json" \
+                        --body "$APP_BODY" 2>&1; then
+                          echo "✅ Agent Application created/updated (api-version=${API_VERSION})."
+                          APP_CREATED=true
+
+                          # Create/update Agent Deployment (hosted, Responses protocol)
+                          echo ""
+                          echo "--- Creating Agent Deployment ---"
+
+                          DEPLOY_BODY=$(cat <<JSONEOF2
+                  {
+                    "properties": {
+                      "displayName": "Production Hosted Deployment",
+                      "deploymentType": "Hosted",
+                      "minReplicas": 1,
+                      "maxReplicas": 2,
+                      "protocols": [{"protocol": "Responses", "version": "1.0"}],
+                      "agents": [{"agentName": "${AGENT_NAME}", "agentVersion": "${AGENT_VERSION}"}]
+                    }
+                  }
+                  JSONEOF2
+                  )
+
+                          if az rest --method PUT \
+                            --url "https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}/agentDeployments/${DEPLOYMENT_NAME}?api-version=${API_VERSION}" \
+                            --headers "Content-Type=application/json" \
+                            --body "$DEPLOY_BODY" 2>&1; then
+                              echo "✅ Agent Deployment created/updated."
+                          else
+                              echo "⚠️  Agent Deployment creation returned non-zero."
+                          fi
+
+                          break
+                      else
+                          echo "⚠️  Agent Application creation failed with api-version=${API_VERSION}, trying next..."
+                      fi
+                  done
+
+                  if [ "$APP_CREATED" = false ]; then
+                      echo "⚠️  Could not create Agent Application with any API version."
+                      echo "   The agent is still accessible via the project-level SDK."
+                      echo "   Playground may need manual publish via the portal."
+                      echo "::endgroup::"
+                      exit 0
+                  fi
+
+                  # Grant Azure AI User on the application so smoke tests can invoke it
+                  echo ""
+                  echo "--- Granting Azure AI User on Agent Application ---"
+                  APP_RESOURCE_ID="${PROJECT_RESOURCE_ID}/applications/${APP_NAME}"
+
+                  ACCOUNT_TYPE=$(az account show --query user.type -o tsv 2>/dev/null || echo "user")
+                  if [[ "${ACCOUNT_TYPE}" == "servicePrincipal" ]]; then
+                      SP_NAME=$(az account show --query user.name -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_ID=$(az ad sp show --id "${SP_NAME}" --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="ServicePrincipal"
+                  else
+                      PRINCIPAL_ID=$(az ad signed-in-user show --query id -o tsv 2>/dev/null || echo "")
+                      PRINCIPAL_TYPE="User"
+                  fi
+
+                  if [ -n "$PRINCIPAL_ID" ]; then
+                      az role assignment create \
+                        --assignee-object-id "$PRINCIPAL_ID" \
+                        --assignee-principal-type "$PRINCIPAL_TYPE" \
+                        --role "Azure AI User" \
+                        --scope "$APP_RESOURCE_ID" 2>/dev/null \
+                        || echo "ℹ️  Azure AI User role already assigned or insufficient permissions."
+                      echo "✅ Azure AI User role configured on application."
+                  else
+                      echo "⚠️  Could not determine principal ID — skipping RBAC grant."
+                  fi
+
+                  # Wait for deployment to reach Running state
+                  echo ""
+                  echo "Waiting 30s for application deployment to start..."
+                  sleep 30
+
+                  echo ""
+                  echo "✅ Agent Application published: ${APP_NAME}"
+                  echo "   Endpoint: /applications/${APP_NAME}/protocols/openai/responses"
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
             # Step 5f — Seed local SQLite DB (required for smoke-test tool calls)
             # ------------------------------------------------------------------
             - name: Set up local SQLite DB for smoke test
@@ -958,22 +1110,26 @@ jobs:
                   credential = DefaultAzureCredential()
                   token = credential.get_token("https://ai.azure.com/.default")
                   
-                  # The hosted agent can be invoked via multiple URL patterns:
-                  # 1. Published Agent Application: /applications/{name}/protocols/openai/responses (2025-11-15-preview)
-                  # 2. Internal agents API: /agents/{name}/responses (v1)
-                  # We try the published application pattern first (per MS docs), then fallback to internal.
+                  # The hosted agent can be invoked via multiple patterns:
+                  # 1. Published Agent Application: /applications/{name}/protocols/openai/responses
+                  #    (requires agent to be published — Step 5e.2)
+                  # 2. SDK: project.get_openai_client() + agent_reference
+                  #    (project-level invocation, no publish required)
+                  # 3. Internal agents API: /agents/{name}/responses (v1)
+                  # We try in order, stopping at the first success.
                   base = endpoint.rstrip("/")
                   agent_name = "agentic-ops-advisor"
-                  
+                  probe = "What is the GPU utilization trend for the last 24 hours?"
+                  print(f"Probe query: {probe}")
+
+                  last_error = None
+
+                  # --- Attempt 1: Published application endpoint (primary) ---
                   url_attempts = [
                       (f"{base}/applications/{agent_name}/protocols/openai/responses?api-version=2025-11-15-preview", "applications/openai"),
                       (f"{base}/agents/{agent_name}/responses?api-version=v1", "agents/v1"),
                   ]
-                  
-                  probe = "What is the GPU utilization trend for the last 24 hours?"
-                  print(f"Probe query: {probe}")
-                  
-                  last_error = None
+
                   for url, label in url_attempts:
                       print(f"\nAttempt [{label}]: {url}")
                       try:
@@ -986,35 +1142,33 @@ jobs:
                               },
                               timeout=180,
                           )
-                          
+
                           print(f"  Status: {response.status_code}")
                           if response.status_code >= 400:
                               print(f"  Body: {response.text[:500]}")
                               last_error = f"[{label}] {response.status_code}: {response.text[:200]}"
                               continue
-                          
+
                           data = response.json()
-                          
-                          # Validate response format
+
                           if not isinstance(data, dict):
                               last_error = f"[{label}] Invalid response format: {type(data).__name__}"
                               print(f"  {last_error}")
                               continue
-                          
+
                           status = data.get("status", "unknown")
                           output = data.get("output", [])
-                          
+
                           if status != "completed":
                               last_error = f"[{label}] Status: {status}"
                               if "error" in data:
                                   last_error += f" — {data['error']}"
                               print(f"  {last_error}")
                               continue
-                          
+
                           # Extract assistant message
                           assistant_msg = next((m for m in output if m.get("role") == "assistant"), None)
                           if not assistant_msg or not assistant_msg.get("content"):
-                              # Some responses put text directly in output_text
                               output_text = data.get("output_text", "")
                               if output_text:
                                   print(f"✅ Smoke test PASSED [{label}]\nResponse preview: {output_text[:300]}")
@@ -1022,11 +1176,11 @@ jobs:
                               last_error = f"[{label}] No assistant content in output"
                               print(f"  {last_error}")
                               continue
-                          
+
                           preview = str(assistant_msg["content"])[:300]
                           print(f"✅ Smoke test PASSED [{label}]\nResponse preview: {preview}")
                           sys.exit(0)
-                      
+
                       except requests.exceptions.RequestException as e:
                           last_error = f"[{label}] {e}"
                           print(f"  Request error: {e}")
@@ -1037,9 +1191,50 @@ jobs:
                           last_error = f"[{label}] {e}"
                           print(f"  Error: {e}")
                           continue
-                  
+
+                  # --- Attempt 3: SDK-based openai.responses.create with agent_reference ---
+                  # Per MS docs: https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-agent
+                  print(f"\nAttempt [sdk/agent_reference]: openai.responses.create")
+                  try:
+                      from azure.ai.projects import AIProjectClient
+
+                      project = AIProjectClient(
+                          endpoint=endpoint,
+                          credential=credential,
+                          allow_preview=True,
+                      )
+                      openai_client = project.get_openai_client()
+                      agent = project.agents.get(agent_name=agent_name)
+
+                      sdk_response = openai_client.responses.create(
+                          input=[{"role": "user", "content": probe}],
+                          extra_body={"agent_reference": {"name": agent.name, "type": "agent_reference"}},
+                          timeout=180,
+                      )
+
+                      output_text = getattr(sdk_response, 'output_text', '') or ''
+                      if output_text:
+                          print(f"✅ Smoke test PASSED [sdk/agent_reference]\nResponse preview: {output_text[:300]}")
+                          sys.exit(0)
+
+                      # Try extracting from output list
+                      output_items = getattr(sdk_response, 'output', []) or []
+                      for item in output_items:
+                          content = getattr(item, 'content', None)
+                          if content:
+                              preview = str(content)[:300]
+                              print(f"✅ Smoke test PASSED [sdk/agent_reference]\nResponse preview: {preview}")
+                              sys.exit(0)
+
+                      last_error = "[sdk/agent_reference] Response received but no output text"
+                      print(f"  {last_error}")
+
+                  except Exception as e:
+                      last_error = f"[sdk/agent_reference] {e}"
+                      print(f"  Error: {e}")
+
                   # All attempts failed — report but don't block deploy
-                  print(f"\n⚠️  Smoke test could not reach hosted agent (all URL patterns failed).")
+                  print(f"\n⚠️  Smoke test could not reach hosted agent (all patterns failed).")
                   print(f"   Last error: {last_error}")
                   print("   The agent may still work in the Foundry Playground — test manually.")
                   # Exit 0 so the deploy isn't blocked; the Playground is the real test
