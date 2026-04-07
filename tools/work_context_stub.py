@@ -162,6 +162,26 @@ _RUNBOOKS: dict[str, list[dict[str, str]]] = {
 }
 
 # ---------------------------------------------------------------------------
+# Cluster / host name → service category mapping (fuzzy matching fallback)
+# ---------------------------------------------------------------------------
+
+_CLUSTER_TO_SERVICE: dict[str, str] = {
+    "prod-east": "gpu-cluster",
+    "prod-west": "gpu-cluster",
+    "gpu": "gpu-cluster",
+    "train": "gpu-cluster",
+    "inference": "gpu-cluster",
+    "wan": "network",
+    "cdn": "network",
+    "edge": "network",
+    "latency": "network",
+    "finops": "cost",
+    "billing": "cost",
+    "spend": "cost",
+    "budget": "cost",
+}
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -169,9 +189,17 @@ _RUNBOOKS: dict[str, list[dict[str, str]]] = {
 def _service_key(service: str) -> str:
     """Normalise a service name to a known key or 'default'."""
     s = service.lower().strip()
+    # Exact match first
+    if s in _CHANGE_EVENTS:
+        return s
+    # Substring match against known keys
     for key in _CHANGE_EVENTS:
         if key in s or s in key:
             return key
+    # Cluster / host name pattern mapping
+    for pattern, svc in _CLUSTER_TO_SERVICE.items():
+        if pattern in s:
+            return svc
     return "default"
 
 
@@ -224,3 +252,49 @@ def get_full_context(service: str) -> dict[str, Any]:
 get_work_context = get_full_context
 get_work_context.__name__ = "get_work_context"
 get_work_context.__qualname__ = "get_work_context"
+
+
+# ---------------------------------------------------------------------------
+# Azure AI Agent Service tool schema
+# ---------------------------------------------------------------------------
+
+TOOL_SCHEMA: dict[str, Any] = {
+    "type": "function",
+    "function": {
+        "name": "get_work_context",
+        "description": (
+            "Retrieve synthetic work context (change events, decisions, ownership, runbooks) "
+            "for a service category. All data is synthetic for demo purposes. "
+            "Simulates Work IQ outputs — Work IQ is in public preview and requires "
+            "Microsoft 365 Copilot licensing + admin consent."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": (
+                        "Service category — not a cluster or host name. "
+                        "Common cluster names (e.g. 'prod-east-01') are "
+                        "resolved automatically."
+                    ),
+                    "enum": ["gpu-cluster", "network", "cost"],
+                },
+            },
+            "required": ["service"],
+            "additionalProperties": False,
+        },
+    },
+}
+
+
+def get_tool_definition() -> dict[str, Any]:
+    """Return the Azure AI Agent Service-compatible tool definition for this tool."""
+    return TOOL_SCHEMA
+
+
+TOOL_DEFINITIONS: list[dict[str, Any]] = [TOOL_SCHEMA]
+
+TOOL_CALLABLES: dict[str, Any] = {
+    "get_work_context": get_work_context,
+}

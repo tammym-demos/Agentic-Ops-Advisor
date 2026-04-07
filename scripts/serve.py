@@ -157,33 +157,12 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
 
     from tools.sql_telemetry import TOOL_DEFINITIONS
     from tools.action_stub import ACTION_STUB_TOOL_DEFINITIONS
-    from tools.work_context_stub import ENABLE_WORK_IQ
+    from tools.work_context_stub import ENABLE_WORK_IQ, TOOL_DEFINITIONS as WORK_CTX_TOOL_DEFINITIONS
 
     # Build full tool definitions
     tool_definitions = list(TOOL_DEFINITIONS) + list(ACTION_STUB_TOOL_DEFINITIONS)
     if ENABLE_WORK_IQ:
-        # Add work_context tool definition
-        work_context_def = {
-            "type": "function",
-            "function": {
-                "name": "get_work_context",
-                "description": (
-                    "Retrieve synthetic work context (change events, decisions, ownership, runbooks) "
-                    "for a specific service. All data is synthetic for demo purposes."
-                ),
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "service": {
-                            "type": "string",
-                            "description": "Service name (e.g., 'gpu-cluster', 'network', 'cost').",
-                        }
-                    },
-                    "required": ["service"],
-                },
-            },
-        }
-        tool_definitions.append(work_context_def)
+        tool_definitions.extend(WORK_CTX_TOOL_DEFINITIONS)
 
     # --- Auth: API key first, managed identity fallback ---
     # API key is preferred because DefaultAzureCredential's managed identity

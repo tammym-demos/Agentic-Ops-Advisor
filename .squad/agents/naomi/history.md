@@ -9,6 +9,13 @@
 
 ## Learnings
 
+### 2025-07-26: Tool Schema Enrichment (Issue #92)
+- **Pattern:** Build TOOL_SCHEMA descriptions dynamically from source-of-truth dicts (e.g. `TELEMETRY_TABLES`) to prevent schema/data drift.
+- **`_CLUSTER_TO_SERVICE` mapping:** Fuzzy matching for cluster/host names to service categories — lives in `tools/work_context_stub.py` above `_service_key()`.
+- **`work_context_stub.py` now owns its own `TOOL_SCHEMA`**, `get_tool_definition()`, `TOOL_DEFINITIONS`, `TOOL_CALLABLES` — same pattern as `sql_telemetry.py`. The inline definition in `scripts/serve.py` was replaced with an import.
+- **Key files:** `tools/sql_telemetry.py` (lines 288-350), `tools/work_context_stub.py` (lines 164-290), `scripts/serve.py` (lines 158-166).
+- **SQLite dialect note** added to `sql` parameter description to prevent GPT-4.1 from generating PostgreSQL syntax.
+
 ### 2025-07-25: Test Wiring Fixes (Alex's findings)
 - **Root cause:** Tests were written against a different API surface than merged source.
 - **conftest.py:** Changed `tools.sql_telemetry._DDL, _seed_db` → `data.seed_telemetry.DDL, seed()` + row generators for in-memory DB fixture.

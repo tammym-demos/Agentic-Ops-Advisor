@@ -300,8 +300,11 @@ TOOL_SCHEMA: dict[str, Any] = {
                 "table": {
                     "type": "string",
                     "description": (
-                        "Return raw rows from one of the telemetry tables: "
-                        "'telemetry_gpu', 'telemetry_net', 'telemetry_cost', 'incidents'."
+                        "Return raw rows from one of the telemetry tables. "
+                        + " | ".join(
+                            f"'{name}' ({', '.join(meta['columns'])})"
+                            for name, meta in TELEMETRY_TABLES.items()
+                        )
                     ),
                     "enum": list(TELEMETRY_TABLES.keys()),
                 },
@@ -309,15 +312,24 @@ TOOL_SCHEMA: dict[str, Any] = {
                     "type": "string",
                     "description": (
                         "Run a pre-built aggregate query. Available keys: "
-                        + ", ".join(sorted(_AGG_QUERIES.keys()))
-                        + ". Use 'list_aggregates' pseudo-value to see descriptions."
+                        + ", ".join(
+                            f"'{k}'" for k in sorted(_AGG_QUERIES.keys())
+                        )
+                        + ". gpu_avg_util_1h/24h: avg/max/min GPU util by cluster+node. "
+                        "net_avg_latency_1h: avg/max latency + loss by site. "
+                        "cost_by_service_24h: total cost/token cost by cluster. "
+                        "open_incidents: unresolved incidents by severity. "
+                        "recent_incidents_24h: all incidents in last 24 h. "
+                        "Use 'list_aggregates' pseudo-value to see full SQL."
                     ),
                 },
                 "sql": {
                     "type": "string",
                     "description": (
                         "A raw SELECT statement scoped to the known telemetry tables. "
-                        "Only SELECT is permitted; no DDL or DML."
+                        "Only SELECT is permitted; no DDL or DML. "
+                        "Database is SQLite — use datetime('now', '-24 hours'), "
+                        "NOT PostgreSQL NOW() or INTERVAL syntax."
                     ),
                 },
                 "limit": {
