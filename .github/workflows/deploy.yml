@@ -426,6 +426,51 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
+            # Step 5b — Ensure AcrPull for hub managed identity
+            # ------------------------------------------------------------------
+            # The Foundry project needs AcrPull on the ACR to pull images.
+            # This runs in the deploy-agent job (not deploy-infra) so it
+            # always executes, even when no infra changes are detected.
+            # ------------------------------------------------------------------
+            - name: Ensure AcrPull on ACR
+              run: |
+                  ACR_NAME="${AZURE_CONTAINER_REGISTRY_NAME:-crhubagentopsprod}"
+                  RG_NAME="${AZURE_RESOURCE_GROUP}"
+                  SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                  ACR_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.ContainerRegistry/registries/${ACR_NAME}"
+
+                  # Get the hub's managed identity (system-assigned)
+                  HUB_NAME="hub-agentops-prod"
+                  HUB_MI=$(az cognitiveservices account show \
+                      --name "${HUB_NAME}" \
+                      --resource-group "${RG_NAME}" \
+                      --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+
+                  if [[ -n "${HUB_MI}" ]]; then
+                      echo "Hub MI: ${HUB_MI}"
+                      ACR_PULL_EXISTS=$(az role assignment list \
+                          --assignee "${HUB_MI}" \
+                          --role "AcrPull" \
+                          --scope "${ACR_SCOPE}" \
+                          --query "[].id" -o tsv 2>/dev/null || echo "")
+                      if [[ -z "${ACR_PULL_EXISTS}" ]]; then
+                          echo "Assigning AcrPull to hub identity on ${ACR_NAME}..."
+                          az role assignment create \
+                              --assignee-object-id "${HUB_MI}" \
+                              --assignee-principal-type "ServicePrincipal" \
+                              --role "AcrPull" \
+                              --scope "${ACR_SCOPE}" \
+                              --output none
+                          echo "✅ AcrPull assigned. Waiting 30s for propagation..."
+                          sleep 30
+                      else
+                          echo "✅ AcrPull already present on ${ACR_NAME}"
+                      fi
+                  else
+                      echo "⚠️  Could not resolve hub MI — skipping AcrPull"
+                  fi
+
+            # ------------------------------------------------------------------
             # Step 6 — Deploy hosted agent (CLI primary, SDK fallback)
             # ------------------------------------------------------------------
             # Primary: `az cognitiveservices agent create` handles version
