@@ -424,16 +424,56 @@ jobs:
 
                   # --- 1. Start the hosted agent container ---
                   az extension add --name cognitiveservices --upgrade --yes 2>/dev/null || true
+                  echo "CLI extension version: $(az extension show --name cognitiveservices --query version -o tsv 2>/dev/null || echo 'not installed')"
 
                   echo "Starting hosted agent..."
-                  az cognitiveservices agent start \
+                  AGENT_START_OUTPUT=$(az cognitiveservices agent start \
                       --account-name "$ACCOUNT_NAME" \
                       --project-name "$FOUNDRY_PROJECT" \
                       --name "$AGENT_NAME" \
                       --agent-version "$AGENT_VERSION" \
                       --min-replicas 1 \
                       --max-replicas 2 \
-                      2>&1 || echo "⚠️  agent start failed — may already be running."
+                      2>&1) && AGENT_START_RC=$? || AGENT_START_RC=$?
+
+                  echo "  agent start output (rc=${AGENT_START_RC}): ${AGENT_START_OUTPUT}"
+
+                  if [ "$AGENT_START_RC" -ne 0 ]; then
+                      echo "⚠️  az cognitiveservices agent start failed (rc=${AGENT_START_RC})."
+                      echo "   Trying ARM REST API fallback to start agent..."
+
+                      # Resolve project resource ID for ARM call
+                      START_PROJECT_ID=$(az resource list \
+                          --resource-group "$AZURE_RESOURCE_GROUP" \
+                          --resource-type "Microsoft.CognitiveServices/accounts/projects" \
+                          --query "[0].id" -o tsv 2>/dev/null)
+
+                      if [ -z "$START_PROJECT_ID" ]; then
+                          START_PROJECT_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT_NAME}/projects/${FOUNDRY_PROJECT}"
+                      fi
+
+                      # ARM REST: start agent via POST action
+                      for API_VER in "2026-01-15-preview" "2025-10-01-preview"; do
+                          echo "   Trying agent start via ARM (api-version=${API_VER})..."
+                          START_RESPONSE=$(az rest --method POST \
+                              --url "https://management.azure.com${START_PROJECT_ID}/agents/${AGENT_NAME}/versions/${AGENT_VERSION}/start?api-version=${API_VER}" \
+                              --headers "Content-Type=application/json" \
+                              --body "{\"minReplicas\":1,\"maxReplicas\":2}" \
+                              2>&1) && START_RC=$? || START_RC=$?
+
+                          echo "   Response (rc=${START_RC}): ${START_RESPONSE}"
+                          if [ "$START_RC" -eq 0 ]; then
+                              echo "✅ Agent started via ARM REST (api-version=${API_VER})"
+                              break
+                          fi
+                      done
+
+                      if [ "$START_RC" -ne 0 ]; then
+                          echo "⚠️  Agent start failed on all methods — may already be running or need manual start."
+                      fi
+                  else
+                      echo "✅ Agent started via CLI."
+                  fi
 
                   # --- 2. Publish Agent Application via ARM REST ---
                   # Resolve project resource ID and log it for debugging
