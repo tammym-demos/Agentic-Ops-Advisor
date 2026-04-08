@@ -242,3 +242,35 @@
 - **Commit:** 84e2f46
 - **Cross-team note:** Amos resolved OpenAI dependency conflict (Run #97 in progress). Drummer added 7 issues to GitHub Project board #13.
 - **Orchestration:** All team deliverables logged to .squad/orchestration-log/ — sprint consolidation complete
+
+### 2026-04-10: Fix #81 + #91 — RBAC Roles & ARM Publish Hardening
+- **Task:** Add missing RBAC roles (Cognitive Services Contributor/User) to deploy.yml and harden the ARM publish step for Agent Application.
+- **Fix #81 (RBAC):** Replaced single Azure AI Developer role assignment with loop over 3 roles: Azure AI Developer, Cognitive Services Contributor, Cognitive Services User. Same idempotent check-then-create pattern. Step renamed "Ensure RBAC roles on AI hub".
+- **Fix #91 (ARM publish):** (1) Log PROJECT_RESOURCE_ID after lookup for debugging. (2) Fallback resource ID construction from endpoint components if `az resource list` returns empty. (3) Try API version 2026-01-15-preview first, fall back to 2025-10-01-preview. (4) Capture full response body + return code from `az rest` calls. (5) Python SDK fallback using `requests` + `DefaultAzureCredential` with management.azure.com audience when both ARM REST versions fail. (6) Portal UI manual publish guidance as last resort.
+- **Pattern:** Export shell variables before heredoc Python script so `os.environ.get()` works.
+- **Tests:** 341 passed, 0 failed.
+- **Commit:** 63691d2.
+- **Key files:** `.github/workflows/deploy.yml` (lines 216-266 RBAC, lines 398-570 publish).
+
+### 2026-06-01: Option A — ARM Publish Fix (4 surgical fixes)
+- **Task:** Apply Holden's Option A diagnosis to unblock ARM agent application publish. 4 fixes to `deploy.yml`.
+- **Fix 1 (agent start params):** Removed `--min-replicas 1` and `--max-replicas 2` from `az cognitiveservices agent start` — those params belong to `create`/`update`, not `start`. Added `--show-logs` for CI diagnostics. Also removed `"minReplicas":1,"maxReplicas":2` from ARM REST fallback body (now sends `{}`).
+- **Fix 2 (extension install):** Replaced `2>/dev/null || true` with visible error output + CLI version logging. Errors no longer silently swallowed.
+- **Fix 3 (GA API version):** Changed all 3 API version loops (ARM start fallback, ARM publish, Python SDK fallback) from `"2026-01-15-preview" "2025-10-01-preview"` to `"2025-12-01" "2025-10-01-preview" "2026-01-15-preview"`. GA version `2025-12-01` tried first — more stable than preview.
+- **Fix 4 (RBAC):** Added "Azure AI Project Manager" to the RBAC role assignment loop (was missing despite being documented in workflow header).
+- **Tests:** 341 passed, 0 failed. YAML valid.
+- **Commit:** 37e1778. Pushed to main.
+- **Diagnosis source:** `.squad/decisions/inbox/holden-arm-publish-diagnosis.md`
+- **Key files:** `.github/workflows/deploy.yml` (lines 247, 426-437, 456-461, 500, 569).
+
+### 2026-06-01: Option B — CLI Modernization (az cognitiveservices agent create)
+- **Task:** Replace separate `deploy_agent.py` (SDK `create_version`) + `az cognitiveservices agent start` with single `az cognitiveservices agent create` command.
+- **Context:** Option A (4 surgical fixes) hit two server-side blockers: (1) container won't start — "Deployment failed with status 'Failed': No error details available", (2) ARM `/applications` returns SystemError from `managementfrontend` in eastus (Foundry platform bug).
+- **Hypothesis:** `agent create` uses a different code path than `create_version` + `start` and may bypass both blockers. Passing env vars via `--env` may fix container startup (container might not have been receiving env vars).
+- **Step 6 rewrite:** "Deploy hosted agent" — primary path uses `az cognitiveservices agent create` with `--env` for all runtime env vars, `--protocol responses --protocol-version v1`, `--show-logs`, `--timeout 600`. Falls back to `deploy_agent.py` + `agent start` if create fails. Tracks deploy method in `AGENT_DEPLOY_METHOD` env var.
+- **Step 7 rewrite:** "Publish agent application" — probes Responses API endpoint first. If HTTP 200/201, skips ARM publish entirely (create already set up the protocol). Otherwise falls through to ARM publish + Python SDK fallback chain.
+- **deploy_agent.py retained:** Not deleted — serves as fallback if `agent create` command doesn't exist in the CLI version or fails for other reasons.
+- **Header comment updated:** "Hybrid: az CLI + Python SDK" → "CLI-first + SDK fallback".
+- **Tests:** 341 passed, 0 failed. YAML valid.
+- **Commit:** d91908e. Pushed to main.
+- **Key files:** `.github/workflows/deploy.yml` (Steps 6-7, lines 377-625).
