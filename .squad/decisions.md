@@ -403,6 +403,103 @@ Result: Hosted agent broken; smoke test 404; zero observability
 
 ---
 
+### 2026-04-08T17:48:00Z: P0 Fixes Planned — Token Audience + strict Parameter
+
+**Date:** 2026-04-08  
+**Owner:** Naomi (Backend Dev) + Amos (DevOps)  
+**Status:** DIAGNOSTIC COMPLETE → IMPLEMENTATION PENDING  
+**Blocking:** None — all remediation can proceed immediately
+
+## Context
+
+Full diagnostic session identified two critical P0 blockers preventing agent deployment. These are blocking 2 additional P1 fixes.
+
+## Decision
+
+**Apply two critical fixes in immediate next session:**
+
+1. **Fix token audience in serve.py (5 min)**
+   - Change token scope from `https://openai.azure.com` to `https://cognitiveservices.azure.com`
+   - Reason: Foundry Responses API validates token audience; wrong scope = 401 Unauthorized on every request
+   - Impact: Unblocks all API calls after initial handshake
+
+2. **Add `strict` parameter to function definitions (15 min)**
+   - Add `"strict": True` to function definitions in: `tools/sql_telemetry.py`, `tools/work_context_stub.py`, `tools/action_stub.py`
+   - Reason: Azure AI Projects SDK API spec requires this field; omission = 400 Bad Request on tool registration
+   - Impact: Unblocks tool dispatch; enables telemetry queries
+
+## Implementation Details
+
+### Change 1: Token Audience (serve.py)
+
+**Location:** `scripts/serve.py` line ~194 (token generation)
+
+**Before:**
+```python
+token = credential.get_token(f"{endpoint}/.default")  # Wrong endpoint
+```
+
+**After:**
+```python
+token = credential.get_token("https://cognitiveservices.azure.com/.default")
+```
+
+### Change 2: FunctionTool `strict` Parameter (3 files)
+
+**Pattern for each tool:**
+
+**Before:**
+```python
+{
+    "type": "function",
+    "function": {
+        "name": name,
+        "description": description,
+        "parameters": parameters
+    }
+}
+```
+
+**After:**
+```python
+{
+    "type": "function",
+    "function": {
+        "name": name,
+        "description": description,
+        "parameters": parameters,
+        "strict": True  # Required by Azure AI API spec
+    }
+}
+```
+
+## Testing & Verification
+
+1. Run serve.py locally → test `/responses` POST → expect 200 OK (not 401)
+2. Verify tool registration succeeds → log shows "Registered 3 tools" (not 400 error)
+3. Run telemetry query → verify response returns data
+4. Pipeline green → smoke test 200 OK
+
+## Risk & Rollback
+
+**Risk:** LOW
+- Changes are surgical; no logic changes
+- Token scope documented in official Azure API reference
+- `strict` parameter is pure schema addition (no behavioral change)
+- All changes additive (no removals)
+
+**Rollback:** Trivial — revert two changes
+
+## Expected Outcome
+
+Post-fix pipeline state:
+- CLI syntax error (B-001) fixed by Amos (remove invalid start params)
+- Token audience (B-002) fixed → bearer validation succeeds
+- FunctionTool strict (B-003) fixed → tool registration succeeds
+- Agent deployed + accessible → P1 fixes can address remaining issues
+
+---
+
 ### 2026-04-06T21:30:00Z: Deploy Pipeline Hardening
 **By:** Amos (DevOps)
 **What:** Hardened `.github/workflows/deploy.yml` with four changes: (1) ODBC driver + unixodbc-dev installed before pip install (matches ci-eval.yml pattern); (2) Pre-deploy test gate with `pytest tests/ -x --tb=short` to block untested code; (3) Always-run Bicep validation with `az deployment sub validate` (catches syntax errors on every deploy, not just on infra changes); (4) Parameterized RBAC step to derive `AI_HUB_NAME` and `MANAGED_IDENTITY_NAME` from `parameters.json` instead of hardcoding resource names.
