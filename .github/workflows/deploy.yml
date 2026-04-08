@@ -1,11 +1,13 @@
 # =============================================================================
-# Deploy — Azure AI Foundry Agent Service (Hybrid: az CLI + Python SDK)
+# Deploy — Azure AI Foundry Agent Service (CLI-first + SDK fallback)
 # =============================================================================
 #
-# Deployment workflow for Foundry hosted agents. Uses a hybrid approach:
-#   1. az acr build   — build + push container image to ACR
-#   2. Python SDK     — create_version() to register hosted agent
-#   3. ARM REST       — publish Agent Application for Playground routing
+# Deployment workflow for Foundry hosted agents. Uses a CLI-first approach:
+#   1. az acr build              — build + push container image to ACR
+#   2. az cognitiveservices agent create — version + deploy + start in one shot
+#      (fallback: Python SDK create_version + agent start)
+#   3. ARM REST                  — publish Agent Application for Playground routing
+#      (skipped if Responses API probe succeeds after create)
 #
 # NOTE: azd does NOT natively support Foundry hosted agents (only Container
 # Apps). This workflow uses targeted az CLI + SDK commands instead.
@@ -375,178 +377,258 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 6 — Register hosted agent version (Python SDK)
+            # Step 6 — Deploy hosted agent (CLI primary, SDK fallback)
             # ------------------------------------------------------------------
-            # Uses AIProjectClient.agents.create_version() to register the
-            # container image as a new hosted agent version with Foundry.
+            # Primary: `az cognitiveservices agent create` handles version
+            # creation + container deployment + startup in one command.
+            # Fallback: deploy_agent.py (SDK create_version) + agent start.
+            # Requires Azure CLI >= 2.80 (cognitiveservices agent is core).
             # ------------------------------------------------------------------
-            - name: Register hosted agent version
-              id: register_agent
-              env:
-                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-              run: |
-                  echo "::group::Register agent version"
-                  python scripts/deploy_agent.py
-                  echo "::endgroup::"
-
-            # ------------------------------------------------------------------
-            # Step 7 — Start agent + Publish Agent Application
-            # ------------------------------------------------------------------
-            # 1. `az cognitiveservices agent start` activates the container
-            #    (create_version does NOT auto-start).
-            # 2. ARM REST PUT publishes the Agent Application so the Foundry
-            #    Playground routes through /applications/{name}/protocols/...
-            # See: https://learn.microsoft.com/azure/foundry/agents/how-to/publish-agent
-            # ------------------------------------------------------------------
-            - name: Start agent and publish application
+            - name: Deploy hosted agent
+              id: deploy_agent
               continue-on-error: true
               env:
                   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
               run: |
-                  echo "::group::Start agent + publish"
+                  echo "::group::Deploy hosted agent"
+
+                  # --- Parse endpoint ---
+                  ENDPOINT_TRIMMED=$(echo "$AZURE_AI_AGENTS_ENDPOINT" | xargs)
+                  ACCOUNT_NAME=$(echo "$ENDPOINT_TRIMMED" | sed -E 's|https://([^.]+)\..*|\1|')
+                  FOUNDRY_PROJECT=$(echo "$ENDPOINT_TRIMMED" | sed -E 's|.*/projects/([^/]+).*|\1|')
+
+                  echo "Endpoint (trimmed): ${ENDPOINT_TRIMMED}"
+                  echo "  Account: ${ACCOUNT_NAME}"
+                  echo "  Project: ${FOUNDRY_PROJECT}"
+                  echo "  Image:   ${CONTAINER_IMAGE}"
+
+                  # --- CLI version check ---
+                  az extension add --name cognitiveservices --upgrade --yes 2>/dev/null || echo "⚠️ Extension install skipped — using core commands"
+                  echo "Azure CLI version: $(az version -o json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"azure-cli\",\"?\"))' 2>/dev/null || echo 'unknown')"
+
+                  # ═══════════════════════════════════════════════════════════
+                  # PRIMARY: az cognitiveservices agent create
+                  # Handles version creation + container deploy + startup
+                  # ═══════════════════════════════════════════════════════════
+                  echo ""
+                  echo "═══ PRIMARY: az cognitiveservices agent create ═══"
+                  AGENT_CREATE_OUTPUT=$(az cognitiveservices agent create \
+                      --account-name "$ACCOUNT_NAME" \
+                      --project-name "$FOUNDRY_PROJECT" \
+                      --name "agentic-ops-advisor" \
+                      --image "${CONTAINER_IMAGE}" \
+                      --cpu 2 --memory 4Gi \
+                      --min-replicas 1 --max-replicas 2 \
+                      --protocol responses --protocol-version v1 \
+                      --env AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT \
+                           AZURE_OPENAI_DEPLOYMENT=$AZURE_OPENAI_DEPLOYMENT \
+                           AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY \
+                           DB_MODE=sqlite \
+                           ENABLE_WORK_IQ=true \
+                           ENABLE_MCP=false \
+                           APPLICATIONINSIGHTS_CONNECTION_STRING=$APPLICATIONINSIGHTS_CONNECTION_STRING \
+                           AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false \
+                      --show-logs --timeout 600 \
+                      2>&1) && CREATE_RC=$? || CREATE_RC=$?
+
+                  echo "Agent create exit code: ${CREATE_RC}"
+                  echo "Agent create output:"
+                  echo "${AGENT_CREATE_OUTPUT}"
+
+                  if [ "$CREATE_RC" -eq 0 ]; then
+                      echo "✅ az cognitiveservices agent create succeeded"
+
+                      # Extract agent ID from create output (JSON: .name or .id)
+                      AGENT_NAME=$(echo "${AGENT_CREATE_OUTPUT}" | python3 -c "
+                  import sys, json
+                  try:
+                      d = json.load(sys.stdin)
+                      print(d.get('name', 'agentic-ops-advisor'))
+                  except:
+                      print('agentic-ops-advisor')
+                  " 2>/dev/null || echo "agentic-ops-advisor")
+
+                      AGENT_VERSION=$(echo "${AGENT_CREATE_OUTPUT}" | python3 -c "
+                  import sys, json
+                  try:
+                      d = json.load(sys.stdin)
+                      v = d.get('properties', {}).get('version', d.get('version', ''))
+                      print(v if v else 'latest')
+                  except:
+                      print('latest')
+                  " 2>/dev/null || echo "latest")
+
+                      echo "DEPLOYED_AGENT_ID=${AGENT_NAME}/${AGENT_VERSION}" >> "$GITHUB_ENV"
+                      echo "AGENT_DEPLOY_METHOD=cli-create" >> "$GITHUB_ENV"
+                      echo "  Agent: ${AGENT_NAME} v${AGENT_VERSION}"
+                  else
+                      echo "⚠️  az cognitiveservices agent create failed (rc=${CREATE_RC})"
+
+                      # ═══════════════════════════════════════════════════════
+                      # FALLBACK 1: deploy_agent.py (SDK create_version)
+                      # ═══════════════════════════════════════════════════════
+                      echo ""
+                      echo "═══ FALLBACK 1: deploy_agent.py (SDK create_version) ═══"
+                      python scripts/deploy_agent.py && SDK_RC=$? || SDK_RC=$?
+
+                      if [ "$SDK_RC" -eq 0 ]; then
+                          echo "✅ SDK deploy_agent.py succeeded"
+                          echo "AGENT_DEPLOY_METHOD=sdk-fallback" >> "$GITHUB_ENV"
+
+                          # FALLBACK 2: az cognitiveservices agent start
+                          # (create_version does NOT auto-start)
+                          AGENT_ID="${DEPLOYED_AGENT_ID:-}"
+                          if [ -n "$AGENT_ID" ]; then
+                              FB_AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
+                              FB_AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
+
+                              echo ""
+                              echo "═══ FALLBACK 2: az cognitiveservices agent start ═══"
+                              AGENT_START_OUTPUT=$(az cognitiveservices agent start \
+                                  --account-name "$ACCOUNT_NAME" \
+                                  --project-name "$FOUNDRY_PROJECT" \
+                                  --name "$FB_AGENT_NAME" \
+                                  --agent-version "$FB_AGENT_VERSION" \
+                                  --show-logs \
+                                  2>&1) && START_RC=$? || START_RC=$?
+
+                              echo "  agent start output (rc=${START_RC}): ${AGENT_START_OUTPUT}"
+                              if [ "$START_RC" -eq 0 ]; then
+                                  echo "✅ Agent started via fallback CLI start"
+                              else
+                                  echo "⚠️  agent start also failed — container may need manual intervention"
+                              fi
+                          fi
+                      else
+                          echo "❌ SDK deploy_agent.py also failed (rc=${SDK_RC})"
+                          echo "AGENT_DEPLOY_METHOD=failed" >> "$GITHUB_ENV"
+                      fi
+                  fi
+
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
+            # Step 7 — Publish Agent Application (probe first, then ARM)
+            # ------------------------------------------------------------------
+            # If `agent create` already set up the Responses protocol, the ARM
+            # publish may not be needed. Probe the Responses endpoint first.
+            # ------------------------------------------------------------------
+            - name: Publish agent application
+              continue-on-error: true
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+              run: |
+                  echo "::group::Publish agent application"
 
                   AGENT_ID="${DEPLOYED_AGENT_ID:-}"
-                  if [ -z "$AGENT_ID" ]; then
-                      echo "⚠️  No agent deployed — skipping start/publish."
+                  DEPLOY_METHOD="${AGENT_DEPLOY_METHOD:-unknown}"
+                  echo "Deploy method: ${DEPLOY_METHOD}"
+                  echo "Agent ID: ${AGENT_ID:-<none>}"
+
+                  if [ -z "$AGENT_ID" ] && [ "$DEPLOY_METHOD" = "failed" ]; then
+                      echo "⚠️  No agent deployed — skipping publish."
                       echo "::endgroup::"
                       exit 0
                   fi
 
-                  AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
-                  AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
+                  AGENT_NAME=$(echo "${AGENT_ID:-agentic-ops-advisor/latest}" | cut -d'/' -f1)
+                  AGENT_VERSION=$(echo "${AGENT_ID:-agentic-ops-advisor/latest}" | cut -d'/' -f2)
 
-                  # Trim whitespace from endpoint (GitHub secrets can have leading/trailing spaces)
                   ENDPOINT_TRIMMED=$(echo "$AZURE_AI_AGENTS_ENDPOINT" | xargs)
-                  echo "Endpoint (trimmed): ${ENDPOINT_TRIMMED}"
-
-                  # Parse account and project from endpoint
                   ACCOUNT_NAME=$(echo "$ENDPOINT_TRIMMED" | sed -E 's|https://([^.]+)\..*|\1|')
                   FOUNDRY_PROJECT=$(echo "$ENDPOINT_TRIMMED" | sed -E 's|.*/projects/([^/]+).*|\1|')
 
-                  echo "Agent: ${AGENT_NAME} v${AGENT_VERSION}"
-                  echo "Account: ${ACCOUNT_NAME} / Project: ${FOUNDRY_PROJECT}"
+                  # --- Probe: is the Responses endpoint already live? ---
+                  ARM_PUBLISH_SUCCESS=false
 
-                  # --- 1. Start the hosted agent container ---
-                  az extension add --name cognitiveservices --upgrade --yes || echo "⚠️ Extension install failed — trying with core commands"
-                  echo "Azure CLI version: $(az version -o json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"azure-cli\",\"?\"))' 2>/dev/null || echo 'unknown')"
-                  echo "CLI extension version: $(az extension show --name cognitiveservices --query version -o tsv 2>/dev/null || echo 'not installed')"
+                  echo ""
+                  echo "Probing Responses API..."
+                  ACCESS_TOKEN=$(az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv 2>/dev/null) || true
+                  PROBE_URL="${ENDPOINT_TRIMMED}/applications/agentic-ops-advisor/protocols/openai/responses?api-version=2025-11-15-preview"
+                  echo "  Probe URL: ${PROBE_URL}"
 
-                  echo "Starting hosted agent..."
-                  AGENT_START_OUTPUT=$(az cognitiveservices agent start \
-                      --account-name "$ACCOUNT_NAME" \
-                      --project-name "$FOUNDRY_PROJECT" \
-                      --name "$AGENT_NAME" \
-                      --agent-version "$AGENT_VERSION" \
-                      --show-logs \
-                      2>&1) && AGENT_START_RC=$? || AGENT_START_RC=$?
+                  if [ -n "$ACCESS_TOKEN" ]; then
+                      PROBE_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$PROBE_URL" \
+                          -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+                          -H "Content-Type: application/json" \
+                          -d '{"input":"ping","model":"gpt-4.1"}' \
+                          --max-time 30) || PROBE_RESPONSE="000"
 
-                  echo "  agent start output (rc=${AGENT_START_RC}): ${AGENT_START_OUTPUT}"
+                      echo "  Responses API probe: HTTP ${PROBE_RESPONSE}"
+                      if [ "$PROBE_RESPONSE" = "200" ] || [ "$PROBE_RESPONSE" = "201" ]; then
+                          echo "✅ Responses API is live — skipping ARM publish"
+                          ARM_PUBLISH_SUCCESS=true
+                      fi
+                  else
+                      echo "  ⚠️  Could not get access token for probe — proceeding to ARM publish"
+                  fi
 
-                  if [ "$AGENT_START_RC" -ne 0 ]; then
-                      echo "⚠️  az cognitiveservices agent start failed (rc=${AGENT_START_RC})."
-                      echo "   Trying ARM REST API fallback to start agent..."
+                  # --- ARM publish (only if probe shows API not live) ---
+                  if [ "$ARM_PUBLISH_SUCCESS" != "true" ]; then
+                      echo ""
+                      echo "Responses API not live yet — attempting ARM publish..."
 
-                      # Resolve project resource ID for ARM call
-                      START_PROJECT_ID=$(az resource list \
+                      # Resolve project resource ID
+                      PROJECT_RESOURCE_ID=$(az resource list \
                           --resource-group "$AZURE_RESOURCE_GROUP" \
                           --resource-type "Microsoft.CognitiveServices/accounts/projects" \
                           --query "[0].id" -o tsv 2>/dev/null)
 
-                      if [ -z "$START_PROJECT_ID" ]; then
-                          START_PROJECT_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT_NAME}/projects/${FOUNDRY_PROJECT}"
+                      if [ -z "$PROJECT_RESOURCE_ID" ]; then
+                          PROJECT_RESOURCE_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT_NAME}/projects/${FOUNDRY_PROJECT}"
+                          echo "  Constructed PROJECT_RESOURCE_ID=${PROJECT_RESOURCE_ID}"
+                      else
+                          echo "  PROJECT_RESOURCE_ID=${PROJECT_RESOURCE_ID}"
                       fi
 
-                      # ARM REST: start agent via POST action (preview API versions only — GA doesn't support /agents)
-                      for API_VER in "2025-10-01-preview" "2026-01-15-preview"; do
-                          echo "   Trying agent start via ARM (api-version=${API_VER})..."
-                          START_RESPONSE=$(az rest --method POST \
-                              --url "https://management.azure.com${START_PROJECT_ID}/agents/${AGENT_NAME}/versions/${AGENT_VERSION}/start?api-version=${API_VER}" \
-                              --headers "Content-Type=application/json" \
-                              --body "{}" \
-                              2>&1) && START_RC=$? || START_RC=$?
+                      APP_NAME="${AGENT_NAME}"
 
-                          echo "   Response (rc=${START_RC}): ${START_RESPONSE}"
-                          if [ "$START_RC" -eq 0 ]; then
-                              echo "✅ Agent started via ARM REST (api-version=${API_VER})"
+                      for API_VERSION in "2025-10-01-preview" "2026-01-15-preview"; do
+                          echo ""
+                          echo "Publishing Agent Application (api-version=${API_VERSION})..."
+                          APP_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}"
+                          echo "  URL: ${APP_URL}"
+
+                          APP_RESPONSE=$(az rest --method PUT \
+                              --url "${APP_URL}" \
+                              --headers "Content-Type=application/json" \
+                              --body "{\"properties\":{\"agents\":[{\"agentName\":\"${AGENT_NAME}\"}]}}" \
+                              2>&1) && APP_RC=$? || APP_RC=$?
+
+                          echo "  Response (rc=${APP_RC}): ${APP_RESPONSE}"
+
+                          if [ "$APP_RC" -ne 0 ]; then
+                              echo "  ⚠️  Application publish failed with api-version=${API_VERSION} (rc=${APP_RC})"
+                              continue
+                          fi
+
+                          echo "Publishing Agent Deployment (api-version=${API_VERSION})..."
+                          DEPLOY_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}/agentDeployments/production?api-version=${API_VERSION}"
+                          echo "  URL: ${DEPLOY_URL}"
+
+                          DEPLOY_RESPONSE=$(az rest --method PUT \
+                              --url "${DEPLOY_URL}" \
+                              --headers "Content-Type=application/json" \
+                              --body "{\"properties\":{\"displayName\":\"Production Hosted Deployment\",\"deploymentType\":\"Hosted\",\"minReplicas\":1,\"maxReplicas\":2,\"protocols\":[{\"protocol\":\"Responses\",\"version\":\"1.0\"}],\"agents\":[{\"agentName\":\"${AGENT_NAME}\",\"agentVersion\":\"${AGENT_VERSION}\"}]}}" \
+                              2>&1) && DEPLOY_RC=$? || DEPLOY_RC=$?
+
+                          echo "  Response (rc=${DEPLOY_RC}): ${DEPLOY_RESPONSE}"
+
+                          if [ "$DEPLOY_RC" -eq 0 ]; then
+                              ARM_PUBLISH_SUCCESS=true
+                              echo "✅ ARM publish succeeded with api-version=${API_VERSION}"
                               break
+                          else
+                              echo "  ⚠️  Deployment publish failed with api-version=${API_VERSION} (rc=${DEPLOY_RC})"
                           fi
                       done
 
-                      if [ "$START_RC" -ne 0 ]; then
-                          echo "⚠️  Agent start failed on all methods — may already be running or need manual start."
-                      fi
-                  else
-                      echo "✅ Agent started via CLI."
-                  fi
-
-                  # --- 2. Publish Agent Application via ARM REST ---
-                  # Resolve project resource ID and log it for debugging
-                  echo "Looking up project resource ID..."
-                  PROJECT_RESOURCE_ID=$(az resource list \
-                      --resource-group "$AZURE_RESOURCE_GROUP" \
-                      --resource-type "Microsoft.CognitiveServices/accounts/projects" \
-                      --query "[0].id" -o tsv 2>/dev/null)
-
-                  echo "PROJECT_RESOURCE_ID=${PROJECT_RESOURCE_ID:-<empty>}"
-
-                  if [ -z "$PROJECT_RESOURCE_ID" ]; then
-                      echo "⚠️  Could not resolve project resource ID via resource list."
-                      echo "   Attempting direct construction from endpoint..."
-                      # Fallback: construct resource ID from known naming convention
-                      PROJECT_RESOURCE_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT_NAME}/projects/${FOUNDRY_PROJECT}"
-                      echo "   Constructed PROJECT_RESOURCE_ID=${PROJECT_RESOURCE_ID}"
-                  fi
-
-                  APP_NAME="${AGENT_NAME}"
-
-                  # Try preview API versions (GA 2025-12-01 does NOT support /applications resource type)
-                  ARM_PUBLISH_SUCCESS=false
-                  for API_VERSION in "2025-10-01-preview" "2026-01-15-preview"; do
-                      echo ""
-                      echo "Publishing Agent Application (api-version=${API_VERSION})..."
-                      APP_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}"
-                      echo "  URL: ${APP_URL}"
-
-                      APP_RESPONSE=$(az rest --method PUT \
-                          --url "${APP_URL}" \
-                          --headers "Content-Type=application/json" \
-                          --body "{\"properties\":{\"agents\":[{\"agentName\":\"${AGENT_NAME}\"}]}}" \
-                          2>&1) && APP_RC=$? || APP_RC=$?
-
-                      echo "  Response (rc=${APP_RC}): ${APP_RESPONSE}"
-
-                      if [ "$APP_RC" -ne 0 ]; then
-                          echo "  ⚠️  Application publish failed with api-version=${API_VERSION} (rc=${APP_RC})"
-                          continue
-                      fi
-
-                      echo "Publishing Agent Deployment (api-version=${API_VERSION})..."
-                      DEPLOY_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}/agentDeployments/production?api-version=${API_VERSION}"
-                      echo "  URL: ${DEPLOY_URL}"
-
-                      DEPLOY_RESPONSE=$(az rest --method PUT \
-                          --url "${DEPLOY_URL}" \
-                          --headers "Content-Type=application/json" \
-                          --body "{\"properties\":{\"displayName\":\"Production Hosted Deployment\",\"deploymentType\":\"Hosted\",\"minReplicas\":1,\"maxReplicas\":2,\"protocols\":[{\"protocol\":\"Responses\",\"version\":\"1.0\"}],\"agents\":[{\"agentName\":\"${AGENT_NAME}\",\"agentVersion\":\"${AGENT_VERSION}\"}]}}" \
-                          2>&1) && DEPLOY_RC=$? || DEPLOY_RC=$?
-
-                      echo "  Response (rc=${DEPLOY_RC}): ${DEPLOY_RESPONSE}"
-
-                      if [ "$DEPLOY_RC" -eq 0 ]; then
-                          ARM_PUBLISH_SUCCESS=true
-                          echo "✅ ARM publish succeeded with api-version=${API_VERSION}"
-                          break
-                      else
-                          echo "  ⚠️  Deployment publish failed with api-version=${API_VERSION} (rc=${DEPLOY_RC})"
-                      fi
-                  done
-
-                  # --- 3. Python SDK fallback if ARM REST failed ---
-                  if [ "$ARM_PUBLISH_SUCCESS" != "true" ]; then
-                      echo ""
-                      echo "⚠️  ARM REST publish failed on all API versions. Trying Python SDK fallback..."
-                      export PROJECT_RESOURCE_ID AGENT_NAME AGENT_VERSION
-                      python3 - <<'PYEOF'
+                      # --- Python SDK fallback if ARM REST failed ---
+                      if [ "$ARM_PUBLISH_SUCCESS" != "true" ]; then
+                          echo ""
+                          echo "⚠️  ARM REST publish failed on all API versions. Trying Python SDK fallback..."
+                          export PROJECT_RESOURCE_ID AGENT_NAME AGENT_VERSION
+                          python3 - <<'PYEOF'
                   import os, sys, json
 
                   try:
@@ -569,11 +651,9 @@ jobs:
                           "Content-Type": "application/json",
                       }
 
-                      # Try preview API versions only (GA 2025-12-01 doesn't support /applications)
                       for api_version in ["2025-10-01-preview", "2026-01-15-preview"]:
                           print(f"\n  Python fallback: api-version={api_version}")
 
-                          # Publish application
                           app_url = f"https://management.azure.com{project_resource_id}/applications/{agent_name}?api-version={api_version}"
                           app_body = {"properties": {"agents": [{"agentName": agent_name}]}}
                           print(f"  PUT {app_url}")
@@ -584,7 +664,6 @@ jobs:
                               print(f"  ⚠️  Application publish failed ({resp.status_code})")
                               continue
 
-                          # Publish deployment
                           deploy_url = f"https://management.azure.com{project_resource_id}/applications/{agent_name}/agentDeployments/production?api-version={api_version}"
                           deploy_body = {
                               "properties": {
@@ -616,9 +695,10 @@ jobs:
                       print("   Please publish manually via Azure AI Foundry Portal UI.")
                       sys.exit(1)
                   PYEOF
-                      PYTHON_RC=$?
-                      if [ "$PYTHON_RC" -ne 0 ]; then
-                          echo "⚠️  All publish methods failed. Publish manually via Azure AI Foundry Portal."
+                          PYTHON_RC=$?
+                          if [ "$PYTHON_RC" -ne 0 ]; then
+                              echo "⚠️  All publish methods failed. Publish manually via Azure AI Foundry Portal."
+                          fi
                       fi
                   fi
 
