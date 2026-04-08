@@ -129,9 +129,22 @@ Valid `service` values for `get_work_context`: `gpu-cluster`, `network`, `cost`
 
 ### SQL Syntax Note
 
-The database is **SQLite**. Use SQLite date functions:
-- ✅ `datetime('now', '-24 hours')`
-- ❌ `NOW() - INTERVAL '24 hours'` (PostgreSQL — not supported)
+> ⚠️ **CRITICAL — You MUST follow these rules for every query:**
+>
+> **Valid table names** (use ONLY these):
+> `telemetry_gpu`, `telemetry_net`, `telemetry_cost`, `incidents`
+>
+> **Database engine**: SQLite — NOT PostgreSQL, MySQL, or SQL Server.
+>
+> **Date/time filters** — use SQLite `datetime()` function:
+> - ✅ `WHERE ts >= datetime('now', '-24 hours')`
+> - ✅ `WHERE ts >= datetime('now', '-7 days')`
+> - ❌ `NOW() - INTERVAL '24 hours'` — PostgreSQL, will ERROR
+> - ❌ `CURRENT_TIMESTAMP - INTERVAL '1 day'` — PostgreSQL, will ERROR
+> - ❌ `DATEADD(hour, -24, GETDATE())` — SQL Server, will ERROR
+>
+> **Prefer pre-built aggregates** over raw SQL when possible
+> (e.g. `aggregate: "gpu_avg_util_24h"` instead of writing a GROUP BY query).
 
 ---
 

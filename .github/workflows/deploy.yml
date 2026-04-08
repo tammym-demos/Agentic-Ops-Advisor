@@ -564,6 +564,7 @@ jobs:
                       --cpu 2 --memory 4Gi \
                       --min-replicas 1 --max-replicas 2 \
                       --protocol responses --protocol-version v1 \
+                      --target-port 8080 \
                       --env "AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}" \
                             "AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}" \
                             "AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}" \
@@ -904,108 +905,103 @@ jobs:
                       print("⚠️  Smoke test skipped — AZURE_AI_AGENTS_ENDPOINT not set.")
                       sys.exit(0)
 
-                  from azure.identity import DefaultAzureCredential
-                  import requests
-
-                  credential = DefaultAzureCredential()
-                  token = credential.get_token("https://ai.azure.com/.default")
-                  
-                  base = endpoint.rstrip("/")
                   agent_name = "agentic-ops-advisor"
-                  probe = "What is the GPU utilization trend for the last 24 hours?"
-                  print(f"Probe query: {probe}")
+                  print(f"Testing agent: {agent_name}")
+                  print(f"Endpoint: {endpoint}")
 
-                  # Try the published Agent Application endpoint (primary)
-                  url = f"{base}/applications/{agent_name}/protocols/openai/responses?api-version=2025-11-15-preview"
-                  print(f"\nTesting: {url}")
+                  # --- SDK-based invocation (Responses API with agent_reference) ---
+                  # This is the correct invocation pattern per Foundry docs:
+                  # https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/runtime-components
+                  try:
+                      from azure.identity import DefaultAzureCredential
+                      from azure.ai.projects import AIProjectClient
 
-                  max_retries = 3
-                  for attempt in range(max_retries):
-                      try:
-                          response = requests.post(
-                              url,
-                              json={"input": probe, "stream": False},
-                              headers={
-                                  "Authorization": f"Bearer {token.token}",
-                                  "Content-Type": "application/json",
-                              },
-                              timeout=180,
-                          )
+                      project = AIProjectClient(
+                          endpoint=endpoint,
+                          credential=DefaultAzureCredential(),
+                          allow_preview=True,
+                      )
 
-                          print(f"  Status: {response.status_code}")
-                          
-                          if response.status_code == 404 and attempt < max_retries - 1:
-                              print(f"  Agent not ready yet, retrying in 10s (attempt {attempt + 1}/{max_retries})...")
-                              time.sleep(10)
-                              continue
-                          
-                          if response.status_code >= 400:
-                              print(f"  Error body: {response.text[:500]}")
+                      # Verify agent exists
+                      agent = project.agents.get(agent_name=agent_name)
+                      print(f"✅ Agent found: {agent.name}")
+
+                      # Invoke via Responses API
+                      openai = project.get_openai_client()
+                      probe = "What is the GPU utilization trend for the last 24 hours?"
+                      print(f"Probe query: {probe}")
+
+                      max_retries = 3
+                      for attempt in range(max_retries):
+                          try:
+                              response = openai.responses.create(
+                                  extra_body={
+                                      "agent_reference": {
+                                          "name": agent.name,
+                                          "type": "agent_reference",
+                                      }
+                                  },
+                                  input=probe,
+                              )
+
+                              output_text = response.output_text or ""
+                              status = getattr(response, "status", "unknown")
+
+                              # Log any tool calls (handled by container)
+                              for item in response.output:
+                                  item_type = getattr(item, "type", "unknown")
+                                  if item_type == "function_call":
+                                      name = getattr(item, "name", "?")
+                                      print(f"  [Tool] {name} — handled by container")
+
+                              if output_text:
+                                  print(f"✅ Smoke test PASSED")
+                                  print(f"Response preview: {output_text[:300]}")
+                                  sys.exit(0)
+                              else:
+                                  print(f"  Response status: {status}, no output text")
+                                  if attempt < max_retries - 1:
+                                      print(f"  Retrying in 15s (attempt {attempt + 1}/{max_retries})...")
+                                      time.sleep(15)
+                                  else:
+                                      print(f"⚠️  Smoke test: response received but no output text")
+                                      sys.exit(1)
+
+                          except Exception as e:
+                              err_str = str(e)
+                              print(f"  Request error (attempt {attempt + 1}/{max_retries}): {err_str[:200]}")
                               if attempt < max_retries - 1:
-                                  print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
-                                  time.sleep(10)
-                                  continue
+                                  time.sleep(15)
                               else:
                                   print(f"⚠️  Smoke test failed after {max_retries} attempts")
-                                  print("   The agent may still work in the Foundry Playground — test manually.")
                                   sys.exit(1)
 
-                          data = response.json()
-                          status = data.get("status", "unknown")
-                          output = data.get("output", [])
+                  except ImportError as e:
+                      print(f"⚠️  SDK not available ({e}), falling back to REST probe")
+                      # Minimal REST fallback — just check agent health
+                      import requests
+                      from azure.identity import DefaultAzureCredential
+                      credential = DefaultAzureCredential()
+                      token = credential.get_token("https://ai.azure.com/.default")
+                      base = endpoint.rstrip("/")
+                      url = f"{base}/applications/{agent_name}/protocols/openai/responses?api-version=2025-11-15-preview"
+                      print(f"  Testing: {url}")
+                      resp = requests.post(
+                          url,
+                          json={"input": "health check", "stream": False},
+                          headers={"Authorization": f"Bearer {token.token}", "Content-Type": "application/json"},
+                          timeout=60,
+                      )
+                      print(f"  Status: {resp.status_code}")
+                      if resp.status_code < 400:
+                          print("✅ REST probe passed")
+                      else:
+                          print(f"⚠️  REST probe failed: {resp.text[:200]}")
+                          sys.exit(1)
 
-                          if status != "completed":
-                              error_msg = data.get("error", {})
-                              print(f"  Status: {status}")
-                              if error_msg:
-                                  print(f"  Error: {error_msg}")
-                              if attempt < max_retries - 1:
-                                  print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
-                                  time.sleep(10)
-                                  continue
-                              else:
-                                  print(f"⚠️  Smoke test incomplete after {max_retries} attempts")
-                                  sys.exit(1)
-
-                          # Extract assistant message
-                          assistant_msg = next((m for m in output if m.get("role") == "assistant"), None)
-                          if assistant_msg and assistant_msg.get("content"):
-                              preview = str(assistant_msg["content"])[:300]
-                              print(f"✅ Smoke test PASSED\nResponse preview: {preview}")
-                              sys.exit(0)
-                          else:
-                              output_text = data.get("output_text", "")
-                              if output_text:
-                                  print(f"✅ Smoke test PASSED\nResponse preview: {output_text[:300]}")
-                                  sys.exit(0)
-                              
-                              if attempt < max_retries - 1:
-                                  print(f"  No output content, retrying in 10s (attempt {attempt + 1}/{max_retries})...")
-                                  time.sleep(10)
-                                  continue
-                              else:
-                                  print(f"⚠️  Smoke test received response but no content")
-                                  sys.exit(1)
-
-                      except requests.exceptions.RequestException as e:
-                          print(f"  Request error: {e}")
-                          if attempt < max_retries - 1:
-                              print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
-                              time.sleep(10)
-                          else:
-                              print(f"⚠️  Smoke test failed after {max_retries} attempts: {e}")
-                              sys.exit(1)
-                      except Exception as e:
-                          print(f"  Unexpected error: {e}")
-                          if attempt < max_retries - 1:
-                              print(f"  Retrying in 10s (attempt {attempt + 1}/{max_retries})...")
-                              time.sleep(10)
-                          else:
-                              print(f"⚠️  Smoke test failed: {e}")
-                              sys.exit(1)
-
-                  print("⚠️  Smoke test exhausted all retries without success")
-                  sys.exit(1)
+                  except Exception as e:
+                      print(f"⚠️  Smoke test error: {e}")
+                      sys.exit(1)
                   EOF
                   echo "::endgroup::"
 

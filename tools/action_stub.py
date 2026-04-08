@@ -182,6 +182,7 @@ ACTION_STUB_TOOL_DEFINITIONS: list[dict] = [
                     }
                 },
                 "required": ["plan"],
+                "additionalProperties": False,
             },
         },
     },
@@ -203,6 +204,7 @@ ACTION_STUB_TOOL_DEFINITIONS: list[dict] = [
                     }
                 },
                 "required": ["change_request_id"],
+                "additionalProperties": False,
             },
         },
     },

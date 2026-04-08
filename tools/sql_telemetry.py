@@ -292,7 +292,9 @@ TOOL_SCHEMA: dict[str, Any] = {
         "description": (
             "Query synthetic infrastructure telemetry data stored in SQL. "
             "Covers GPU utilization, network throughput/latency, cost, and incidents. "
-            "All data is synthetic and for demo purposes only."
+            "All data is synthetic and for demo purposes only. "
+            "IMPORTANT: The ONLY valid tables are: telemetry_gpu, telemetry_net, "
+            "telemetry_cost, incidents. Do NOT use any other table names."
         ),
         "parameters": {
             "type": "object",
@@ -328,8 +330,9 @@ TOOL_SCHEMA: dict[str, Any] = {
                     "description": (
                         "A raw SELECT statement scoped to the known telemetry tables. "
                         "Only SELECT is permitted; no DDL or DML. "
-                        "Database is SQLite — use datetime('now', '-24 hours'), "
-                        "NOT PostgreSQL NOW() or INTERVAL syntax."
+                        "CRITICAL — SQLite ONLY: Use datetime('now', '-24 hours') for time filters. "
+                        "Do NOT use PostgreSQL syntax like NOW(), INTERVAL, or CURRENT_TIMESTAMP. "
+                        "Example: SELECT * FROM telemetry_gpu WHERE ts >= datetime('now', '-24 hours')"
                     ),
                 },
                 "limit": {

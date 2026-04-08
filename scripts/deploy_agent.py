@@ -54,7 +54,7 @@ def main() -> None:
     )
 
     # Hosted agent definition — container handles its own LLM calls,
-    # tool dispatch, and system prompt via POST /responses on port 8088.
+    # tool dispatch, and system prompt via POST /responses on port 8080.
     env_vars = {}
     for key in [
         "AZURE_OPENAI_ENDPOINT",
