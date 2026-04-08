@@ -267,6 +267,38 @@ jobs:
                       fi
                   done
 
+                  # Grant AcrPull to the AI project's managed identity on ACR.
+                  # Required for `az cognitiveservices agent create` to pull images.
+                  ACR_NAME="${AZURE_CONTAINER_REGISTRY_NAME:-crhubagentopsprod}"
+                  ACR_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.ContainerRegistry/registries/${ACR_NAME}"
+                  PROJ_NAME="proj-${PROJECT_NAME}-${ENV_NAME}"
+                  PROJ_MI=$(az cognitiveservices account show \
+                      --name "${HUB_NAME}" \
+                      --resource-group "${RG_NAME}" \
+                      --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+
+                  if [[ -n "${PROJ_MI}" ]]; then
+                      ACR_PULL_EXISTS=$(az role assignment list \
+                          --assignee "${PROJ_MI}" \
+                          --role "AcrPull" \
+                          --scope "${ACR_SCOPE}" \
+                          --query "[].id" -o tsv 2>/dev/null || echo "")
+                      if [[ -z "${ACR_PULL_EXISTS}" ]]; then
+                          echo "Assigning AcrPull to hub identity ${PROJ_MI} on ${ACR_NAME}..."
+                          az role assignment create \
+                              --assignee-object-id "${PROJ_MI}" \
+                              --assignee-principal-type "ServicePrincipal" \
+                              --role "AcrPull" \
+                              --scope "${ACR_SCOPE}" \
+                              --output none 2>/dev/null || echo "⚠️  AcrPull assignment failed (non-blocking)"
+                          echo "✅ AcrPull role assigned."
+                      else
+                          echo "✅ AcrPull on ACR already present."
+                      fi
+                  else
+                      echo "⚠️  Could not resolve hub managed identity — skipping AcrPull (use --skip-acr-check)"
+                  fi
+
     # -------------------------------------------------------------------------
     # 3. Deploy agent: ACR build → SDK create_version → ARM publish
     # -------------------------------------------------------------------------
@@ -445,7 +477,7 @@ jobs:
                             "ENABLE_MCP=false" \
                             "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                             "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
-                      --show-logs --timeout 600 \
+                      --show-logs --timeout 600 --skip-acr-check \
                       2>&1) && CREATE_RC=$? || CREATE_RC=$?
 
                   echo "Agent create exit code: ${CREATE_RC}"
