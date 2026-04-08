@@ -530,6 +530,7 @@ jobs:
                       --image "${CONTAINER_IMAGE}" \
                       --cpu 2 --memory 4Gi \
                       --min-replicas 1 --max-replicas 2 \
+                      --target-port 8088 \
                       --protocol responses --protocol-version v1 \
                       --env "AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}" \
                             "AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}" \
