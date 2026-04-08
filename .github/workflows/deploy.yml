@@ -244,7 +244,7 @@ jobs:
 
                   # Assign roles (idempotent). Each role is checked and created
                   # only if not already present.
-                  for ROLE_NAME in "Azure AI Developer" "Cognitive Services Contributor" "Cognitive Services User"; do
+                  for ROLE_NAME in "Azure AI Developer" "Cognitive Services Contributor" "Cognitive Services User" "Azure AI Project Manager"; do
                       ROLE_EXISTS=$(az role assignment list \
                           --assignee "${PRINCIPAL_ID}" \
                           --role "${ROLE_NAME}" \
@@ -423,7 +423,8 @@ jobs:
                   echo "Account: ${ACCOUNT_NAME} / Project: ${FOUNDRY_PROJECT}"
 
                   # --- 1. Start the hosted agent container ---
-                  az extension add --name cognitiveservices --upgrade --yes 2>/dev/null || true
+                  az extension add --name cognitiveservices --upgrade --yes || echo "⚠️ Extension install failed — trying with core commands"
+                  echo "Azure CLI version: $(az version -o json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"azure-cli\",\"?\"))' 2>/dev/null || echo 'unknown')"
                   echo "CLI extension version: $(az extension show --name cognitiveservices --query version -o tsv 2>/dev/null || echo 'not installed')"
 
                   echo "Starting hosted agent..."
@@ -432,8 +433,7 @@ jobs:
                       --project-name "$FOUNDRY_PROJECT" \
                       --name "$AGENT_NAME" \
                       --agent-version "$AGENT_VERSION" \
-                      --min-replicas 1 \
-                      --max-replicas 2 \
+                      --show-logs \
                       2>&1) && AGENT_START_RC=$? || AGENT_START_RC=$?
 
                   echo "  agent start output (rc=${AGENT_START_RC}): ${AGENT_START_OUTPUT}"
@@ -453,12 +453,12 @@ jobs:
                       fi
 
                       # ARM REST: start agent via POST action
-                      for API_VER in "2026-01-15-preview" "2025-10-01-preview"; do
+                      for API_VER in "2025-12-01" "2025-10-01-preview" "2026-01-15-preview"; do
                           echo "   Trying agent start via ARM (api-version=${API_VER})..."
                           START_RESPONSE=$(az rest --method POST \
                               --url "https://management.azure.com${START_PROJECT_ID}/agents/${AGENT_NAME}/versions/${AGENT_VERSION}/start?api-version=${API_VER}" \
                               --headers "Content-Type=application/json" \
-                              --body "{\"minReplicas\":1,\"maxReplicas\":2}" \
+                              --body "{}" \
                               2>&1) && START_RC=$? || START_RC=$?
 
                           echo "   Response (rc=${START_RC}): ${START_RESPONSE}"
@@ -495,9 +495,9 @@ jobs:
 
                   APP_NAME="${AGENT_NAME}"
 
-                  # Try API versions: 2026-01-15-preview first, then 2025-10-01-preview
+                  # Try API versions: GA 2025-12-01 first, then preview versions
                   ARM_PUBLISH_SUCCESS=false
-                  for API_VERSION in "2026-01-15-preview" "2025-10-01-preview"; do
+                  for API_VERSION in "2025-12-01" "2025-10-01-preview" "2026-01-15-preview"; do
                       echo ""
                       echo "Publishing Agent Application (api-version=${API_VERSION})..."
                       APP_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}"
@@ -565,8 +565,8 @@ jobs:
                           "Content-Type": "application/json",
                       }
 
-                      # Try both API versions
-                      for api_version in ["2026-01-15-preview", "2025-10-01-preview"]:
+                      # Try API versions: GA first, then preview
+                      for api_version in ["2025-12-01", "2025-10-01-preview", "2026-01-15-preview"]:
                           print(f"\n  Python fallback: api-version={api_version}")
 
                           # Publish application
