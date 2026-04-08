@@ -458,9 +458,20 @@ jobs:
                   # ═══════════════════════════════════════════════════════════
                   # PRIMARY: az cognitiveservices agent create
                   # Handles version creation + container deploy + startup
+                  # + publish (--protocol responses) in one command.
+                  # Delete existing agent first to avoid "already exists" error.
                   # ═══════════════════════════════════════════════════════════
                   echo ""
                   echo "═══ PRIMARY: az cognitiveservices agent create ═══"
+
+                  # Delete existing agent (if any) so create can work fresh
+                  echo "Cleaning up existing agent definition..."
+                  az cognitiveservices agent delete \
+                      --account-name "$ACCOUNT_NAME" \
+                      --project-name "$FOUNDRY_PROJECT" \
+                      --name "agentic-ops-advisor" \
+                      --yes 2>/dev/null && echo "  Deleted existing agent" || echo "  No existing agent to delete"
+
                   AGENT_CREATE_OUTPUT=$(az cognitiveservices agent create \
                       --account-name "$ACCOUNT_NAME" \
                       --project-name "$FOUNDRY_PROJECT" \
