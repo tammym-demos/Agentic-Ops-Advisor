@@ -182,7 +182,7 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
             logger.info("No API key — trying managed identity auth")
             credential = DefaultAzureCredential()
             token_provider = get_bearer_token_provider(
-                credential, "https://cognitiveservices.azure.com/.default"
+                credential, "https://ai.azure.com/.default"
             )
             client = AzureOpenAI(
                 azure_endpoint=endpoint,
@@ -459,7 +459,7 @@ def main() -> None:
         try:
             from azure.identity import DefaultAzureCredential
             cred = DefaultAzureCredential()
-            cred.get_token("https://cognitiveservices.azure.com/.default")
+            cred.get_token("https://ai.azure.com/.default")
             logger.info("Managed identity auth: SUCCESS")
         except Exception as diag_exc:
             logger.warning("Managed identity auth: FAILED (%s)", diag_exc)

@@ -114,6 +114,7 @@ def _get_function_tool_definitions() -> list:
                 name=fn["name"],
                 description=fn.get("description", ""),
                 parameters=fn.get("parameters", {}),
+                strict=False,
             )
         )
     return sdk_tools
