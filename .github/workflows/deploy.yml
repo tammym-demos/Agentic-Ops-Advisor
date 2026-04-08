@@ -547,19 +547,14 @@ jobs:
                   echo "Agent create output:"
                   echo "${AGENT_CREATE_OUTPUT}"
 
+                  AGENT_NAME="agentic-ops-advisor"
+                  AGENT_VERSION="latest"
+                  DEPLOY_DONE=false
+
                   if [ "$CREATE_RC" -eq 0 ]; then
                       echo "✅ az cognitiveservices agent create succeeded"
 
-                      # Extract agent ID from create output (JSON: .name or .id)
-                      AGENT_NAME=$(echo "${AGENT_CREATE_OUTPUT}" | python3 -c "
-                  import sys, json
-                  try:
-                      d = json.load(sys.stdin)
-                      print(d.get('name', 'agentic-ops-advisor'))
-                  except:
-                      print('agentic-ops-advisor')
-                  " 2>/dev/null || echo "agentic-ops-advisor")
-
+                      # Extract version from create output
                       AGENT_VERSION=$(echo "${AGENT_CREATE_OUTPUT}" | python3 -c "
                   import sys, json
                   try:
@@ -573,43 +568,78 @@ jobs:
                       echo "DEPLOYED_AGENT_ID=${AGENT_NAME}/${AGENT_VERSION}" >> "$GITHUB_ENV"
                       echo "AGENT_DEPLOY_METHOD=cli-create" >> "$GITHUB_ENV"
                       echo "  Agent: ${AGENT_NAME} v${AGENT_VERSION}"
+                      DEPLOY_DONE=true
                   else
                       echo "⚠️  az cognitiveservices agent create failed (rc=${CREATE_RC})"
 
-                      # ═══════════════════════════════════════════════════════
-                      # FALLBACK 1: deploy_agent.py (SDK create_version)
-                      # ═══════════════════════════════════════════════════════
+                      # ─── Check if version was created but deployment conflicted ───
+                      # Error: "Agent version 'N' was created but deployment failed: (conflict)"
+                      # Fix: retry with `az cognitiveservices agent start`
+                      CONFLICT_VERSION=$(echo "${AGENT_CREATE_OUTPUT}" | grep -oP "Agent version '\K[0-9]+" || true)
+                      if [ -n "$CONFLICT_VERSION" ]; then
+                          echo ""
+                          echo "═══ RETRY: az cognitiveservices agent start (version ${CONFLICT_VERSION}) ═══"
+                          AGENT_VERSION="${CONFLICT_VERSION}"
+                          AGENT_START_OUTPUT=$(az cognitiveservices agent start \
+                              --account-name "$ACCOUNT_NAME" \
+                              --project-name "$FOUNDRY_PROJECT" \
+                              --name "$AGENT_NAME" \
+                              --agent-version "$AGENT_VERSION" \
+                              --show-logs \
+                              2>&1) && START_RC=$? || START_RC=$?
+
+                          echo "  agent start output (rc=${START_RC}):"
+                          echo "${AGENT_START_OUTPUT}"
+
+                          if [ "$START_RC" -eq 0 ]; then
+                              echo "✅ Agent started via conflict-retry"
+                              echo "DEPLOYED_AGENT_ID=${AGENT_NAME}/${AGENT_VERSION}" >> "$GITHUB_ENV"
+                              echo "AGENT_DEPLOY_METHOD=cli-create-restart" >> "$GITHUB_ENV"
+                              DEPLOY_DONE=true
+                          else
+                              echo "⚠️  agent start also failed"
+                          fi
+                      fi
+                  fi
+
+                  # ═══════════════════════════════════════════════════════
+                  # FALLBACK: deploy_agent.py (SDK create_version) + agent start
+                  # ═══════════════════════════════════════════════════════
+                  if [ "$DEPLOY_DONE" != "true" ]; then
                       echo ""
-                      echo "═══ FALLBACK 1: deploy_agent.py (SDK create_version) ═══"
-                      python scripts/deploy_agent.py && SDK_RC=$? || SDK_RC=$?
+                      echo "═══ FALLBACK: deploy_agent.py (SDK create_version) + agent start ═══"
+                      SDK_OUTPUT=$(python scripts/deploy_agent.py 2>&1) && SDK_RC=$? || SDK_RC=$?
+                      echo "${SDK_OUTPUT}"
 
                       if [ "$SDK_RC" -eq 0 ]; then
                           echo "✅ SDK deploy_agent.py succeeded"
+
+                          # Parse version from SDK output: "✅ Hosted agent version created: name/version"
+                          SDK_VERSION=$(echo "${SDK_OUTPUT}" | grep -oP 'created: [^/]+/\K[0-9]+' || true)
+                          if [ -n "$SDK_VERSION" ]; then
+                              AGENT_VERSION="${SDK_VERSION}"
+                          fi
+
+                          echo "DEPLOYED_AGENT_ID=${AGENT_NAME}/${AGENT_VERSION}" >> "$GITHUB_ENV"
                           echo "AGENT_DEPLOY_METHOD=sdk-fallback" >> "$GITHUB_ENV"
 
-                          # FALLBACK 2: az cognitiveservices agent start
-                          # (create_version does NOT auto-start)
-                          AGENT_ID="${DEPLOYED_AGENT_ID:-}"
-                          if [ -n "$AGENT_ID" ]; then
-                              FB_AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
-                              FB_AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
+                          # SDK create_version does NOT auto-start — use agent start
+                          echo ""
+                          echo "═══ Starting agent container (version ${AGENT_VERSION}) ═══"
+                          AGENT_START_OUTPUT=$(az cognitiveservices agent start \
+                              --account-name "$ACCOUNT_NAME" \
+                              --project-name "$FOUNDRY_PROJECT" \
+                              --name "$AGENT_NAME" \
+                              --agent-version "$AGENT_VERSION" \
+                              --show-logs \
+                              2>&1) && START_RC=$? || START_RC=$?
 
-                              echo ""
-                              echo "═══ FALLBACK 2: az cognitiveservices agent start ═══"
-                              AGENT_START_OUTPUT=$(az cognitiveservices agent start \
-                                  --account-name "$ACCOUNT_NAME" \
-                                  --project-name "$FOUNDRY_PROJECT" \
-                                  --name "$FB_AGENT_NAME" \
-                                  --agent-version "$FB_AGENT_VERSION" \
-                                  --show-logs \
-                                  2>&1) && START_RC=$? || START_RC=$?
-
-                              echo "  agent start output (rc=${START_RC}): ${AGENT_START_OUTPUT}"
-                              if [ "$START_RC" -eq 0 ]; then
-                                  echo "✅ Agent started via fallback CLI start"
-                              else
-                                  echo "⚠️  agent start also failed — container may need manual intervention"
-                              fi
+                          echo "  agent start output (rc=${START_RC}):"
+                          echo "${AGENT_START_OUTPUT}"
+                          if [ "$START_RC" -eq 0 ]; then
+                              echo "✅ Agent started via SDK + CLI start"
+                          else
+                              echo "⚠️  agent start failed — container may need manual intervention"
                           fi
                       else
                           echo "❌ SDK deploy_agent.py also failed (rc=${SDK_RC})"
