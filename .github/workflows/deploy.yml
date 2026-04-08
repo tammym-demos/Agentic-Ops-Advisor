@@ -415,9 +415,13 @@ jobs:
                   AGENT_NAME=$(echo "$AGENT_ID" | cut -d'/' -f1)
                   AGENT_VERSION=$(echo "$AGENT_ID" | cut -d'/' -f2)
 
+                  # Trim whitespace from endpoint (GitHub secrets can have leading/trailing spaces)
+                  ENDPOINT_TRIMMED=$(echo "$AZURE_AI_AGENTS_ENDPOINT" | xargs)
+                  echo "Endpoint (trimmed): ${ENDPOINT_TRIMMED}"
+
                   # Parse account and project from endpoint
-                  ACCOUNT_NAME=$(echo "$AZURE_AI_AGENTS_ENDPOINT" | sed -E 's|https://([^.]+)\..*|\1|')
-                  FOUNDRY_PROJECT=$(echo "$AZURE_AI_AGENTS_ENDPOINT" | sed -E 's|.*/projects/([^/]+).*|\1|')
+                  ACCOUNT_NAME=$(echo "$ENDPOINT_TRIMMED" | sed -E 's|https://([^.]+)\..*|\1|')
+                  FOUNDRY_PROJECT=$(echo "$ENDPOINT_TRIMMED" | sed -E 's|.*/projects/([^/]+).*|\1|')
 
                   echo "Agent: ${AGENT_NAME} v${AGENT_VERSION}"
                   echo "Account: ${ACCOUNT_NAME} / Project: ${FOUNDRY_PROJECT}"
@@ -452,8 +456,8 @@ jobs:
                           START_PROJECT_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT_NAME}/projects/${FOUNDRY_PROJECT}"
                       fi
 
-                      # ARM REST: start agent via POST action
-                      for API_VER in "2025-12-01" "2025-10-01-preview" "2026-01-15-preview"; do
+                      # ARM REST: start agent via POST action (preview API versions only — GA doesn't support /agents)
+                      for API_VER in "2025-10-01-preview" "2026-01-15-preview"; do
                           echo "   Trying agent start via ARM (api-version=${API_VER})..."
                           START_RESPONSE=$(az rest --method POST \
                               --url "https://management.azure.com${START_PROJECT_ID}/agents/${AGENT_NAME}/versions/${AGENT_VERSION}/start?api-version=${API_VER}" \
@@ -495,9 +499,9 @@ jobs:
 
                   APP_NAME="${AGENT_NAME}"
 
-                  # Try API versions: GA 2025-12-01 first, then preview versions
+                  # Try preview API versions (GA 2025-12-01 does NOT support /applications resource type)
                   ARM_PUBLISH_SUCCESS=false
-                  for API_VERSION in "2025-12-01" "2025-10-01-preview" "2026-01-15-preview"; do
+                  for API_VERSION in "2025-10-01-preview" "2026-01-15-preview"; do
                       echo ""
                       echo "Publishing Agent Application (api-version=${API_VERSION})..."
                       APP_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}"
@@ -565,8 +569,8 @@ jobs:
                           "Content-Type": "application/json",
                       }
 
-                      # Try API versions: GA first, then preview
-                      for api_version in ["2025-12-01", "2025-10-01-preview", "2026-01-15-preview"]:
+                      # Try preview API versions only (GA 2025-12-01 doesn't support /applications)
+                      for api_version in ["2025-10-01-preview", "2026-01-15-preview"]:
                           print(f"\n  Python fallback: api-version={api_version}")
 
                           # Publish application
@@ -640,7 +644,7 @@ jobs:
                   import os, sys, json, time
                   sys.path.insert(0, os.getcwd())
 
-                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
+                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "").strip()
                   if not endpoint:
                       print("⚠️  Smoke test skipped — AZURE_AI_AGENTS_ENDPOINT not set.")
                       sys.exit(0)
