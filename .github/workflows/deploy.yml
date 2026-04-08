@@ -322,6 +322,23 @@ jobs:
                   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
 
             # ------------------------------------------------------------------
+            # Step 2b — Upgrade Azure CLI to latest
+            # ------------------------------------------------------------------
+            # The GitHub-hosted runner may ship an older CLI version that lacks
+            # newer `az cognitiveservices agent create` flags (--env, --show-logs,
+            # --timeout).  Upgrading ensures we have the full parameter set.
+            # ------------------------------------------------------------------
+            - name: Upgrade Azure CLI
+              run: |
+                  echo "::group::Upgrade Azure CLI"
+                  echo "Before: $(az version -o tsv 2>/dev/null | head -1 || echo 'unknown')"
+                  sudo az upgrade --yes --all 2>&1 | tail -5 || \
+                      (echo "az upgrade failed — trying apt" && \
+                       curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash)
+                  echo "After:  $(az version -o tsv 2>/dev/null | head -1 || echo 'unknown')"
+                  echo "::endgroup::"
+
+            # ------------------------------------------------------------------
             # Step 3 — Set up Python + dependencies
             # ------------------------------------------------------------------
             - name: Set up Python 3.11
@@ -403,8 +420,8 @@ jobs:
                   echo "  Image:   ${CONTAINER_IMAGE}"
 
                   # --- CLI version check ---
-                  az extension add --name cognitiveservices --upgrade --yes 2>/dev/null || echo "⚠️ Extension install skipped — using core commands"
-                  echo "Azure CLI version: $(az version -o json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get(\"azure-cli\",\"?\"))' 2>/dev/null || echo 'unknown')"
+                  CLI_VER=$(az version -o json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("azure-cli","?"))' 2>/dev/null || echo 'unknown')
+                  echo "Azure CLI version: ${CLI_VER}"
 
                   # ═══════════════════════════════════════════════════════════
                   # PRIMARY: az cognitiveservices agent create
@@ -420,14 +437,14 @@ jobs:
                       --cpu 2 --memory 4Gi \
                       --min-replicas 1 --max-replicas 2 \
                       --protocol responses --protocol-version v1 \
-                      --env AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT \
-                           AZURE_OPENAI_DEPLOYMENT=$AZURE_OPENAI_DEPLOYMENT \
-                           AZURE_OPENAI_API_KEY=$AZURE_OPENAI_API_KEY \
-                           DB_MODE=sqlite \
-                           ENABLE_WORK_IQ=true \
-                           ENABLE_MCP=false \
-                           APPLICATIONINSIGHTS_CONNECTION_STRING=$APPLICATIONINSIGHTS_CONNECTION_STRING \
-                           AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false \
+                      --env "AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}" \
+                            "AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}" \
+                            "AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}" \
+                            "DB_MODE=sqlite" \
+                            "ENABLE_WORK_IQ=true" \
+                            "ENABLE_MCP=false" \
+                            "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
+                            "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
                       --show-logs --timeout 600 \
                       2>&1) && CREATE_RC=$? || CREATE_RC=$?
 
@@ -773,7 +790,7 @@ jobs:
                               else:
                                   print(f"⚠️  Smoke test failed after {max_retries} attempts")
                                   print("   The agent may still work in the Foundry Playground — test manually.")
-                                  sys.exit(0)
+                                  sys.exit(1)
 
                           data = response.json()
                           status = data.get("status", "unknown")
@@ -790,7 +807,7 @@ jobs:
                                   continue
                               else:
                                   print(f"⚠️  Smoke test incomplete after {max_retries} attempts")
-                                  sys.exit(0)
+                                  sys.exit(1)
 
                           # Extract assistant message
                           assistant_msg = next((m for m in output if m.get("role") == "assistant"), None)
@@ -810,7 +827,7 @@ jobs:
                                   continue
                               else:
                                   print(f"⚠️  Smoke test received response but no content")
-                                  sys.exit(0)
+                                  sys.exit(1)
 
                       except requests.exceptions.RequestException as e:
                           print(f"  Request error: {e}")
@@ -819,7 +836,7 @@ jobs:
                               time.sleep(10)
                           else:
                               print(f"⚠️  Smoke test failed after {max_retries} attempts: {e}")
-                              sys.exit(0)
+                              sys.exit(1)
                       except Exception as e:
                           print(f"  Unexpected error: {e}")
                           if attempt < max_retries - 1:
@@ -827,10 +844,10 @@ jobs:
                               time.sleep(10)
                           else:
                               print(f"⚠️  Smoke test failed: {e}")
-                              sys.exit(0)
+                              sys.exit(1)
 
                   print("⚠️  Smoke test exhausted all retries without success")
-                  sys.exit(0)
+                  sys.exit(1)
                   EOF
                   echo "::endgroup::"
 
