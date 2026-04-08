@@ -448,6 +448,39 @@ jobs:
                   PROJ_MI=$(az resource show --ids "${PROJECT_RID}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
                   assign_acr_pull "${PROJ_MI}" "Project"
 
+                  # Try user-assigned identities on the project too
+                  PROJ_UAMI_IDS=$(az resource show --ids "${PROJECT_RID}" --query "identity.userAssignedIdentities" -o json 2>/dev/null || echo "{}")
+                  if [[ "${PROJ_UAMI_IDS}" != "{}" && "${PROJ_UAMI_IDS}" != "null" && -n "${PROJ_UAMI_IDS}" ]]; then
+                      echo "Found user-assigned identities on project"
+                      for UAMI_PID in $(echo "${PROJ_UAMI_IDS}" | python3 -c "
+                  import sys, json
+                  try:
+                      d = json.load(sys.stdin)
+                      for v in d.values():
+                          pid = v.get('principalId', '')
+                          if pid:
+                              print(pid)
+                  except:
+                      pass
+                  " 2>/dev/null); do
+                          assign_acr_pull "${UAMI_PID}" "Project-UAMI"
+                      done
+                  fi
+
+                  # If project has no MI, try enabling system-assigned MI
+                  if [[ -z "${PROJ_MI}" ]]; then
+                      echo ""
+                      echo "Project has no system MI — enabling system-assigned identity..."
+                      az resource update --ids "${PROJECT_RID}" \
+                          --set "identity={\"type\":\"SystemAssigned\"}" \
+                          --output none 2>/dev/null && {
+                          echo "✅ System MI enabled on project"
+                          sleep 10
+                          PROJ_MI=$(az resource show --ids "${PROJECT_RID}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+                          assign_acr_pull "${PROJ_MI}" "Project-SystemMI"
+                      } || echo "⚠️  Could not enable system MI on project"
+                  fi
+
                   # Also try all user-assigned identities on the hub
                   HUB_UAMI_IDS=$(az cognitiveservices account show \
                       --name "${HUB_NAME}" \
