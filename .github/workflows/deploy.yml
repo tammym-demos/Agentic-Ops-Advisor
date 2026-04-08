@@ -213,7 +213,7 @@ jobs:
                   fi
                   echo "::endgroup::"
 
-            - name: Ensure Azure AI Developer role on AI hub
+            - name: Ensure RBAC roles on AI hub
               run: |
                   PARAMS_FILE="infra/parameters.json"
                   PROJECT_NAME=$(python3 -c "import json; d=json.load(open('${PARAMS_FILE}')); print(d['parameters']['projectName']['value'])" 2>/dev/null || echo "agentops")
@@ -242,25 +242,28 @@ jobs:
                   echo "Principal: ${PRINCIPAL_ID} (${PRINCIPAL_TYPE})"
                   echo "Hub scope: ${HUB_SCOPE}"
 
-                  # Assign Azure AI Developer role (idempotent)
-                  ROLE_EXISTS=$(az role assignment list \
-                      --assignee "${PRINCIPAL_ID}" \
-                      --role "Azure AI Developer" \
-                      --scope "${HUB_SCOPE}" \
-                      --query "[].id" -o tsv 2>/dev/null || echo "")
-
-                  if [[ -z "${ROLE_EXISTS}" ]]; then
-                      echo "Assigning Azure AI Developer role..."
-                      az role assignment create \
-                          --assignee-object-id "${PRINCIPAL_ID}" \
-                          --assignee-principal-type "${PRINCIPAL_TYPE}" \
-                          --role "Azure AI Developer" \
+                  # Assign roles (idempotent). Each role is checked and created
+                  # only if not already present.
+                  for ROLE_NAME in "Azure AI Developer" "Cognitive Services Contributor" "Cognitive Services User"; do
+                      ROLE_EXISTS=$(az role assignment list \
+                          --assignee "${PRINCIPAL_ID}" \
+                          --role "${ROLE_NAME}" \
                           --scope "${HUB_SCOPE}" \
-                          --output none
-                      echo "✅ Azure AI Developer role assigned."
-                  else
-                      echo "✅ Azure AI Developer role already present."
-                  fi
+                          --query "[].id" -o tsv 2>/dev/null || echo "")
+
+                      if [[ -z "${ROLE_EXISTS}" ]]; then
+                          echo "Assigning ${ROLE_NAME} role..."
+                          az role assignment create \
+                              --assignee-object-id "${PRINCIPAL_ID}" \
+                              --assignee-principal-type "${PRINCIPAL_TYPE}" \
+                              --role "${ROLE_NAME}" \
+                              --scope "${HUB_SCOPE}" \
+                              --output none
+                          echo "✅ ${ROLE_NAME} role assigned."
+                      else
+                          echo "✅ ${ROLE_NAME} role already present."
+                      fi
+                  done
 
     # -------------------------------------------------------------------------
     # 3. Deploy agent: ACR build → SDK create_version → ARM publish
@@ -397,6 +400,8 @@ jobs:
             # ------------------------------------------------------------------
             - name: Start agent and publish application
               continue-on-error: true
+              env:
+                  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
               run: |
                   echo "::group::Start agent + publish"
 
@@ -431,35 +436,148 @@ jobs:
                       2>&1 || echo "⚠️  agent start failed — may already be running."
 
                   # --- 2. Publish Agent Application via ARM REST ---
+                  # Resolve project resource ID and log it for debugging
+                  echo "Looking up project resource ID..."
                   PROJECT_RESOURCE_ID=$(az resource list \
                       --resource-group "$AZURE_RESOURCE_GROUP" \
                       --resource-type "Microsoft.CognitiveServices/accounts/projects" \
                       --query "[0].id" -o tsv 2>/dev/null)
 
+                  echo "PROJECT_RESOURCE_ID=${PROJECT_RESOURCE_ID:-<empty>}"
+
                   if [ -z "$PROJECT_RESOURCE_ID" ]; then
-                      echo "⚠️  Could not resolve project resource ID — skipping publish."
-                      echo "::endgroup::"
-                      exit 0
+                      echo "⚠️  Could not resolve project resource ID via resource list."
+                      echo "   Attempting direct construction from endpoint..."
+                      # Fallback: construct resource ID from known naming convention
+                      PROJECT_RESOURCE_ID="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT_NAME}/projects/${FOUNDRY_PROJECT}"
+                      echo "   Constructed PROJECT_RESOURCE_ID=${PROJECT_RESOURCE_ID}"
                   fi
 
                   APP_NAME="${AGENT_NAME}"
-                  API_VERSION="2025-10-01-preview"
 
-                  echo "Publishing Agent Application (api-version=${API_VERSION})..."
-                  az rest --method PUT \
-                      --url "https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}" \
-                      --headers "Content-Type=application/json" \
-                      --body "{\"properties\":{\"agents\":[{\"agentName\":\"${AGENT_NAME}\"}]}}" \
-                      2>&1 || echo "⚠️  Application publish failed — try manually in portal."
+                  # Try API versions: 2026-01-15-preview first, then 2025-10-01-preview
+                  ARM_PUBLISH_SUCCESS=false
+                  for API_VERSION in "2026-01-15-preview" "2025-10-01-preview"; do
+                      echo ""
+                      echo "Publishing Agent Application (api-version=${API_VERSION})..."
+                      APP_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}"
+                      echo "  URL: ${APP_URL}"
 
-                  echo "Publishing Agent Deployment..."
-                  az rest --method PUT \
-                      --url "https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}/agentDeployments/production?api-version=${API_VERSION}" \
-                      --headers "Content-Type=application/json" \
-                      --body "{\"properties\":{\"displayName\":\"Production Hosted Deployment\",\"deploymentType\":\"Hosted\",\"minReplicas\":1,\"maxReplicas\":2,\"protocols\":[{\"protocol\":\"Responses\",\"version\":\"1.0\"}],\"agents\":[{\"agentName\":\"${AGENT_NAME}\",\"agentVersion\":\"${AGENT_VERSION}\"}]}}" \
-                      2>&1 || echo "⚠️  Deployment publish failed."
+                      APP_RESPONSE=$(az rest --method PUT \
+                          --url "${APP_URL}" \
+                          --headers "Content-Type=application/json" \
+                          --body "{\"properties\":{\"agents\":[{\"agentName\":\"${AGENT_NAME}\"}]}}" \
+                          2>&1) && APP_RC=$? || APP_RC=$?
 
-                  echo "✅ Agent started and application published"
+                      echo "  Response (rc=${APP_RC}): ${APP_RESPONSE}"
+
+                      if [ "$APP_RC" -ne 0 ]; then
+                          echo "  ⚠️  Application publish failed with api-version=${API_VERSION} (rc=${APP_RC})"
+                          continue
+                      fi
+
+                      echo "Publishing Agent Deployment (api-version=${API_VERSION})..."
+                      DEPLOY_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}/agentDeployments/production?api-version=${API_VERSION}"
+                      echo "  URL: ${DEPLOY_URL}"
+
+                      DEPLOY_RESPONSE=$(az rest --method PUT \
+                          --url "${DEPLOY_URL}" \
+                          --headers "Content-Type=application/json" \
+                          --body "{\"properties\":{\"displayName\":\"Production Hosted Deployment\",\"deploymentType\":\"Hosted\",\"minReplicas\":1,\"maxReplicas\":2,\"protocols\":[{\"protocol\":\"Responses\",\"version\":\"1.0\"}],\"agents\":[{\"agentName\":\"${AGENT_NAME}\",\"agentVersion\":\"${AGENT_VERSION}\"}]}}" \
+                          2>&1) && DEPLOY_RC=$? || DEPLOY_RC=$?
+
+                      echo "  Response (rc=${DEPLOY_RC}): ${DEPLOY_RESPONSE}"
+
+                      if [ "$DEPLOY_RC" -eq 0 ]; then
+                          ARM_PUBLISH_SUCCESS=true
+                          echo "✅ ARM publish succeeded with api-version=${API_VERSION}"
+                          break
+                      else
+                          echo "  ⚠️  Deployment publish failed with api-version=${API_VERSION} (rc=${DEPLOY_RC})"
+                      fi
+                  done
+
+                  # --- 3. Python SDK fallback if ARM REST failed ---
+                  if [ "$ARM_PUBLISH_SUCCESS" != "true" ]; then
+                      echo ""
+                      echo "⚠️  ARM REST publish failed on all API versions. Trying Python SDK fallback..."
+                      export PROJECT_RESOURCE_ID AGENT_NAME AGENT_VERSION
+                      python3 - <<'PYEOF'
+                  import os, sys, json
+
+                  try:
+                      from azure.identity import DefaultAzureCredential
+                      import requests
+
+                      credential = DefaultAzureCredential()
+                      token = credential.get_token("https://management.azure.com/.default")
+
+                      project_resource_id = os.environ.get("PROJECT_RESOURCE_ID", "")
+                      agent_name = os.environ.get("AGENT_NAME", "")
+                      agent_version = os.environ.get("AGENT_VERSION", "")
+
+                      if not project_resource_id or not agent_name:
+                          print("❌ Missing PROJECT_RESOURCE_ID or AGENT_NAME for SDK fallback.")
+                          sys.exit(1)
+
+                      headers = {
+                          "Authorization": f"Bearer {token.token}",
+                          "Content-Type": "application/json",
+                      }
+
+                      # Try both API versions
+                      for api_version in ["2026-01-15-preview", "2025-10-01-preview"]:
+                          print(f"\n  Python fallback: api-version={api_version}")
+
+                          # Publish application
+                          app_url = f"https://management.azure.com{project_resource_id}/applications/{agent_name}?api-version={api_version}"
+                          app_body = {"properties": {"agents": [{"agentName": agent_name}]}}
+                          print(f"  PUT {app_url}")
+
+                          resp = requests.put(app_url, json=app_body, headers=headers, timeout=60)
+                          print(f"  Application response: {resp.status_code} {resp.text[:500]}")
+                          if resp.status_code >= 400:
+                              print(f"  ⚠️  Application publish failed ({resp.status_code})")
+                              continue
+
+                          # Publish deployment
+                          deploy_url = f"https://management.azure.com{project_resource_id}/applications/{agent_name}/agentDeployments/production?api-version={api_version}"
+                          deploy_body = {
+                              "properties": {
+                                  "displayName": "Production Hosted Deployment",
+                                  "deploymentType": "Hosted",
+                                  "minReplicas": 1,
+                                  "maxReplicas": 2,
+                                  "protocols": [{"protocol": "Responses", "version": "1.0"}],
+                                  "agents": [{"agentName": agent_name, "agentVersion": agent_version}],
+                              }
+                          }
+                          print(f"  PUT {deploy_url}")
+
+                          resp = requests.put(deploy_url, json=deploy_body, headers=headers, timeout=60)
+                          print(f"  Deployment response: {resp.status_code} {resp.text[:500]}")
+                          if resp.status_code < 400:
+                              print(f"✅ Python SDK fallback succeeded with api-version={api_version}")
+                              sys.exit(0)
+                          else:
+                              print(f"  ⚠️  Deployment publish failed ({resp.status_code})")
+
+                      print("❌ Python SDK fallback also failed on all API versions.")
+                      print("   Please publish manually via Azure AI Foundry Portal UI:")
+                      print("   https://ai.azure.com → Projects → Agent → Publish")
+                      sys.exit(1)
+
+                  except Exception as e:
+                      print(f"❌ Python SDK fallback error: {e}")
+                      print("   Please publish manually via Azure AI Foundry Portal UI.")
+                      sys.exit(1)
+                  PYEOF
+                      PYTHON_RC=$?
+                      if [ "$PYTHON_RC" -ne 0 ]; then
+                          echo "⚠️  All publish methods failed. Publish manually via Azure AI Foundry Portal."
+                      fi
+                  fi
+
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
