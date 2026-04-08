@@ -518,7 +518,10 @@ jobs:
                       --account-name "$ACCOUNT_NAME" \
                       --project-name "$FOUNDRY_PROJECT" \
                       --name "agentic-ops-advisor" \
-                      --yes 2>/dev/null && echo "  Deleted existing agent" || echo "  No existing agent to delete"
+                      --yes 2>/dev/null && {
+                      echo "  Deleted existing agent — waiting 30s for cleanup..."
+                      sleep 30
+                  } || echo "  No existing agent to delete"
 
                   AGENT_CREATE_OUTPUT=$(az cognitiveservices agent create \
                       --account-name "$ACCOUNT_NAME" \
