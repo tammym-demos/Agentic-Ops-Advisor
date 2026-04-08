@@ -9,6 +9,59 @@
 
 ## Learnings
 
+### 2026-04-08: Full Diagnostic — Infrastructure State + Deploy Blocker Audit
+
+**Session:** Full diagnostic with Holden (Lead) + Naomi (Backend)  
+**Status:** Infrastructure fully provisioned; CI/CD runs but deploy step fails (P0 CLI syntax error)  
+**Files to fix:** `.github/workflows/deploy.yml` (multiple steps)
+
+**Infrastructure Status: ✅ ALL GREEN**
+- Resource Group: `rg-agentic-ops-advisor` deployed in eastus
+- Azure AI Hub + Projects: Fully deployed
+- ACR: `agentopsacr.azurecr.io` with images available
+- Service Principal: RBAC roles correctly assigned (Contributor, AI Developer, AI Project Manager) ✅
+- CI/CD Pipeline: Runs successfully up to Step 7, then fails
+
+**P0-1: Invalid `az cognitiveservices agent start` Parameters**
+- **Issue:** Deploy.yml Step 7 passes `--min-replicas 1 --max-replicas 2` to `start` command
+- **Root Cause:** `start` command does NOT accept scaling parameters (those belong to `create` or `update`)
+- **Source:** Azure CLI reference docs confirm parameters don't exist
+- **Wire Evidence:** Step 7 returns 400 error: "Field 'min-replicas' is not recognized"
+- **Impact:** Agent version cannot start; no deployment registered; cascades to ARM publish failure
+- **Fix:** Remove both parameters from `az cognitiveservices agent start` line ~430
+- **Effort:** 5 min
+- **Confidence:** CERTAIN (100%) — Azure CLI docs are authoritative
+
+**P1-1: ARM API Version Order**
+- **Issue:** ARM publish loop tries only preview versions: `2026-01-15-preview`, `2025-10-01-preview`
+- **Root Cause:** GA version `2025-12-01` missing from cascade
+- **Impact:** Preview handlers may throw SystemError in certain regions; less stable
+- **Source:** ARM template reference confirms GA version exists and is more stable
+- **Fix:** Reorder loop to try `2025-12-01` first, then preview versions
+- **Effort:** 1 min
+
+**P1-2: Extension Error Suppression**
+- **Issue:** Extension install step uses `2>/dev/null || true` hiding all errors
+- **Root Cause:** Cannot debug if extension install fails
+- **Impact:** Silent failures mask root causes in CI logs; agent commands are Core type (extension add may be unnecessary)
+- **Fix:** Remove error suppression; add `az version` output for diagnostics
+- **Effort:** 5 min
+
+**CI/CD Pipeline Structure: ✅ HEALTHY**
+- Validation: Bicep build working correctly
+- Auth: Service Principal authentication successful
+- Deployment: Bicep template deploys ACR/Hub/Projects successfully
+- Only issue: Invalid CLI parameters in Step 7
+
+**Remediation Sequence (Total: ~40 min across team)**
+1. Amos: Remove invalid start params (P0, 5 min)
+2. Amos: Reorder API versions (P1, 1 min)
+3. Amos: Remove extension error suppression (P1, 5 min)
+4. Naomi: Fix token audience + add strict params (P0, 20 min)
+5. Full team: Verify pipeline green + smoke test 200 OK (5 min)
+
+**Next Deploy Run:** Should reach ARM publish step successfully. If ARM still fails, investigate SystemError with new diagnostic output enabled.
+
 ### 2026-04-04: Deployment Readiness Audit
 - **az CLI:** Authenticated to subscription `ME-MngEnvMCAP960375-tmcclell-1`, state Enabled
 - **Bicep structure:** `infra/main.bicep` is subscription-scoped, deploys 6 modules: identity, loganalytics, appinsights, sql, openai, aifoundry

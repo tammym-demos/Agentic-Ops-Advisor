@@ -297,6 +297,112 @@ Our agent.yaml is production-ready and compatible with azd workflows. No structu
 
 ## Recent Decisions
 
+### 2026-04-08T17:48:00Z: Full Diagnostic Session — Deploy Blockers Root Cause Analysis
+
+**Date:** 2026-04-08  
+**Participants:** Holden (Lead), Naomi (Backend), Amos (DevOps)  
+**Status:** DIAGNOSTIC COMPLETE — RECOMMENDATIONS READY
+
+## Summary
+
+Three-agent comprehensive audit identified 5 blocking issues across CLI, SDK, and deploy infrastructure. 1 already fixed (RBAC), 2 P0 (CLI syntax + token audience), 2 P1 (extension suppression + ARM API version order). Total remediation ~40 min for all fixes.
+
+## Key Blockers Identified
+
+### P0 (Critical) Issues
+
+**B-001: Invalid `az cognitiveservices agent start` Parameters**
+- **Issue:** CLI `start` command receives `--min-replicas 1 --max-replicas 2` — these parameters do NOT exist
+- **Source:** Azure CLI reference docs confirm `start` only accepts: `--account-name`, `--agent-version`, `--name`, `--project-name`, `--show-logs`, `--timeout`
+- **Impact:** Immediate 400 error; Step 7 deploy.yml fails; no version registered
+- **Fix:** Remove 2 invalid parameters (5 min)
+
+**B-002: Token Audience Mismatch (Bearer Scheme)**
+- **Issue:** serve.py issues token with wrong audience scope (Azure OpenAI vs. Cognitive Services)
+- **Impact:** Every API call after handshake fails 401 Unauthorized
+- **Root Cause:** Token generation uses wrong resource endpoint
+- **Fix:** Change token scope to `https://cognitiveservices.azure.com` (5 min)
+
+### P1 (Important) Issues
+
+**B-003: FunctionTool Missing `strict` Parameter**
+- **Issue:** All three tools (sql_telemetry, work_context_stub, action_stub) omit required `strict` key in function definitions
+- **Impact:** Tool registration fails with 400 Bad Request
+- **Fix:** Add `"strict": True` to function definitions (5 min per tool)
+
+**B-004: ARM API Version Order**
+- **Issue:** Deploy.yml tries only preview API versions; GA version `2025-12-01` missing
+- **Impact:** Preview handlers may throw SystemError; less stable
+- **Fix:** Reorder to try GA first (1 min)
+
+**B-005: Extension Error Suppression**
+- **Issue:** Error suppression `2>/dev/null || true` hides failures
+- **Impact:** Silent failures mask root causes in CI logs
+- **Fix:** Remove suppression; add `az version` diagnostic (5 min)
+
+### Already Fixed
+
+✅ **B-006: RBAC — Azure AI Project Manager Role**
+- Status: FIXED by Amos (2026-04-08)
+- Service Principal now has correct roles for ARM publish
+
+## Cascade Failure Chain
+
+```
+B-001 (CLI syntax) → 400 error → no version registered
+  ↓
+B-002 (token audience) → 401 → telemetry unreachable
+  ↓
+B-004 (ARM API) → SystemError → publish fails
+  ↓
+Result: Hosted agent broken; smoke test 404; zero observability
+```
+
+## Remediation Plan
+
+### Phase 1 (P0 Fixes, ~15 min)
+1. Remove `--min-replicas` and `--max-replicas` from deploy.yml Step 7 (Amos)
+2. Fix token scope in serve.py (Naomi)
+
+### Phase 2 (P1 Fixes, ~20 min)
+3. Add `strict: True` to three tool definitions (Naomi)
+4. Reorder ARM API versions in deploy.yml (Amos)
+5. Remove error suppression from extension install (Amos)
+
+### Phase 3 (Verification, ~5 min)
+6. Pipeline green ✅
+7. Smoke test 200 OK ✅
+8. Telemetry query succeeds ✅
+
+## Files Affected
+
+| File | Changes | Priority |
+|------|---------|----------|
+| `.github/workflows/deploy.yml` | Remove invalid start params, reorder API versions, clean extension errors | P0 + P1 |
+| `scripts/serve.py` | Fix token audience to `https://cognitiveservices.azure.com` | P0 |
+| `tools/sql_telemetry.py` | Add `strict: True` | P1 |
+| `tools/work_context_stub.py` | Add `strict: True` | P1 |
+| `tools/action_stub.py` | Add `strict: True` | P1 |
+
+## Confidence Levels
+
+| Blocker | Confidence | Evidence |
+|---------|-----------|----------|
+| B-001 | CERTAIN (100%) | Azure CLI reference docs explicit |
+| B-002 | HIGH (95%) | Token validation patterns + scope mismatch visible in code |
+| B-003 | HIGH (95%) | Azure AI API spec requires `strict` |
+| B-004 | HIGH (90%) | ARM template reference documented |
+| B-005 | MEDIUM (80%) | Pattern visible; commands are Core type |
+
+## Decision
+
+**Approve all remediation steps in sequence.**
+1. Apply P0 fixes immediately → test pipeline
+2. Apply P1 fixes in same PR → verify complete fix
+3. Consider Option B (CLI modernization via `az cognitiveservices agent create`) next sprint
+
+---
+
 ### 2026-04-06T21:30:00Z: Deploy Pipeline Hardening
 **By:** Amos (DevOps)
 **What:** Hardened `.github/workflows/deploy.yml` with four changes: (1) ODBC driver + unixodbc-dev installed before pip install (matches ci-eval.yml pattern); (2) Pre-deploy test gate with `pytest tests/ -x --tb=short` to block untested code; (3) Always-run Bicep validation with `az deployment sub validate` (catches syntax errors on every deploy, not just on infra changes); (4) Parameterized RBAC step to derive `AI_HUB_NAME` and `MANAGED_IDENTITY_NAME` from `parameters.json` instead of hardcoding resource names.

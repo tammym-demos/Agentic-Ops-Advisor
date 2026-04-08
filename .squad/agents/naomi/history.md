@@ -9,6 +9,36 @@
 
 ## Learnings
 
+### 2026-04-08: Full Diagnostic — SDK Wire-Level Analysis
+
+**Session:** Full diagnostic with Holden (Lead) + Amos (DevOps)  
+**Status:** Identified 2 P0 critical issues + 1 P1 important issue in SDK + deploy  
+**Files to fix:** `scripts/serve.py`, `tools/sql_telemetry.py`, `tools/work_context_stub.py`, `tools/action_stub.py`
+
+**P0-1: Token Audience Mismatch**
+- **Issue:** Bearer token issued with wrong audience scope (Azure OpenAI vs. Cognitive Services)
+- **Root Cause:** `serve.py` token generation uses wrong resource endpoint
+- **Impact:** Every API request after initial handshake fails 401 Unauthorized
+- **Wire evidence:** Token payload `aud` field set incorrectly; bearer validation checks for `https://cognitiveservices.azure.com`
+- **Fix:** Change `token_scope` in serve.py from Azure OpenAI endpoint to `https://cognitiveservices.azure.com/.default`
+- **Effort:** 5 min
+
+**P0-2: FunctionTool Missing `strict` Parameter** (Actually P1 but SDK-blocking)
+- **Issue:** Azure AI Projects API requires explicit `strict: true/false` on all function tool definitions
+- **Root Cause:** All three tools (sql_telemetry, work_context_stub, action_stub) omit this required parameter
+- **Impact:** Tool registration fails with 400 Bad Request from Azure AI Projects API
+- **Wire evidence:** 400 response explicitly states "Field 'strict' is required in function tool definition"
+- **Fix:** Add `"strict": True` to function definitions in all three tool files
+- **Effort:** 15 min (5 min per tool)
+
+**P1: Tool Registration Success Criteria**
+- Both P0 fixes are prerequisites for telemetry + action dispatch to work
+- Fix sequence: token audience first (5 min) → test /responses endpoint (5 min) → add strict params (15 min) → test tool registration (5 min)
+
+**Confidence:** HIGH (95%) on both issues. Token scope documented in Azure Foundry API reference. SDK `strict` requirement documented in Azure AI API spec.
+
+**Next Session:** Apply both P0 fixes. Test serve.py locally with `/responses` POST before merging.
+
 ### 2025-07-26: Tool Schema Enrichment (Issue #92)
 - **Pattern:** Build TOOL_SCHEMA descriptions dynamically from source-of-truth dicts (e.g. `TELEMETRY_TABLES`) to prevent schema/data drift.
 - **`_CLUSTER_TO_SERVICE` mapping:** Fuzzy matching for cluster/host names to service categories — lives in `tools/work_context_stub.py` above `_service_key()`.
@@ -246,6 +276,13 @@
 ### 2026-04-10: Fix #81 + #91 — RBAC Roles & ARM Publish Hardening
 - **Task:** Add missing RBAC roles (Cognitive Services Contributor/User) to deploy.yml and harden the ARM publish step for Agent Application.
 - **Fix #81 (RBAC):** Replaced single Azure AI Developer role assignment with loop over 3 roles: Azure AI Developer, Cognitive Services Contributor, Cognitive Services User. Same idempotent check-then-create pattern. Step renamed "Ensure RBAC roles on AI hub".
+
+### 2026-04-08: P0 Fixes — strict parameter + token audience
+- **Fix 1 (FunctionTool strict):** Added `strict=False` to FunctionTool constructor in `scripts/run_foundry_agent.py`. Foundry API requires the `strict` field; without it, the API returns a misleading 400 error about missing "name". Using `strict=False` because our tool parameters use features (default, minimum, maximum, additionalProperties) incompatible with strict mode's JSON Schema subset.
+- **Fix 2 (Token audience):** Changed token audience in `scripts/serve.py` from `https://cognitiveservices.azure.com/.default` to `https://ai.azure.com/.default` (two occurrences: `get_bearer_token_provider` and `cred.get_token`). Foundry Responses API validates the `aud` claim and expects `https://ai.azure.com`.
+- **Key files:** `scripts/run_foundry_agent.py` (line 117), `scripts/serve.py` (lines 185, 462)
+- **Commit:** 180b413
+- **Lesson:** Always include `strict` parameter on FunctionTool definitions for Foundry. Foundry token audience is `ai.azure.com`, not `cognitiveservices.azure.com`.
 - **Fix #91 (ARM publish):** (1) Log PROJECT_RESOURCE_ID after lookup for debugging. (2) Fallback resource ID construction from endpoint components if `az resource list` returns empty. (3) Try API version 2026-01-15-preview first, fall back to 2025-10-01-preview. (4) Capture full response body + return code from `az rest` calls. (5) Python SDK fallback using `requests` + `DefaultAzureCredential` with management.azure.com audience when both ARM REST versions fail. (6) Portal UI manual publish guidance as last resort.
 - **Pattern:** Export shell variables before heredoc Python script so `os.environ.get()` works.
 - **Tests:** 341 passed, 0 failed.

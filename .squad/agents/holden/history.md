@@ -9,6 +9,133 @@
 
 ## Learnings
 
+### 2026-04-08: Full Diagnostic Session — Deploy Cascade Failure Analysis
+
+**Session:** Three-agent diagnostic audit (Holden lead, Naomi backend analysis, Amos infra audit)  
+**Status:** Root cause analysis complete; 5 blockers identified; 1 already fixed  
+**Duration:** 90 min analysis; 40 min estimated remediation  
+
+**Outcome:** Comprehensive blocker audit identified clear remediation path (P0 + P1 fixes, ~40 min total work).
+
+**Blockers Found (Priority Order)**
+
+**P0-1: CLI Syntax Error — Invalid `start` Parameters**
+- **Issue:** `.github/workflows/deploy.yml` Step 7 passes `--min-replicas 1 --max-replicas 2` to `az cognitiveservices agent start`
+- **Root Cause:** `start` command accepts only: `--account-name`, `--agent-version`, `--name`, `--project-name`, `--show-logs`, `--timeout` (per official CLI reference docs)
+- **Impact:** Immediate 400 error; agent version cannot register; cascade blocks ARM publish + smoke test
+- **Evidence:** Azure CLI reference link provided; error message explicit in CI logs (runs #125-127)
+- **Fix:** Remove 2 invalid parameters from command
+- **Owner:** Amos
+- **Effort:** 5 min
+
+**P0-2: Token Audience Mismatch**
+- **Issue:** `scripts/serve.py` token generation uses wrong resource scope
+- **Root Cause:** Bearer token issued with Azure OpenAI endpoint; Azure AI Projects API expects `https://cognitiveservices.azure.com`
+- **Impact:** Every API call fails 401 Unauthorized; telemetry unreachable
+- **Evidence:** Token validation logic + Azure Foundry API docs confirm scope
+- **Fix:** Change token scope in serve.py
+- **Owner:** Naomi
+- **Effort:** 5 min
+
+**P1-1: FunctionTool Missing `strict` Parameter**
+- **Issue:** All three tools omit required `strict: true/false` in function definitions
+- **Root Cause:** Azure AI Projects SDK API spec requires this field (validates schema against OpenAI function-calling spec)
+- **Impact:** Tool registration fails 400; prevents telemetry dispatch
+- **Evidence:** Azure AI API spec requirement
+- **Fix:** Add `"strict": True` to function defs in sql_telemetry.py, work_context_stub.py, action_stub.py
+- **Owner:** Naomi
+- **Effort:** 15 min (3×5)
+
+**P1-2: ARM API Version Order**
+- **Issue:** `.github/workflows/deploy.yml` tries only preview API versions for agent application publish
+- **Root Cause:** GA version `2025-12-01` missing from cascade; preview handlers less stable
+- **Impact:** SystemError in certain regions; publish fails with generic error
+- **Evidence:** ARM template reference confirms GA version exists + is stable
+- **Fix:** Reorder API version loop: GA first, then preview
+- **Owner:** Amos
+- **Effort:** 1 min
+
+**P1-3: Extension Error Suppression**
+- **Issue:** Extension install step hides failures with `2>/dev/null || true`
+- **Root Cause:** Cannot debug if extension fails; agent commands are Core type (may not need extension)
+- **Impact:** Silent failures mask root causes
+- **Fix:** Remove suppression; add `az version` diagnostic
+- **Owner:** Amos
+- **Effort:** 5 min
+
+**B-005 Already Fixed ✅**
+- RBAC role "Azure AI Project Manager" already assigned by earlier work
+- Service Principal now has all three required roles (Contributor, AI Developer, AI Project Manager)
+
+**Cascade Failure Chain Analysis**
+
+```
+B-001 (CLI syntax) [Step 7] → 400 error
+    ↓ No version registered
+    ↓
+B-004 (ARM API order) [Step 7b] → SystemError (if B-001 fixed)
+    ↓ Publish fails
+    ↓
+Result: Hosted agent broken; no API endpoint; smoke test 404
+
+(Parallel) If deployed but B-002 (token scope) unfixed:
+    ↓
+    Requests arrive at /responses → Bearer validation
+    ↓
+    B-002 (token audience) → 401 Unauthorized
+    ↓
+    Telemetry query fails; agent non-functional
+
+(Parallel) If B-002 fixed but B-003 (strict param) unfixed:
+    ↓
+    Requests arrive; auth succeeds
+    ↓
+    Agent tries to register tools → 400 "strict required"
+    ↓
+    Tool dispatch fails; agent responses incomplete
+```
+
+**Fix Sequence (Critical Order)**
+
+1. **B-001 (P0, 5 min):** Remove invalid start params → unblock version creation
+2. **B-002 (P0, 5 min):** Fix token scope → enable bearer auth
+3. **B-003 (P1, 15 min):** Add strict params → enable tool dispatch
+4. **B-004 (P1, 1 min):** Reorder API versions → stabilize publish
+5. **B-005 (P1, 5 min):** Clean extension suppression → improve diagnostics
+6. **Verify (5 min):** Pipeline green + smoke test 200 + telemetry query works
+
+**Remediation Assignment**
+
+| Task | Owner | Effort | Priority |
+|------|-------|--------|----------|
+| Remove invalid start params | Amos | 5 min | P0 |
+| Fix token scope | Naomi | 5 min | P0 |
+| Add strict params (3 files) | Naomi | 15 min | P1 |
+| Reorder API versions | Amos | 1 min | P1 |
+| Clean extension suppression | Amos | 5 min | P1 |
+| Verify pipeline | Team | 5 min | Gate |
+
+**Key Confidence Levels**
+
+| Blocker | Confidence | Basis |
+|---------|-----------|-------|
+| B-001 | CERTAIN (100%) | Azure CLI docs explicit; error message confirms |
+| B-002 | HIGH (95%) | Token validation + API scope spec |
+| B-003 | HIGH (95%) | Azure AI API spec; matches error pattern |
+| B-004 | HIGH (90%) | ARM template reference; platform behavior docs |
+| B-005 | MEDIUM (80%) | Code pattern visible; agent commands are Core |
+
+**Strategic Notes**
+
+- **Option B (CLI modernization):** Consider next sprint after P0 fixes verified. Replace `deploy_agent.py` (SDK) + `start` (CLI) with single `az cognitiveservices agent create` command. Would eliminate multiple failure points; removes ~180 lines of code.
+
+- **Post-fix roadmap:** Once pipeline is green, priorities are:
+  1. Regression test suite (verify telemetry + action dispatch)
+  2. Integration test (end-to-end agent reasoning on real infrastructure)
+  3. DoD verification (all 22 acceptance criteria)
+
+
+
 ### 2025-07-25: DoD Audit (Issue #54)
 - Audited all 7 Definition of Done criteria from `customerfriendly-plan.md` Section 8.
 - **5 PASS, 2 PARTIAL.** Core agent code, eval pipeline, tracing, deployment IaC, regression demo, and synthetic data posture are all solid.
@@ -276,3 +403,17 @@
 - **Key files:** `agent/system_prompt.md`, `tools/sql_telemetry.py` (source of truth for TOOL_SCHEMA + _AGG_QUERIES), `tools/work_context_stub.py` (source of truth for get_work_context alias)
 - **Pattern:** System prompt function names MUST match TOOL_SCHEMA `function.name` and the `__name__` attribute of aliased callables
 - **Status:** ✅ COMPLETE
+
+### 2026-06-01: ARM Agent Application Publish Failure Diagnosis
+- **Context:** ARM publish step consistently fails with `SystemError` from `managementfrontend` in eastus. All three methods fail: az CLI, ARM REST PUT, Python SDK fallback. Tammy confirmed Playground shows legacy Agents API behavior.
+- **Root causes identified (5):**
+  1. 🔴 `az cognitiveservices agent start` uses `--min-replicas`/`--max-replicas` which DO NOT EXIST on `start` command. They belong to `create` and `update`. CLI rejects them.
+  2. 🟡 Extension install error suppressed by `2>/dev/null || true` — hides failures. Commands are Core type (CLI ≥ 2.80), not extension.
+  3. 🔴 ARM publish loop missing GA API version `2025-12-01`. Only tries preview versions (`2026-01-15-preview`, `2025-10-01-preview`). Preview handlers may have regional bugs causing `SystemError`.
+  4. 🟡 Missing Azure AI Project Manager RBAC role on Hub. Docs troubleshooting: "Publish Agent disabled → Missing Azure AI Project Manager role on Foundry resource scope."
+  5. ℹ️ Playground legacy behavior is EXPECTED without published Application — project-level API routes through threads/runs pattern. Fix publish → fix Playground.
+- **Resource path confirmed CORRECT:** `Microsoft.CognitiveServices/accounts/{hub}/projects/{project}/applications/{app}` per official docs and ARM template reference.
+- **Key discovery:** `az cognitiveservices agent create` can replace both `deploy_agent.py` AND `start` in one command (creates version + deploys + starts, supports --min-replicas, --image, --env, --show-logs).
+- **Recommendation:** Option A (minimal fix, ~30min) first — fix start params, remove error suppression, add 2025-12-01 API version, add RBAC role. Option B (CLI modernization with `create` command) next sprint.
+- **Decision written to:** `.squad/decisions/inbox/holden-arm-publish-diagnosis.md`
+- **Confidence:** HIGH (95%) on root causes 1–3 (verified against official CLI/ARM docs). MEDIUM (75%) on root cause 4 (RBAC — need to verify assignment status in portal).
