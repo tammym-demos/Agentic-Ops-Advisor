@@ -530,7 +530,6 @@ jobs:
                       --image "${CONTAINER_IMAGE}" \
                       --cpu 2 --memory 4Gi \
                       --min-replicas 1 --max-replicas 2 \
-                      --target-port 8088 \
                       --protocol responses --protocol-version v1 \
                       --env "AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}" \
                             "AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}" \
@@ -538,6 +537,7 @@ jobs:
                             "DB_MODE=sqlite" \
                             "ENABLE_WORK_IQ=true" \
                             "ENABLE_MCP=false" \
+                            "PORT=80" \
                             "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                             "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
                       --show-logs --timeout 600 --skip-acr-check \
