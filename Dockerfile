@@ -86,13 +86,14 @@ ENV DB_MODE=sqlite \
     MODE=serve
 
 # ---- Expose hosted agent service port ----
-# Port 80 for Azure AI Foundry Agent Service (default expected port)
-# Override via PORT env var for local development (e.g., PORT=8088)
-EXPOSE 80
+# Port 8080 for Azure AI Foundry Agent Service (non-privileged port for non-root user)
+# Foundry reads EXPOSE to determine the target port for routing
+# Override via PORT env var for local development
+EXPOSE 8080
 
 # ---- Health check ----
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-80}/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8080}/health || exit 1
 
 # ---- Run as non-root ----
 USER agent

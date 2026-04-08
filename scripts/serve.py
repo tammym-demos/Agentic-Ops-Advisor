@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hosted agent server for Azure AI Foundry Agent Service.
 
-Implements the Foundry Responses API on port 80 (default).
+Implements the Foundry Responses API on port 8080 (default).
 
 Usage:
     python scripts/serve.py
@@ -9,7 +9,7 @@ Usage:
 What it does:
     1. Loads system prompt from agent/system_prompt.md
     2. Seeds the SQLite database if needed
-    3. Starts aiohttp server on port 80 (override with PORT env var):
+    3. Starts aiohttp server on port 8080 (override with PORT env var):
        - POST /responses — Foundry Responses API endpoint
        - GET /health — Health check
        - GET / — Serve static/index.html or JSON welcome
@@ -473,7 +473,7 @@ def main() -> None:
         logger.error(f"Failed to set up database: {exc}")
         sys.exit(1)
 
-    port = int(os.environ.get("PORT", "80"))
+    port = int(os.environ.get("PORT", "8080"))
     
     logger.info(f"Server starting on http://0.0.0.0:{port}")
     logger.info("Endpoints: POST /responses, GET /health, GET /")
