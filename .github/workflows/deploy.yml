@@ -267,38 +267,6 @@ jobs:
                       fi
                   done
 
-                  # Grant AcrPull to the AI project's managed identity on ACR.
-                  # Required for `az cognitiveservices agent create` to pull images.
-                  ACR_NAME="${AZURE_CONTAINER_REGISTRY_NAME:-crhubagentopsprod}"
-                  ACR_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.ContainerRegistry/registries/${ACR_NAME}"
-                  PROJ_NAME="proj-${PROJECT_NAME}-${ENV_NAME}"
-                  PROJ_MI=$(az cognitiveservices account show \
-                      --name "${HUB_NAME}" \
-                      --resource-group "${RG_NAME}" \
-                      --query "identity.principalId" -o tsv 2>/dev/null || echo "")
-
-                  if [[ -n "${PROJ_MI}" ]]; then
-                      ACR_PULL_EXISTS=$(az role assignment list \
-                          --assignee "${PROJ_MI}" \
-                          --role "AcrPull" \
-                          --scope "${ACR_SCOPE}" \
-                          --query "[].id" -o tsv 2>/dev/null || echo "")
-                      if [[ -z "${ACR_PULL_EXISTS}" ]]; then
-                          echo "Assigning AcrPull to hub identity ${PROJ_MI} on ${ACR_NAME}..."
-                          az role assignment create \
-                              --assignee-object-id "${PROJ_MI}" \
-                              --assignee-principal-type "ServicePrincipal" \
-                              --role "AcrPull" \
-                              --scope "${ACR_SCOPE}" \
-                              --output none 2>/dev/null || echo "⚠️  AcrPull assignment failed (non-blocking)"
-                          echo "✅ AcrPull role assigned."
-                      else
-                          echo "✅ AcrPull on ACR already present."
-                      fi
-                  else
-                      echo "⚠️  Could not resolve hub managed identity — skipping AcrPull (use --skip-acr-check)"
-                  fi
-
     # -------------------------------------------------------------------------
     # 3. Deploy agent: ACR build → SDK create_version → ARM publish
     # -------------------------------------------------------------------------
@@ -426,11 +394,10 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 5b — Ensure AcrPull for hub managed identity
+            # Step 5b — Ensure AcrPull for project managed identity
             # ------------------------------------------------------------------
             # The Foundry project needs AcrPull on the ACR to pull images.
-            # This runs in the deploy-agent job (not deploy-infra) so it
-            # always executes, even when no infra changes are detected.
+            # Query both hub and project identities and grant AcrPull.
             # ------------------------------------------------------------------
             - name: Ensure AcrPull on ACR
               run: |
@@ -438,37 +405,73 @@ jobs:
                   RG_NAME="${AZURE_RESOURCE_GROUP}"
                   SUBSCRIPTION_ID=$(az account show --query id -o tsv)
                   ACR_SCOPE="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.ContainerRegistry/registries/${ACR_NAME}"
-
-                  # Get the hub's managed identity (system-assigned)
                   HUB_NAME="hub-agentops-prod"
-                  HUB_MI=$(az cognitiveservices account show \
-                      --name "${HUB_NAME}" \
-                      --resource-group "${RG_NAME}" \
-                      --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+                  PROJ_NAME="proj-agentops-prod"
 
-                  if [[ -n "${HUB_MI}" ]]; then
-                      echo "Hub MI: ${HUB_MI}"
+                  assign_acr_pull() {
+                      local PRINCIPAL_ID="$1"
+                      local LABEL="$2"
+                      if [[ -z "${PRINCIPAL_ID}" ]]; then
+                          echo "⚠️  No MI found for ${LABEL}"
+                          return
+                      fi
+                      echo "${LABEL} MI: ${PRINCIPAL_ID}"
                       ACR_PULL_EXISTS=$(az role assignment list \
-                          --assignee "${HUB_MI}" \
+                          --assignee "${PRINCIPAL_ID}" \
                           --role "AcrPull" \
                           --scope "${ACR_SCOPE}" \
                           --query "[].id" -o tsv 2>/dev/null || echo "")
                       if [[ -z "${ACR_PULL_EXISTS}" ]]; then
-                          echo "Assigning AcrPull to hub identity on ${ACR_NAME}..."
+                          echo "Assigning AcrPull to ${LABEL} on ${ACR_NAME}..."
                           az role assignment create \
-                              --assignee-object-id "${HUB_MI}" \
+                              --assignee-object-id "${PRINCIPAL_ID}" \
                               --assignee-principal-type "ServicePrincipal" \
                               --role "AcrPull" \
                               --scope "${ACR_SCOPE}" \
-                              --output none
-                          echo "✅ AcrPull assigned. Waiting 30s for propagation..."
-                          sleep 30
+                              --output none 2>/dev/null && \
+                          echo "✅ AcrPull assigned to ${LABEL}" || \
+                          echo "⚠️  AcrPull assignment failed for ${LABEL}"
                       else
-                          echo "✅ AcrPull already present on ${ACR_NAME}"
+                          echo "✅ AcrPull already present for ${LABEL}"
                       fi
-                  else
-                      echo "⚠️  Could not resolve hub MI — skipping AcrPull"
+                  }
+
+                  # Try hub identity
+                  HUB_MI=$(az cognitiveservices account show \
+                      --name "${HUB_NAME}" \
+                      --resource-group "${RG_NAME}" \
+                      --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+                  assign_acr_pull "${HUB_MI}" "Hub"
+
+                  # Try project identity (sub-resource of hub)
+                  PROJECT_RID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG_NAME}/providers/Microsoft.CognitiveServices/accounts/${HUB_NAME}/projects/${PROJ_NAME}"
+                  PROJ_MI=$(az resource show --ids "${PROJECT_RID}" --query "identity.principalId" -o tsv 2>/dev/null || echo "")
+                  assign_acr_pull "${PROJ_MI}" "Project"
+
+                  # Also try all user-assigned identities on the hub
+                  HUB_UAMI_IDS=$(az cognitiveservices account show \
+                      --name "${HUB_NAME}" \
+                      --resource-group "${RG_NAME}" \
+                      --query "identity.userAssignedIdentities" -o json 2>/dev/null || echo "{}")
+                  if [[ "${HUB_UAMI_IDS}" != "{}" && "${HUB_UAMI_IDS}" != "null" && -n "${HUB_UAMI_IDS}" ]]; then
+                      echo "Found user-assigned identities on hub"
+                      for UAMI_PID in $(echo "${HUB_UAMI_IDS}" | python3 -c "
+                  import sys, json
+                  try:
+                      d = json.load(sys.stdin)
+                      for v in d.values():
+                          pid = v.get('principalId', '')
+                          if pid:
+                              print(pid)
+                  except:
+                      pass
+                  " 2>/dev/null); do
+                          assign_acr_pull "${UAMI_PID}" "Hub-UAMI"
+                      done
                   fi
+
+                  # Wait for RBAC propagation if any assignments were made
+                  sleep 15
 
             # ------------------------------------------------------------------
             # Step 6 — Deploy hosted agent (CLI primary, SDK fallback)
