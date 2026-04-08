@@ -759,7 +759,7 @@ jobs:
 
                       APP_NAME="${AGENT_NAME}"
 
-                      for API_VERSION in "2025-10-01-preview" "2026-01-15-preview"; do
+                      for API_VERSION in "2025-12-01" "2026-01-15-preview" "2025-10-01-preview"; do
                           echo ""
                           echo "Publishing Agent Application (api-version=${API_VERSION})..."
                           APP_URL="https://management.azure.com${PROJECT_RESOURCE_ID}/applications/${APP_NAME}?api-version=${API_VERSION}"
@@ -827,7 +827,7 @@ jobs:
                           "Content-Type": "application/json",
                       }
 
-                      for api_version in ["2025-10-01-preview", "2026-01-15-preview"]:
+                      for api_version in ["2025-12-01", "2026-01-15-preview", "2025-10-01-preview"]:
                           print(f"\n  Python fallback: api-version={api_version}")
 
                           app_url = f"https://management.azure.com{project_resource_id}/applications/{agent_name}?api-version={api_version}"

@@ -70,6 +70,12 @@ def main() -> None:
         val = os.environ.get(key, "")
         if val:
             env_vars[key] = val
+    
+    # CRITICAL: Set PORT=8080 to match container listener (Dockerfile EXPOSE 8080, serve.py PORT=8080).
+    # HostedAgentDefinition has no target_port parameter, so we rely on the container
+    # reading PORT env var. If Foundry defaults to routing to port 80, this mismatch
+    # will cause container health checks to fail.
+    env_vars["PORT"] = "8080"
 
     agent_definition = HostedAgentDefinition(
         kind="hosted",
