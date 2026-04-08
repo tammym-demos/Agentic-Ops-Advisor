@@ -86,8 +86,13 @@ def _dispatch_tool(name: str, arguments: str) -> str:
 # Build tool definitions for PromptAgent registration
 # ---------------------------------------------------------------------------
 
-def _get_function_tool_definitions() -> list[dict]:
-    """Collect tool schemas from all tool modules for PromptAgent registration."""
+def _get_function_tool_definitions() -> list:
+    """Collect tool schemas from all tool modules for PromptAgent registration.
+
+    Converts the OpenAI-format tool dicts ({"type":"function","function":{...}})
+    into azure-ai-projects FunctionTool objects that the SDK expects.
+    """
+    from azure.ai.projects.models import FunctionTool
     from tools.sql_telemetry import TOOL_DEFINITIONS as sql_tools
     from tools.action_stub import ACTION_STUB_TOOL_DEFINITIONS as action_tools
     from tools.work_context_stub import (
@@ -95,10 +100,23 @@ def _get_function_tool_definitions() -> list[dict]:
         ENABLE_WORK_IQ,
     )
 
-    tools = list(sql_tools) + list(action_tools)
+    raw_tools = list(sql_tools) + list(action_tools)
     if ENABLE_WORK_IQ:
-        tools.extend(work_ctx_tools)
-    return tools
+        raw_tools.extend(work_ctx_tools)
+
+    # Convert {"type":"function","function":{"name":..,"description":..,"parameters":..}}
+    # into FunctionTool(name=.., description=.., parameters=..)
+    sdk_tools = []
+    for t in raw_tools:
+        fn = t.get("function", t)
+        sdk_tools.append(
+            FunctionTool(
+                name=fn["name"],
+                description=fn.get("description", ""),
+                parameters=fn.get("parameters", {}),
+            )
+        )
+    return sdk_tools
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +143,7 @@ def _ensure_database():
     os.environ.setdefault("DB_MODE", "sqlite")
     try:
         import sqlite3
-        from data.seed import seed_connection
+        from data.seed_telemetry import seed_connection
 
         db_path = os.path.join(_REPO_ROOT, "data", "telemetry.db")
         os.environ.setdefault("SQLITE_DB_PATH", db_path)
@@ -349,8 +367,9 @@ def main():
     )
     parser.add_argument(
         "--agent-name",
-        default=os.environ.get("AGENT_NAME", "agentic-ops-advisor"),
-        help="Agent name in Foundry (default: agentic-ops-advisor)",
+        default=os.environ.get("AGENT_NAME", ""),
+        help="Agent name in Foundry (default: agentic-ops-advisor for hosted, "
+             "agentic-ops-advisor-prompt for prompt mode)",
     )
     parser.add_argument(
         "--model",
@@ -370,6 +389,13 @@ def main():
         print("❌ AZURE_AI_AGENTS_ENDPOINT environment variable is required.")
         print("   Format: https://<resource>.services.ai.azure.com/api/projects/<project>")
         sys.exit(1)
+
+    # Default agent name depends on mode (hosted vs prompt are different kinds)
+    if not args.agent_name:
+        args.agent_name = (
+            "agentic-ops-advisor-prompt" if args.mode == "prompt"
+            else "agentic-ops-advisor"
+        )
 
     # Seed database for prompt mode (tools run locally)
     if args.mode == "prompt":
