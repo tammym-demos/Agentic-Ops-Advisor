@@ -332,11 +332,36 @@ def _run_agent_mode(endpoint: str, deployment: str, api_version: str) -> None:
 
     from tools.sql_telemetry import TOOL_DEFINITIONS  # noqa: PLC0415
 
-    client = AzureOpenAI(
-        azure_endpoint=endpoint,
-        api_version=api_version,
-        # Uses DefaultAzureCredential / AZURE_OPENAI_API_KEY from env automatically
-    )
+    # Use API key from env if available, otherwise fall back to Entra ID via
+    # DefaultAzureCredential (requires `az login` or a managed identity).
+    api_key = os.environ.get("AZURE_OPENAI_API_KEY", "").strip()
+    if api_key:
+        client = AzureOpenAI(
+            azure_endpoint=endpoint,
+            api_key=api_key,
+            api_version=api_version,
+        )
+    else:
+        try:
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider  # noqa: PLC0415
+        except ImportError:
+            print(
+                "  ✗ No AZURE_OPENAI_API_KEY set and azure-identity not installed.\n"
+                "    Either set AZURE_OPENAI_API_KEY in .env, or:\n"
+                "      pip install azure-identity\n",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        credential = DefaultAzureCredential()
+        token_provider = get_bearer_token_provider(
+            credential, "https://cognitiveservices.azure.com/.default"
+        )
+        client = AzureOpenAI(
+            azure_endpoint=endpoint,
+            azure_ad_token_provider=token_provider,
+            api_version=api_version,
+        )
 
     print(f"  Mode: AGENT (Azure OpenAI · {deployment} · {endpoint})\n")
     print("-" * 64)
