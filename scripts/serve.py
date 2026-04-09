@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hosted agent server for Azure AI Foundry Agent Service.
 
-Implements the Foundry Responses API on port 8080 (default).
+Implements the Foundry Responses API on port 8088 (default).
 
 Usage:
     python scripts/serve.py
@@ -9,9 +9,10 @@ Usage:
 What it does:
     1. Loads system prompt from agent/system_prompt.md
     2. Seeds the SQLite database if needed
-    3. Starts aiohttp server on port 8080 (override with PORT env var):
+    3. Starts aiohttp server on port 8088 (override with PORT env var):
        - POST /responses — Foundry Responses API endpoint
        - GET /health — Health check
+       - GET /readiness — Readiness check
        - GET / — Serve static/index.html or JSON welcome
     4. Handles agent loop with Azure OpenAI function-calling
     5. Stateless — each request is independent
@@ -383,6 +384,18 @@ async def _health_handler(request) -> object:
     })
 
 
+async def _readiness_handler(request) -> object:
+    """Handle GET /readiness requests — used by Foundry for container probes."""
+    from aiohttp import web
+
+    version = os.environ.get("CONTAINER_IMAGE_TAG", "dev")
+    return web.json_response({
+        "status": "ready",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": version,
+    })
+
+
 async def _root_handler(request) -> object:
     """Handle GET / requests — serve static/index.html or JSON welcome."""
     from aiohttp import web
@@ -426,6 +439,7 @@ async def _init_app() -> object:
     # Add routes
     app.router.add_post("/responses", _responses_handler)
     app.router.add_get("/health", _health_handler)
+    app.router.add_get("/readiness", _readiness_handler)
     app.router.add_get("/", _root_handler)
 
     # Enable CORS on all routes
@@ -473,7 +487,7 @@ def main() -> None:
         logger.error(f"Failed to set up database: {exc}")
         sys.exit(1)
 
-    port = int(os.environ.get("PORT", "8080"))
+    port = int(os.environ.get("PORT", "8088"))
     
     logger.info(f"Server starting on http://0.0.0.0:{port}")
     logger.info("Endpoints: POST /responses, GET /health, GET /")

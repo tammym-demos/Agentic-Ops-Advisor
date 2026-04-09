@@ -192,7 +192,7 @@ container:
   image: ${ACR_LOGIN_SERVER}/agentic-ops-advisor:${CONTAINER_IMAGE_TAG}
 
   # Port the container exposes for the hosted agent HTTP server.
-  port: 8080
+  port: 8088
 
   # Health check endpoint used by the platform to verify container readiness.
   health:

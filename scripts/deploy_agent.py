@@ -38,7 +38,7 @@ def main() -> None:
 
     deployment_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1")
 
-    print(f"🔧 Configuration:")
+    print("🔧 Configuration:")
     print(f"   Endpoint: {endpoint}")
     print(f"   Model deployment: {deployment_name}")
     print(f"   Container image: {container_image}")
@@ -54,7 +54,7 @@ def main() -> None:
     )
 
     # Hosted agent definition — container handles its own LLM calls,
-    # tool dispatch, and system prompt via POST /responses on port 8080.
+    # tool dispatch, and system prompt via POST /responses on port 8088.
     env_vars = {}
     for key in [
         "AZURE_OPENAI_ENDPOINT",
@@ -71,11 +71,11 @@ def main() -> None:
         if val:
             env_vars[key] = val
     
-    # CRITICAL: Set PORT=8080 to match container listener (Dockerfile EXPOSE 8080, serve.py PORT=8080).
+    # CRITICAL: Set PORT=8088 to match Foundry hosting adapter default.
+    # Foundry's sidecar occupies port 8080, so the container must listen on 8088.
     # HostedAgentDefinition has no target_port parameter, so we rely on the container
-    # reading PORT env var. If Foundry defaults to routing to port 80, this mismatch
-    # will cause container health checks to fail.
-    env_vars["PORT"] = "8080"
+    # reading PORT env var.
+    env_vars["PORT"] = "8088"
 
     agent_definition = HostedAgentDefinition(
         kind="hosted",

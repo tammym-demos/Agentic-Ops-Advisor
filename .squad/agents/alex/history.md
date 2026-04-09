@@ -107,6 +107,14 @@
 - **Key discovery:** serve.py uses `_call_tool()` which calls `TOOL_CALLABLES["query_telemetry"]`, which is `_sync_query_telemetry()`, which uses `asyncio.run()`. This fails when called from an existing event loop (aiohttp server). Tests mock `_call_tool` to work around this. Naomi should refactor to use async tool dispatch or use a different sync wrapper pattern.
 - **Test execution:** All 18 tests pass with aiohttp test client. Validates Foundry Responses API compliance, tool dispatch workflows, error handling, and CORS configuration.
 
+### Foundry Deployment Fixes — Test Validation
+- **Context:** Team had 7 uncommitted files with Foundry deployment fixes (port 8080→8088, API route changes to project-level Responses API with agent_reference, target port alignment).
+- **Files changed:** serve.py, run_foundry_agent.py, deploy_agent.py, Dockerfile, deploy.yml, agent.yaml
+- **Test results:** **341/341 passed, 0 failed, 0 skipped** — full suite clean in 19.92s
+- **Lint results:** 1 ruff finding — F541 f-string without placeholders in `scripts/deploy_agent.py:41` (cosmetic, auto-fixable)
+- **Port check:** No tests reference port 8080 or 8088 directly. Tests use aiohttp test client which handles port allocation automatically. No test updates needed.
+- **Conclusion:** The Foundry deployment changes are safe to commit. No test breakage, no port-hardcoded tests to fix.
+
 ### Issue #92: Edge-case tests for LLM wrong-parameter fixes
 - **File updated:** `tests/test_tools.py` — added 14 edge-case tests (33 total, all pass)
 - **TestQueryTelemetry additions (5 tests):**

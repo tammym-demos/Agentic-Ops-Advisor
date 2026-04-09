@@ -564,14 +564,14 @@ jobs:
                       --cpu 2 --memory 4Gi \
                       --min-replicas 1 --max-replicas 2 \
                       --protocol responses --protocol-version v1 \
-                      --target-port 8080 \
+                      --target-port 8088 \
                       --env "AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}" \
                             "AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}" \
                             "AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}" \
                             "DB_MODE=sqlite" \
                             "ENABLE_WORK_IQ=true" \
                             "ENABLE_MCP=false" \
-                            "PORT=8080" \
+                            "PORT=8088" \
                             "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                             "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
                       --show-logs --timeout 600 --skip-acr-check \
@@ -978,17 +978,25 @@ jobs:
 
                   except ImportError as e:
                       print(f"⚠️  SDK not available ({e}), falling back to REST probe")
-                      # Minimal REST fallback — just check agent health
+                      # Minimal REST fallback — project-level endpoint for hosted agents
                       import requests
                       from azure.identity import DefaultAzureCredential
                       credential = DefaultAzureCredential()
                       token = credential.get_token("https://ai.azure.com/.default")
                       base = endpoint.rstrip("/")
-                      url = f"{base}/applications/{agent_name}/protocols/openai/responses?api-version=2025-11-15-preview"
+                      # Extract project ID from endpoint (format: https://{endpoint}/api/projects/{project})
+                      project_id = endpoint.split("/projects/")[-1].rstrip("/")
+                      url = f"{base}/api/projects/{project_id}/openai/responses?api-version=2025-11-15-preview"
                       print(f"  Testing: {url}")
                       resp = requests.post(
                           url,
-                          json={"input": "health check", "stream": False},
+                          json={
+                              "input": "health check",
+                              "agent_reference": {
+                                  "name": agent_name,
+                                  "type": "agent_reference"
+                              }
+                          },
                           headers={"Authorization": f"Bearer {token.token}", "Content-Type": "application/json"},
                           timeout=60,
                       )

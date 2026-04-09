@@ -282,22 +282,18 @@ def run_hosted_agent(user_input: str, endpoint: str, agent_name: str) -> str:
         allow_preview=True,
     )
 
-    # 2. Verify agent exists
-    agent = project.agents.get(agent_name=agent_name)
-    logger.info("Agent found: %s (version: %s)", agent.name, agent.versions.latest.version)
-
-    # 3. Invoke via Responses API — container handles everything
+    # 2. Get OpenAI client and invoke via project-level Responses API
     openai = project.get_openai_client()
 
     logger.info("Sending message: %s", user_input[:100])
     response = openai.responses.create(
         extra_body={
             "agent_reference": {
-                "name": agent.name,
+                "name": agent_name,
                 "type": "agent_reference",
             }
         },
-        input=[{"role": "user", "content": user_input}],
+        input=user_input,
     )
 
     # Print tool calls for visibility
