@@ -9,6 +9,31 @@
 
 ## Learnings
 
+### 2026-04-08: Foundry Deployment Fix Verification (Post-Crash Pickup)
+
+**Session:** Picked up from crashed session. Reviewed uncommitted changes in serve.py and run_foundry_agent.py against three identified root causes.
+
+**Root Cause 1 — Port conflict (serve.py):** ✅ Already fixed in uncommitted diff.
+- PORT default changed from 8080 → 8088 (Foundry sidecar occupies 8080)
+- Binds to 0.0.0.0:8088
+- Docstring updated
+- Bonus: `/readiness` endpoint added for Foundry container probes
+
+**Root Cause 2 — Wrong API route (run_foundry_agent.py):** ✅ Already fixed in uncommitted diff.
+- `run_hosted_agent()` now uses project-level Responses API via `project.get_openai_client()` with `agent_reference`
+- Removed old `project.agents.get()` call (application-scoped route that doesn't support hosted agents)
+- Uses `agent_name` string directly instead of fetching agent object first
+- `input` simplified from `[{"role": "user", "content": ...}]` to plain string
+
+**Root Cause 3 — Target port mismatch:** Amos owns Dockerfile/deploy.yml; not my files. `--target-port 8088` must be set there.
+
+**Additional checks passed:**
+- Token audience in serve.py: `https://ai.azure.com/.default` ✅
+- FunctionTool `strict=False` in run_foundry_agent.py line 117 ✅
+- serve.py uses raw OpenAI dict format (strict defaults to false) ✅
+
+**Result:** No gaps found. All fixes in my owned files were already complete from the crashed session. No additional code changes needed.
+
 ### 2026-04-08: Full Diagnostic — SDK Wire-Level Analysis
 
 **Session:** Full diagnostic with Holden (Lead) + Amos (DevOps)  

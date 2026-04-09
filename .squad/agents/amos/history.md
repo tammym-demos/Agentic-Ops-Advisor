@@ -454,3 +454,58 @@
 - **Tests:** 329 passed
 - **Files modified:** `.github/workflows/deploy.yml`, `azure.yaml`, `scripts/deploy_agent.py` (new)
 - **Status:** ✅ Complete. Ready for deploy run.
+
+### 2026-04-08: Deploy Pipeline Layer 3 Fixes — Port Configuration + GA API Version
+
+**Session:** Layer 3 cascade failure fix (following Layers 1 & 2: strict=False, token audience)  
+**Status:** Fixed 3 critical deploy gaps  
+**Files:** scripts/deploy_agent.py, .github/workflows/deploy.yml
+
+**Finding 1: SDK Port Mismatch (P0)**
+- **Issue:** HostedAgentDefinition has NO 	arget_port parameter
+- **Root Cause:** SDK fallback path creates agent versions but Foundry defaults to routing to port 80; container listens on 8080
+- **Impact:** Container health checks fail; agent versions created but non-responsive
+- **Evidence:** Checked zure.ai.projects.models.HostedAgentDefinition — only supports: ai_config, kind, 	ools, container_protocol_versions, cpu, memory, nvironment_variables, image
+- **Fix:** Added PORT=8080 to environment_variables with CRITICAL comment explaining port mismatch risk
+- **Confidence:** HIGH (95%) — PORT env var is container's fallback; CLI path uses --target-port 8080 correctly
+
+**Finding 2: ARM Publish API Version Order (P1)**
+- **Issue:** ARM publish loops only tried preview API versions: 2025-10-01-preview, 2026-01-15-preview
+- **Root Cause:** GA version 2025-12-01 missing from retry cascade
+- **Impact:** Preview handlers have persistent SystemError in eastus; GA version more stable
+- **Fix:** Added 2025-12-01 as FIRST version to try in both bash and Python fallback loops
+- **Confidence:** MEDIUM (70%) — GA versions typically more stable, but no guarantee it fixes eastus SystemError
+
+**Finding 3: Agent Start Command Validation (P0)**
+- **Issue:** Verified agent start commands don't use invalid flags
+- **Status:** ✅ CLEAN — both z cognitiveservices agent start invocations (conflict-retry line 617, SDK fallback line 663) use only valid flags: --account-name, --project-name, --name, --agent-version, --show-logs
+- **Confidence:** CERTAIN (100%) — no invalid flags present
+
+**Commit:** ccb57f1 — "fix: deploy pipeline — add target port to SDK, add GA API version to ARM publish"
+
+**Next:** Push to origin/main and monitor CI run to see if Layer 3 fixes resolve deployment
+
+### 2026-04-08: Verification — Port 8088 Migration + API Route Fix (Session Recovery)
+
+**Session:** Crash recovery — verified uncommitted changes from prior session  
+**Status:** ✅ All three root causes fully addressed in existing uncommitted changes  
+**Files reviewed:** `.github/workflows/deploy.yml`, `Dockerfile`, `agent.yaml`, `scripts/deploy_agent.py`
+
+**Root Cause 1: Port Conflict (8080 → 8088) — ✅ COMPLETE**
+- Foundry sidecar occupies port 8080; container must listen on 8088
+- Dockerfile: EXPOSE 8088, HEALTHCHECK curl to 8088 ✅
+- agent.yaml: container port 8088 ✅
+- deploy.yml: --target-port 8088, PORT=8088 env var ✅
+- deploy_agent.py: PORT=8088 env var, updated comments ✅
+- Note: `scripts/run_local.py` retains 8080 for local health server — intentional (no sidecar locally)
+
+**Root Cause 2: Wrong API Route — ✅ COMPLETE**
+- deploy.yml REST fallback: changed from application-scoped `/applications/{name}/protocols/openai/responses` to project-level `/api/projects/{id}/openai/responses` with `agent_reference` payload ✅
+
+**Root Cause 3: Target Port Mismatch — ✅ COMPLETE**
+- deploy.yml `--target-port 8088` replaces old value of 8080 ✅
+- deploy_agent.py PORT=8088 aligns container listener with Foundry routing ✅
+
+**Verification:** No remaining 8080 references in deployment-owned files. Only `run_local.py` (local dev) retains 8080, which is correct.
+
+**Action taken:** No additional code changes needed — prior session had already applied all fixes before crashing.

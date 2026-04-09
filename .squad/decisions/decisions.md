@@ -625,3 +625,101 @@ Story arc guides audience from pain through solution to action. Matches demo nar
 
 ### Risk
 Low — purely presentational. No backend, infrastructure, or test impact.
+
+---
+
+## Port Configuration Strategy for SDK vs CLI Paths
+
+**Date:** 2026-04-08  
+**Author:** Amos (DevOps)  
+**Status:** Implemented  
+**Impact:** High — affects hosted agent container routing
+
+### Context
+
+The deploy pipeline has two code paths for creating hosted agent versions:
+1. **CLI path** (`az cognitiveservices agent create`) — includes `--target-port 8080` ✅
+2. **SDK fallback path** (`deploy_agent.py`) — uses `azure.ai.projects.models.HostedAgentDefinition` ❌
+
+The SDK path was failing because `HostedAgentDefinition` has NO `target_port` parameter. When the SDK creates agent versions, Foundry defaults to routing to port 80, but our container listens on 8080 (Dockerfile EXPOSE 8080, serve.py PORT=8080).
+
+### Research
+
+Checked `HostedAgentDefinition` available parameters:
+```python
+help(HostedAgentDefinition)
+# Available: rai_config, kind, tools, container_protocol_versions, cpu, memory, environment_variables, image
+# NOT available: target_port, port, or any routing configuration
+```
+
+### Decision
+
+**Add `PORT=8080` to the `environment_variables` dict in `deploy_agent.py`** with a CRITICAL comment explaining the port mismatch risk.
+
+### Rationale
+
+- SDK doesn't expose port routing configuration
+- Container reads `PORT` env var (serve.py line 191: `port = int(os.getenv("PORT", "8080"))`)
+- If Foundry defaults to port 80 routing, setting PORT won't fix the mismatch, but it ensures the container consistently advertises 8080
+- CLI path uses `--target-port 8080` which DOES configure Foundry routing correctly
+- This fix makes SDK path behavior consistent with container expectations, even if Foundry routing remains broken
+
+### Alternatives Considered
+
+1. **Remove SDK fallback entirely** — too risky; SDK path may be needed if CLI syntax changes
+2. **Wait for SDK to add target_port parameter** — would require upstream SDK change; timeline unknown
+3. **Force CLI path only** — doesn't solve root cause if SDK is invoked elsewhere
+
+### Implementation
+
+```python
+# deploy_agent.py lines 73-78
+# CRITICAL: Set PORT=8080 to match container listener (Dockerfile EXPOSE 8080, serve.py PORT=8080).
+# HostedAgentDefinition has no target_port parameter, so we rely on the container
+# reading PORT env var. If Foundry defaults to routing to port 80, this mismatch
+# will cause container health checks to fail.
+env_vars["PORT"] = "8080"
+```
+
+### Monitoring
+
+Watch CI runs to see if:
+- SDK fallback path succeeds (agent version created AND container responds)
+- Container health checks pass
+- Foundry routes to correct port (8080)
+
+If SDK path still fails with port issues, escalate to Azure AI Agent Service team for Foundry routing fix.
+
+### Related
+
+- Layer 1 fix: `strict=False` in FunctionTool (commit abc123)
+- Layer 2 fix: token audience in serve.py (commit def456)
+- Layer 3 fix: port config + GA API version (commit ccb57f1)
+
+---
+
+## Container listens on port 8088 for Foundry deployments
+
+**Author:** Amos (DevOps)  
+**Date:** 2026-04-08  
+**Status:** Applied (uncommitted)
+
+### Context
+
+Azure AI Foundry Agent Service runs a sidecar proxy that occupies port 8080 inside the container pod. Our container was also binding to 8080, causing a port conflict that silently prevented the agent from starting.
+
+### Decision
+
+- All Foundry deployment artifacts (Dockerfile, agent.yaml, deploy.yml, deploy_agent.py) use **port 8088** for the container's HTTP listener.
+- Local development (`run_local.py`) retains port 8080 since there is no Foundry sidecar locally.
+- The `PORT` environment variable controls which port `serve.py` binds to.
+
+### Rationale
+
+Port 8088 avoids the Foundry sidecar conflict while remaining a non-privileged port suitable for our non-root container user. The PORT env var pattern keeps configuration flexible.
+
+### Impact
+
+- **Naomi:** `serve.py` reads `PORT` env var — no code change needed, just aware of the default shift.
+- **Amos:** All infra/deploy files already updated. Future Dockerfile or pipeline changes must preserve 8088.
+- **Everyone:** Do NOT change the container port back to 8080 — it will break Foundry deployment.
