@@ -150,6 +150,10 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
     
     Returns:
         {"content": str, "error": str | None}
+    
+    Timeouts:
+        - Per-request: 30s (OpenAI SDK httpx timeout)
+        - Overall loop: 85s (must finish before Foundry's 100s gateway timeout)
     """
     try:
         from openai import AzureOpenAI
@@ -165,6 +169,11 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
     if ENABLE_WORK_IQ:
         tool_definitions.extend(WORK_CTX_TOOL_DEFINITIONS)
 
+    # Foundry gateway has a 100s HttpClient.Timeout. We must respond before that.
+    LOOP_TIMEOUT_S = 85
+    REQUEST_TIMEOUT_S = 30.0
+    loop_start = time.monotonic()
+
     # --- Auth: API key first, managed identity fallback ---
     # API key is preferred because DefaultAzureCredential's managed identity
     # probe can hang for ~2 min when no MI is configured (IMDS timeout).
@@ -175,6 +184,8 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
             azure_endpoint=endpoint,
             api_key=api_key,
             api_version=api_version,
+            timeout=REQUEST_TIMEOUT_S,
+            max_retries=1,
         )
     else:
         try:
@@ -189,6 +200,8 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
                 azure_endpoint=endpoint,
                 azure_ad_token_provider=token_provider,
                 api_version=api_version,
+                timeout=REQUEST_TIMEOUT_S,
+                max_retries=1,
             )
         except Exception as cred_exc:
             logger.error("Auth failed — no API key and managed identity unavailable: %s", cred_exc)
@@ -197,10 +210,17 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
     # Prepend system prompt
     conversation: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] + messages
 
-    max_tool_rounds = 8
+    max_tool_rounds = 4
     for _round in range(max_tool_rounds):
+        elapsed = time.monotonic() - loop_start
+        remaining = LOOP_TIMEOUT_S - elapsed
+        if remaining < 5:
+            logger.warning("Agent loop timeout — %.1fs elapsed, aborting", elapsed)
+            return {"content": "", "error": f"Agent loop timeout ({elapsed:.0f}s elapsed, {LOOP_TIMEOUT_S}s limit)"}
+
         try:
-            # Run sync OpenAI call in thread pool to avoid blocking event loop
+            call_start = time.monotonic()
+            logger.info("OpenAI call round %d (%.1fs elapsed, %.1fs remaining)", _round + 1, elapsed, remaining)
             response = await asyncio.to_thread(
                 client.chat.completions.create,
                 model=deployment,
@@ -209,17 +229,24 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
                 tool_choice="auto",
                 temperature=0.2,
             )
+            call_duration = time.monotonic() - call_start
+            logger.info("OpenAI call round %d completed in %.1fs", _round + 1, call_duration)
         except Exception as exc:
-            logger.exception("Azure OpenAI error")
-            return {"content": "", "error": str(exc)}
+            call_duration = time.monotonic() - call_start
+            logger.exception("Azure OpenAI error after %.1fs", call_duration)
+            return {"content": "", "error": f"OpenAI call failed after {call_duration:.0f}s: {exc}"}
 
         choice = response.choices[0]
         message = choice.message
         conversation.append(message.model_dump(exclude_unset=True))
 
         if choice.finish_reason == "tool_calls" and message.tool_calls:
+            tool_names = [tc.function.name for tc in message.tool_calls]
+            logger.info("Tool calls requested: %s", tool_names)
             for tc in message.tool_calls:
+                tool_start = time.monotonic()
                 tool_result = await _call_tool(tc.function.name, tc.function.arguments)
+                logger.info("Tool %s completed in %.1fs", tc.function.name, time.monotonic() - tool_start)
                 conversation.append(
                     {
                         "role": "tool",
@@ -229,10 +256,13 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
                 )
         else:
             # Final answer
+            total = time.monotonic() - loop_start
             answer = message.content or "(no response)"
+            logger.info("Agent loop complete: %d rounds, %.1fs total", _round + 1, total)
             return {"content": answer, "error": None}
 
-    return {"content": "", "error": "Reached max tool-call rounds — check your query."}
+    total = time.monotonic() - loop_start
+    return {"content": "", "error": f"Reached max tool-call rounds ({max_tool_rounds}) in {total:.0f}s — check your query."}
 
 # ---------------------------------------------------------------------------
 # HTTP handlers

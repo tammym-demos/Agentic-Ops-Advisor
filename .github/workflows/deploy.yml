@@ -958,7 +958,9 @@ jobs:
 
                       # Invoke via Responses API
                       openai = project.get_openai_client()
-                      probe = "What is the GPU utilization trend for the last 24 hours?"
+                      # Use a simple probe to avoid tool calls — must respond under
+                      # Foundry's 100s gateway HttpClient.Timeout
+                      probe = "Hello! Respond with one sentence confirming you are the Agentic Ops Advisor."
                       print(f"Probe query: {probe}")
 
                       max_retries = 5
