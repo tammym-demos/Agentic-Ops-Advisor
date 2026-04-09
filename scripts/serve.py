@@ -519,8 +519,13 @@ def main() -> None:
         logger.error(f"Failed to set up database: {exc}")
         sys.exit(1)
 
-    port = int(os.environ.get("PORT", "8088"))
-    
+    # Prefer SERVE_PORT; fall back to PORT for backward compat; default 8088.
+    # Guard: Foundry sidecar occupies 8080 — never bind there.
+    port = int(os.environ.get("SERVE_PORT") or os.environ.get("PORT") or "8088")
+    if port == 8080:
+        logger.warning("Port 8080 is reserved by Foundry sidecar — overriding to 8088")
+        port = 8088
+
     logger.info(f"Server starting on http://0.0.0.0:{port}")
     logger.info("Endpoints: POST /responses, GET /health, GET /")
 

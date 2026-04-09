@@ -806,6 +806,7 @@ Copy `.env.example` to `.env` and fill in these values. Variables marked **Requi
 | `AZURE_RESOURCE_GROUP` | `rg-agentic-ops-advisor` | Azure | Azure resource group name |
 | `AZURE_LOCATION` | `eastus` | Azure | Azure region for resource deployment |
 | `HEALTH_PORT` | `8080` | Both | Port for health check endpoint (used by Docker HEALTHCHECK and k8s probes) |
+| `SERVE_PORT` | `8088` | Deploy | Port for the hosted agent HTTP server (Foundry sidecar uses 8080 — never use 8080) |
 
 ---
 

@@ -71,11 +71,11 @@ def main() -> None:
         if val:
             env_vars[key] = val
     
-    # CRITICAL: Set PORT=8088 to match Foundry hosting adapter default.
+    # CRITICAL: Set SERVE_PORT=8088 to match Foundry hosting adapter default.
     # Foundry's sidecar occupies port 8080, so the container must listen on 8088.
     # HostedAgentDefinition has no target_port parameter, so we rely on the container
-    # reading PORT env var.
-    env_vars["PORT"] = "8088"
+    # reading SERVE_PORT env var.
+    env_vars["SERVE_PORT"] = "8088"
 
     agent_definition = HostedAgentDefinition(
         kind="hosted",

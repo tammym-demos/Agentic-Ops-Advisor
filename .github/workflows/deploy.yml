@@ -571,7 +571,7 @@ jobs:
                             "DB_MODE=sqlite" \
                             "ENABLE_WORK_IQ=true" \
                             "ENABLE_MCP=false" \
-                            "PORT=8088" \
+                            "SERVE_PORT=8088" \
                             "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                             "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
                       --show-logs --timeout 600 --skip-acr-check \
