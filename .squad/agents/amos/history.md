@@ -553,3 +553,21 @@
 **Key Learning:** The Foundry Responses API esponse object has an .error attribute with .code and .message when status == "failed". Always log this — it reveals whether the failure is container timeout, tool execution error, model error, etc.
 
 **Total warmup budget now:** 60s sleep + up to 60s readiness probe + 5×20s retries = ~220s max before giving up.
+### 2026-04-10: Non-Blocking Startup Readiness (Cross-Naomi)
+
+**Context:** Naomi completed serve.py startup refactor (RequestTimedOut blocker). Key change impacts Dockerfile HEALTHCHECK configuration.
+
+**Naomi's Changes (for your reference):**
+- **Removed** blocking MI probe from serve.py main() — auth handled lazily at request time
+- **Added** _ready_event (asyncio.Event) as module-level readiness gate
+- **Moved** _ensure_db() to async on_startup hook — server passes liveness probe immediately
+- **Exposed** /readiness endpoint: returns 503 while initializing, 200 when ready
+- **/health** remains liveness-only (always 200)
+- **/responses** returns "starting up" envelope during initialization
+
+**Why This Matters for Your Work:**
+- Your Dockerfile HEALTHCHECK should now use /readiness instead of /health
+- 30s start-period allows async DB seed + startup logging to complete
+- Container no longer blocked on IMDS probe
+
+**Files to Review:** scripts/serve.py (lines ~40 for on_startup hook, _ready_event gate, [STARTUP] logging)

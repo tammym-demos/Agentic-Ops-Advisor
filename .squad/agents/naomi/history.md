@@ -9,6 +9,29 @@
 
 ## Learnings
 
+### 2026-04-10: Non-Blocking Startup Refactor (RequestTimedOut Fix)
+
+**Session:** Solo fix requested by Tammy  
+**Status:** ✅ IMPLEMENTED  
+**Focus:** serve.py blocked on `DefaultAzureCredential().get_token()` IMDS probe at startup, preventing HTTP server from ever listening in Foundry container.
+
+**Changes:**
+- **Deleted MI probe block** from `main()` — auth is already handled lazily in `_run_agent_conversation()`
+- **Moved `_ensure_db()` to async background task** via `app.on_startup` hook + `asyncio.create_task()` — server listens immediately
+- **Added `_ready_event` (asyncio.Event)** as module-level readiness gate:
+  - `/readiness` returns 503 while initializing, 200 when ready
+  - `/responses` returns friendly "starting up" envelope while initializing
+  - `/health` always returns 200 (liveness, not readiness)
+- **Structured startup logging** with `[STARTUP]` prefix and phase timing
+
+**Key Learnings:**
+- `on_startup` hooks in aiohttp fire before server accepts connections — use `asyncio.create_task()` inside to make init non-blocking
+- Foundry containers MUST start HTTP listener fast; IMDS probe at 169.254.169.254 hangs indefinitely in some environments
+- Always use `status: "completed"` in Responses API envelopes (Foundry sidecar strips output_text on `"failed"`)
+- Tests import `_init_app()` directly; `on_startup` hooks only fire via `web.run_app()`, so tests are unaffected
+
+**Files changed:** `scripts/serve.py`
+
 ### 2026-04-09: Smoke Test Hardening + Response Handling (Deploy #126 Recovery)
 
 **Session:** Joint work with Amos (DevOps)  

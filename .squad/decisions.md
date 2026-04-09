@@ -1531,3 +1531,48 @@ The initial hybrid deploy (commit 1741a86) replaced `azd deploy` but had incorre
 - New file: `scripts/deploy_agent.py` (reusable for local deploy too)
 - No impact on Bicep infra, tests, or smoke test
 
+
+
+---
+
+# Decision: Non-Blocking Server Startup in serve.py
+
+**Date:** 2026-04-10  
+**Author:** Naomi (Backend Dev)  
+**Status:** IMPLEMENTED  
+**Requested by:** Tammy
+
+## Context
+
+The Foundry-hosted container was returning `RequestTimedOut` because `serve.py` blocked on
+`DefaultAzureCredential().get_token()` (IMDS probe at 169.254.169.254) before calling
+`web.run_app()`. The HTTP server never started listening.
+
+## Decision
+
+1. **Delete the startup MI probe entirely.** Auth is already handled lazily at request time
+   in `_run_agent_conversation()`. The probe was purely diagnostic.
+
+2. **Move `_ensure_db()` to a background async task** registered via `app.on_startup` hook.
+   The server starts accepting connections immediately; DB seed runs concurrently.
+
+3. **Gate `/responses` and `/readiness` on `_ready_event` (asyncio.Event)**:
+   - `/health` → always 200 (liveness)
+   - `/readiness` → 503 while initializing, 200 when ready
+   - `/responses` → friendly "starting up" envelope while initializing
+
+4. **Add structured `[STARTUP]` logging** with phase timing for observability.
+
+## Rationale
+
+- Foundry container environment can hang indefinitely on IMDS probe — must not block startup
+- Lazy auth at request time is the correct pattern (already implemented)
+- Background DB seed lets server pass liveness probes immediately
+- Readiness gate prevents premature traffic from hitting uninitialized agent
+
+## Impact
+
+- All 341 existing tests pass (startup hook only fires via `web.run_app()`, not test imports)
+- No changes to agent loop, tool dispatch, or Responses API format
+- `status: "completed"` convention maintained for all response envelopes
+
