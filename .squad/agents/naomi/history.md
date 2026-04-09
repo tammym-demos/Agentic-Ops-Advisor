@@ -163,6 +163,23 @@
 - **Responsive:** Chart grid collapses to 1 column on mobile (<768px). Health tiles auto-fit from 200px min.
 - **Key files:** `docs/pages/dashboard.html`, `docs/pages/dashboard.css`, `docs/index.html`, `docs/style.css` (reference only).
 
+### 2026-04-08: Smoke Test "No Output Text" Fix (Deploy Run #126)
+- **Task:** Diagnose and fix hosted agent returning `status: "failed", no output text` on all smoke test probes after successful container startup.
+- **Root causes found:**
+  1. **P0-1 Token audience mismatch (NEVER FIXED from prior diagnostic):** `serve.py` used `https://ai.azure.com/.default` as the bearer token scope for Azure OpenAI calls. Azure OpenAI validates against `https://cognitiveservices.azure.com/.default`. When `AZURE_OPENAI_API_KEY` is absent, managed identity auth gets a token with the wrong audience → 401 from Azure OpenAI.
+  2. **Response status masking:** Error responses used `status: "failed"` in the Responses API envelope. The Foundry gateway/sidecar strips output text from "failed" responses before returning to callers, so the smoke test's `response.output_text` was always empty — even though our container DID include the error message.
+  3. **No top-level error handler:** `_responses_handler` lacked a catch-all try/except. Unhandled exceptions (import errors, serialization bugs) would trigger aiohttp's default 500 HTML response, which the sidecar interprets as "failed" with no output.
+- **Fixes applied:**
+  - `scripts/serve.py` — Changed managed identity token scope from `ai.azure.com/.default` → `cognitiveservices.azure.com/.default` (both request-time line 186 and startup diagnostic line 478).
+  - `scripts/serve.py` — All error responses now use `status: "completed"` so the Foundry gateway preserves output text. Errors are surfaced in the text body (e.g., "Error: Auth failed...") rather than via the status field.
+  - `scripts/serve.py` — Extracted `_handle_responses_inner()` from `_responses_handler()` with a top-level try/except that catches ANY unhandled exception and returns a proper Responses API error envelope.
+  - `scripts/serve.py` — Added empty-messages validation (returns error instead of calling LLM with no user message).
+  - `scripts/serve.py` — Added request/response logging (keys, message count, endpoint, model).
+  - `tools/sql_telemetry.py`, `tools/work_context_stub.py`, `tools/action_stub.py` — Added `"strict": False` to all function tool definitions for forward compatibility.
+  - `tests/test_serve.py` — Updated `test_responses_handles_openai_error` to expect `status: "completed"` (error text visible) instead of `"failed"` (text stripped by gateway).
+- **Tests:** 341 passed, 0 failed. Lint clean.
+- **Key insight:** The `ai.azure.com/.default` scope is correct for Foundry Responses API gateway calls (smoke test token audience), but WRONG for Azure OpenAI direct API calls inside the container. These are different token scopes for different services.
+
 ### 2026-04-06: Health Endpoint Implementation (Issue #60)
 - **Task:** Implement GET /health endpoint for Docker HEALTHCHECK on port 8080.
 - **Implementation:** Added aiohttp-based health server that runs in background daemon thread alongside the interactive CLI loop.

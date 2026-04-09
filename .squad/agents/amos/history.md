@@ -509,3 +509,20 @@
 **Verification:** No remaining 8080 references in deployment-owned files. Only `run_local.py` (local dev) retains 8080, which is correct.
 
 **Action taken:** No additional code changes needed — prior session had already applied all fixes before crashing.
+### 2026-04-09: Smoke Test Fix — Run #126 "No Output Text" Failure
+
+**Issue:** Deploy run #126 succeeded at container deployment (port 8088 fix worked), but smoke test failed with "Response status: failed, no output text" after 3 retries.
+
+**Root Cause Analysis:**
+1. **Missing error diagnostics** — When esponse.status == "failed", code only logged "no output text" but never checked esponse.error for the actual failure reason (error code + message)
+2. **30s warmup too aggressive** — Container-hosted agents with Python + dependencies + DB init need 60s+ before they're ready to accept Responses API calls
+3. **Insufficient retries** — Only 3 retries at 15s intervals (total ~75s from deploy) not enough for cold container startup
+4. **No readiness probe** — Warmup was a blind sleep 30 with no verification the agent was actually responsive
+
+**Fix Applied:**
+- **Step 8 (warmup):** Increased sleep from 30s → 60s; added active readiness probe that polls gents.get() up to 6 times at 10s intervals
+- **Step 9 (smoke test):** Increased retries from 3 → 5, delay from 15s → 20s; added esponse.error logging (code + message) when status is "failed"; added incomplete_details logging; expanded output item logging to show all types (not just function_calls); improved diagnostic messages
+
+**Key Learning:** The Foundry Responses API esponse object has an .error attribute with .code and .message when status == "failed". Always log this — it reveals whether the failure is container timeout, tool execution error, model error, etc.
+
+**Total warmup budget now:** 60s sleep + up to 60s readiness probe + 5×20s retries = ~220s max before giving up.

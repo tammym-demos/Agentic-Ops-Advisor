@@ -183,7 +183,7 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
             logger.info("No API key — trying managed identity auth")
             credential = DefaultAzureCredential()
             token_provider = get_bearer_token_provider(
-                credential, "https://ai.azure.com/.default"
+                credential, "https://cognitiveservices.azure.com/.default"
             )
             client = AzureOpenAI(
                 azure_endpoint=endpoint,
@@ -242,6 +242,38 @@ async def _responses_handler(request) -> object:
     """Handle POST /responses (Foundry Responses API)."""
     from aiohttp import web
 
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1").strip()
+
+    def _error_response(text: str, *, http_status: int = 200) -> object:
+        """Build a Responses API error envelope."""
+        return web.json_response({
+            "id": f"resp_{uuid.uuid4().hex}",
+            "object": "response",
+            "created_at": int(time.time()),
+            "model": deployment,
+            "output": [
+                {
+                    "type": "message",
+                    "id": f"msg_{uuid.uuid4().hex}",
+                    "status": "completed",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": text, "annotations": []}],
+                }
+            ],
+            "status": "completed",
+        }, status=http_status)
+
+    try:
+        return await _handle_responses_inner(request, deployment, _error_response)
+    except Exception as exc:
+        logger.exception("Unhandled error in /responses handler")
+        return _error_response(f"Internal error: {exc}")
+
+
+async def _handle_responses_inner(request, deployment: str, _error_response) -> object:
+    """Inner handler for POST /responses — separated for top-level error catch."""
+    from aiohttp import web
+
     try:
         body = await request.json()
     except json.JSONDecodeError:
@@ -249,6 +281,8 @@ async def _responses_handler(request) -> object:
             {"error": "Invalid JSON in request body"},
             status=400,
         )
+
+    logger.info("POST /responses — keys: %s", list(body.keys()))
 
     # Extract input (can be a string, list, or messages dict)
     input_data = body.get("input")
@@ -278,44 +312,26 @@ async def _responses_handler(request) -> object:
     elif isinstance(input_data, dict) and "messages" in input_data:
         messages = input_data["messages"]
     else:
-        return web.json_response(
-            {"error": "Invalid input format. Expected string, list, or {messages: [...]}"},
-            status=400,
+        return _error_response(
+            "Invalid input format. Send {\"input\": \"your question\"}.",
+            http_status=400,
         )
+
+    if not messages:
+        return _error_response("No user messages found in the input.")
 
     # Get Azure OpenAI config
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1").strip()
     api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2025-01-01-preview").strip()
 
     if not endpoint:
-        return web.json_response(
-            {
-                "id": f"resp_{uuid.uuid4().hex}",
-                "object": "response",
-                "created_at": int(time.time()),
-                "model": deployment,
-                "output": [
-                    {
-                        "type": "message",
-                        "id": f"msg_{uuid.uuid4().hex}",
-                        "status": "failed",
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "type": "output_text",
-                                "text": "AZURE_OPENAI_ENDPOINT not configured. Agent cannot run.",
-                                "annotations": [],
-                            }
-                        ],
-                    }
-                ],
-                "status": "failed",
-            },
-            status=500,
+        return _error_response(
+            "AZURE_OPENAI_ENDPOINT not configured. Agent cannot run.",
+            http_status=500,
         )
 
-    logger.debug(f"Processing conversation with {len(messages)} messages")
+    logger.info("Processing conversation: %d messages, endpoint=%s, model=%s",
+                len(messages), endpoint[:40] + "…" if len(endpoint) > 40 else endpoint, deployment)
 
     # Run agent loop
     result = await _run_agent_conversation(messages, endpoint, deployment, api_version)
@@ -323,22 +339,8 @@ async def _responses_handler(request) -> object:
     response_id = f"resp_{uuid.uuid4().hex}"
 
     if result["error"]:
-        return web.json_response({
-            "id": response_id,
-            "object": "response",
-            "created_at": int(time.time()),
-            "model": deployment,
-            "output": [
-                {
-                    "type": "message",
-                    "id": f"msg_{uuid.uuid4().hex}",
-                    "status": "failed",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": f"Error: {result['error']}", "annotations": []}],
-                }
-            ],
-            "status": "failed",
-        })
+        logger.warning("Agent loop error: %s", result["error"][:200])
+        return _error_response(f"Error: {result['error']}")
 
     return web.json_response({
         "id": response_id,
@@ -473,7 +475,7 @@ def main() -> None:
         try:
             from azure.identity import DefaultAzureCredential
             cred = DefaultAzureCredential()
-            cred.get_token("https://ai.azure.com/.default")
+            cred.get_token("https://cognitiveservices.azure.com/.default")
             logger.info("Managed identity auth: SUCCESS")
         except Exception as diag_exc:
             logger.warning("Managed identity auth: FAILED (%s)", diag_exc)

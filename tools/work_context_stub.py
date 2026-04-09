@@ -262,6 +262,7 @@ TOOL_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "get_work_context",
+        "strict": False,
         "description": (
             "Retrieve synthetic work context (change events, decisions, ownership, runbooks) "
             "for a service category. All data is synthetic for demo purposes. "

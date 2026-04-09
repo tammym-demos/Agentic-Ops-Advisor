@@ -289,6 +289,7 @@ TOOL_SCHEMA: dict[str, Any] = {
     "type": "function",
     "function": {
         "name": "query_telemetry",
+        "strict": False,
         "description": (
             "Query synthetic infrastructure telemetry data stored in SQL. "
             "Covers GPU utilization, network throughput/latency, cost, and incidents. "

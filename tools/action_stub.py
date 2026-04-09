@@ -166,6 +166,7 @@ ACTION_STUB_TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "propose_change",
+            "strict": False,
             "description": (
                 "Propose a simulated infrastructure change based on an operator's plan. "
                 "Returns a structured change request payload including risk level, "
@@ -190,6 +191,7 @@ ACTION_STUB_TOOL_DEFINITIONS: list[dict] = [
         "type": "function",
         "function": {
             "name": "request_approval",
+            "strict": False,
             "description": (
                 "Return a simulated approval status for a previously proposed change request. "
                 "Cycles through 'pending', 'approved', and 'rejected' states for demo purposes. "

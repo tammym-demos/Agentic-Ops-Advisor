@@ -435,11 +435,12 @@ class TestResponsesErrorHandling(AioHTTPTestCase):
             payload = {"input": "What is GPU utilization?", "stream": False}
             resp = await self.client.post("/responses", json=payload)
 
-            # Server returns 200 but with failed status in response
+            # Server returns 200 with error text surfaced in completed response
+            # (we always return status=completed so Foundry gateway preserves
+            # the output text for the caller to read)
             assert resp.status == 200
             data = await resp.json()
-            # Should have status=failed
-            assert data.get("status") == "failed"
+            assert data.get("status") == "completed"
             # Error should be in output message content
             assert any("Error" in str(msg.get("content", "")) for msg in data.get("output", []))
 

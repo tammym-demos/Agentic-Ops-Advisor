@@ -881,12 +881,42 @@ jobs:
                   echo "::endgroup::"
 
             # ------------------------------------------------------------------
-            # Step 8 — Wait for agent warmup
+            # Step 8 — Wait for agent warmup (active readiness probe)
             # ------------------------------------------------------------------
             - name: Wait for agent warmup
               run: |
-                  echo "Waiting 30s for container warmup..."
-                  sleep 30
+                  echo "Waiting 60s for container warmup..."
+                  sleep 60
+                  echo "Checking agent readiness..."
+                  python - <<'READYEOF'
+                  import os, sys, time
+                  endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "").strip()
+                  if not endpoint:
+                      print("⚠️  No endpoint — skipping readiness check")
+                      sys.exit(0)
+                  try:
+                      from azure.identity import DefaultAzureCredential
+                      from azure.ai.projects import AIProjectClient
+                      project = AIProjectClient(
+                          endpoint=endpoint,
+                          credential=DefaultAzureCredential(),
+                          allow_preview=True,
+                      )
+                      agent_name = "agentic-ops-advisor"
+                      max_checks = 6
+                      for i in range(max_checks):
+                          try:
+                              agent = project.agents.get(agent_name=agent_name)
+                              print(f"✅ Agent responsive: {agent.name} (check {i+1}/{max_checks})")
+                              sys.exit(0)
+                          except Exception as e:
+                              print(f"  Readiness check {i+1}/{max_checks}: {str(e)[:120]}")
+                              if i < max_checks - 1:
+                                  time.sleep(10)
+                      print("⚠️  Agent not responsive after readiness checks — proceeding anyway")
+                  except Exception as e:
+                      print(f"⚠️  Readiness check error: {e}")
+                  READYEOF
 
             # ------------------------------------------------------------------
             # Step 9 — Smoke test: Responses API
@@ -931,7 +961,8 @@ jobs:
                       probe = "What is the GPU utilization trend for the last 24 hours?"
                       print(f"Probe query: {probe}")
 
-                      max_retries = 3
+                      max_retries = 5
+                      retry_delay = 20
                       for attempt in range(max_retries):
                           try:
                               response = openai.responses.create(
@@ -944,34 +975,54 @@ jobs:
                                   input=probe,
                               )
 
-                              output_text = response.output_text or ""
                               status = getattr(response, "status", "unknown")
+                              print(f"  Response status: {status}")
 
-                              # Log any tool calls (handled by container)
+                              # Log error details when status is failed
+                              if status == "failed":
+                                  err = getattr(response, "error", None)
+                                  if err:
+                                      err_code = getattr(err, "code", "unknown")
+                                      err_msg = getattr(err, "message", str(err))
+                                      print(f"  Error code: {err_code}")
+                                      print(f"  Error message: {err_msg[:300]}")
+                                  else:
+                                      print("  No error details on response")
+
+                              # Log incomplete details if present
+                              incomplete = getattr(response, "incomplete_details", None)
+                              if incomplete:
+                                  print(f"  Incomplete details: {incomplete}")
+
+                              # Log all output items for diagnostics
                               for item in response.output:
                                   item_type = getattr(item, "type", "unknown")
                                   if item_type == "function_call":
                                       name = getattr(item, "name", "?")
                                       print(f"  [Tool] {name} — handled by container")
+                                  elif item_type == "message":
+                                      print(f"  [Message] role={getattr(item, 'role', '?')}")
+                                  else:
+                                      print(f"  [Output item] type={item_type}")
 
+                              output_text = response.output_text or ""
                               if output_text:
                                   print(f"✅ Smoke test PASSED")
                                   print(f"Response preview: {output_text[:300]}")
                                   sys.exit(0)
                               else:
-                                  print(f"  Response status: {status}, no output text")
                                   if attempt < max_retries - 1:
-                                      print(f"  Retrying in 15s (attempt {attempt + 1}/{max_retries})...")
-                                      time.sleep(15)
+                                      print(f"  No output text — retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})...")
+                                      time.sleep(retry_delay)
                                   else:
-                                      print(f"⚠️  Smoke test: response received but no output text")
+                                      print(f"⚠️  Smoke test: response received but no output text after {max_retries} attempts")
                                       sys.exit(1)
 
                           except Exception as e:
                               err_str = str(e)
-                              print(f"  Request error (attempt {attempt + 1}/{max_retries}): {err_str[:200]}")
+                              print(f"  Request error (attempt {attempt + 1}/{max_retries}): {err_str[:300]}")
                               if attempt < max_retries - 1:
-                                  time.sleep(15)
+                                  time.sleep(retry_delay)
                               else:
                                   print(f"⚠️  Smoke test failed after {max_retries} attempts")
                                   sys.exit(1)
