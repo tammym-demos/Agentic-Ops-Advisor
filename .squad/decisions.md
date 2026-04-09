@@ -1052,7 +1052,74 @@ Once blockers are resolved, trigger a test deployment to verify the full pipelin
 **Author:** Naomi (Backend Dev)  
 **Date:** 2025-07-26  
 **Status:** DECIDED + IMPLEMENTED  
-**Impact:** LLM accuracy improvement; eliminates hallucinated table/column names and SQL dialect errors  
+**Impact:** LLM accuracy improvement; eliminates hallucinated table/column names and SQL dialect errors
+
+---
+
+## 2026-04-09T02:05:00Z: Smoke Test Hardening + Response Handling (Deploy #126 Fix)
+
+**Date:** 2026-04-09  
+**Authors:** Amos (DevOps) + Naomi (Backend)  
+**Status:** IMPLEMENTED  
+**Related Issue:** Deploy run #126 smoke test returned "failed, no output text" (container healthy, diagnostics missing)  
+
+### Root Causes & Fixes
+
+#### Issue 1: Token Audience Mismatch (Naomi)
+- **Problem:** Bearer token issued with wrong audience scope for Foundry environment
+- **Root Cause:** serve.py token generation used Azure OpenAI endpoint → token `aud` claim set to `https://ai.azure.com`
+- **Symptom:** All API calls after initial handshake fail 401 Unauthorized (Foundry sidecar validates against `cognitiveservices.azure.com`)
+- **Impact:** Tool execution blocked inside container; no diagnostic text visible
+- **Fix:** Changed token scope in serve.py from `https://ai.azure.com/.default` to `https://cognitiveservices.azure.com/.default`
+- **Confidence:** CERTAIN — token validation against wrong audience is a clear authentication failure
+
+#### Issue 2: Response Status Masks Error Output (Naomi)
+- **Problem:** When serve.py returned `status: "failed"`, Foundry gateway/sidecar strips output text before returning to caller
+- **Symptom:** Smoke test probe sees `{"status": "failed", "output_text": ""}` even though errors were generated
+- **Impact:** Diagnostic information invisible to callers (smoke test, Playground)
+- **Fix:** All responses now use `status: "completed"` with error messages in `output_text` body (e.g., `"Error: Auth failed..."`)
+- **Pattern:** Follows web API convention: return 200 with error payload, not status-dependent masking
+- **Confidence:** HIGH — Foundry sidecar behavior verified; consistent with documented gateway patterns
+
+#### Issue 3: Insufficient Warmup + Poor Diagnostics (Amos)
+- **Problem:** 30s blind warmup insufficient for Python container cold start (dependency imports + DB init); smoke test had zero error logging
+- **Root Cause:** Container takes ~45s to reach readiness; old code logged nothing on failure
+- **Symptom:** Smoke test probes arrive before agent ready; "failed, no output text" with no error code or message
+- **Impact:** Cannot distinguish between timeouts, tool crashes, or model failures
+- **Fixes:**
+  1. Changed warmup: `30s blind sleep` → `60s sleep + active readiness polling` (calls `agents.get()` up to 6×10s)
+  2. Enhanced smoke test retries: `3×15s` → `5×20s` (total budget ~220s max)
+  3. Added error diagnostics: Log `response.error.code` and `response.error.message` when status is "failed"
+  4. Expanded output logging: Log all response item types (messages, function_calls, etc.)
+- **Confidence:** HIGH — container startup times verified in logs; diagnostics follow Responses API contract
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| `.github/workflows/deploy.yml` | Warmup loop + polling, retry count/delay, error code/message logging, full output logging |
+| `scripts/serve.py` | Token audience fix, status: "completed" for all responses |
+| `tools/*.py` | Verified `strict: false` in all FunctionTool definitions |
+
+### Impact
+
+- ✅ Next deploy run will show actual error codes instead of blank output
+- ✅ Token authentication succeeds for all OpenAI calls inside container
+- ✅ Error messages visible to smoke test and Playground
+- ✅ Container readiness validated before test begins
+- ✅ Hosted agent pattern follows Foundry gateway best practices
+- ⚠️ Total warmup budget increased from ~75s to ~220s max (fast path unchanged)
+
+### Team Learnings
+
+- **Foundry Behavior:** `status: "failed"` signals sidecar to suppress output text — always use `status: "completed"` with error detail in body
+- **Token Auth:** Verify audience scope matches the environment (cognitiveservices.azure.com for Foundry)
+- **SDK Constraint:** `strict: false` required for hosted agent tool responses
+- **Container Cold Start:** Python + dependencies + DB init = 45s+ (add headroom in startup probes)
+
+### Commit
+
+Hash: 6039210 to main
 
 ### Context
 

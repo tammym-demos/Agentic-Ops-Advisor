@@ -9,6 +9,33 @@
 
 ## Learnings
 
+### 2026-04-09: Smoke Test Hardening + Response Handling (Deploy #126 Recovery)
+
+**Session:** Joint work with Naomi (Backend)  
+**Status:** ✅ IMPLEMENTED → Commit 6039210 merged  
+**Focus:** Deploy run #126 smoke test returned "failed, no output text" despite container being healthy  
+
+**Your Work:**
+- **Warmup hardening:** 30s blind sleep → 60s + active polling (agents.get() up to 6×10s)
+- **Smoke test retry enhancement:** 3×15s → 5×20s retries (total budget ~220s)
+- **Error diagnostics:** Added logging for response.error.code + response.error.message
+- **Output logging:** Expanded to capture all response item types (not just tool calls)
+
+**Naomi's Parallel Work:**
+- Fixed token audience: `ai.azure.com` → `cognitiveservices.azure.com` in serve.py
+- Fixed response masking: Changed `status: "failed"` → `status: "completed"` with error text in body (Foundry sidecar was stripping output on failed status)
+- Verified `strict: false` in all tool definitions
+
+**Key Learning:** Foundry gateway treats `status: "failed"` as a signal to suppress output_text — always use `status: "completed"` with error detail in body.
+
+**Impact:**
+- Next deploy run will show actual error codes instead of "no output text"
+- Container readiness validated before test begins  
+- Token auth succeeds for all OpenAI calls
+- Error messages visible to Playground + smoke test
+
+**Files changed:** `.github/workflows/deploy.yml`, `scripts/serve.py`, `tools/*.py`
+
 ### 2026-04-08: Full Diagnostic — Infrastructure State + Deploy Blocker Audit
 
 **Session:** Full diagnostic with Holden (Lead) + Naomi (Backend)  

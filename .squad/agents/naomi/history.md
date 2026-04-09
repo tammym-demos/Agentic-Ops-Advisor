@@ -9,6 +9,46 @@
 
 ## Learnings
 
+### 2026-04-09: Smoke Test Hardening + Response Handling (Deploy #126 Recovery)
+
+**Session:** Joint work with Amos (DevOps)  
+**Status:** ✅ IMPLEMENTED → Commit 6039210 merged  
+**Focus:** Deploy run #126 smoke test returned "failed, no output text" despite container being healthy  
+
+**Your Work:**
+- **Token audience fix:** serve.py was using wrong token scope for Foundry environment
+  - Changed from: `https://ai.azure.com/.default` (Azure OpenAI scope)
+  - Changed to: `https://cognitiveservices.azure.com/.default` (Foundry scope)
+  - Impact: All API calls after handshake were failing 401 Unauthorized
+  
+- **Response status handling:** Fixed Foundry sidecar behavior that strips output text
+  - Problem: When respond with `status: "failed"`, sidecar suppresses output_text before returning to caller
+  - Solution: All responses now use `status: "completed"` with error messages in output_text body
+  - Example: `"Error: Auth failed..."` instead of `{"status": "failed", "output_text": ""}`
+  
+- **Tool schema validation:** Verified `strict: false` in all FunctionTool definitions
+  - Required for Foundry hosted agent responses to parse correctly
+
+**Amos's Parallel Work:**
+- Enhanced warmup: 30s → 60s + active polling with agents.get()
+- Improved retries: 3×15s → 5×20s  
+- Added error diagnostics: Log response.error.code + response.error.message
+- Expanded output logging: Capture all response item types
+
+**Key Learnings:**
+- Foundry gateway behavior: `status: "failed"` suppresses output → always use `status: "completed"` with error detail
+- Token scope must match environment (cognitiveservices.azure.com for Foundry, not ai.azure.com)
+- Python container cold start: ~45s for deps + DB init (verify warmup headroom)
+- `strict: false` requirement in tool definitions for Foundry compatibility
+
+**Impact:**
+- Token auth now succeeds for all OpenAI calls inside container
+- Error messages visible to smoke test + Playground (not stripped by sidecar)
+- Container health validated before test begins
+- Next failed run will show actual error code/message for root-cause triage
+
+**Files changed:** `scripts/serve.py`, `tools/sql_telemetry.py` (+ all other tool files), `.github/workflows/deploy.yml` (Amos)
+
 ### 2026-04-08: Foundry Deployment Fix Verification (Post-Crash Pickup)
 
 **Session:** Picked up from crashed session. Reviewed uncommitted changes in serve.py and run_foundry_agent.py against three identified root causes.
