@@ -16,7 +16,7 @@ from aiohttp.test_utils import AioHTTPTestCase
 
 
 # Import after skip check
-from scripts.serve import _init_app  # noqa: E402
+from scripts.serve import _init_app, _ready_event  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +86,7 @@ class TestHealthEndpoint(AioHTTPTestCase):
                 "ENABLE_WORK_IQ": "true",
             },
         ):
+            _ready_event.set()
             return await _init_app()
 
     @pytest.mark.asyncio
@@ -132,6 +133,7 @@ class TestRootEndpoint(AioHTTPTestCase):
                 "ENABLE_WORK_IQ": "true",
             },
         ):
+            _ready_event.set()
             return await _init_app()
 
     @pytest.mark.asyncio
@@ -154,6 +156,7 @@ class TestResponsesEndpointInputParsing(AioHTTPTestCase):
                 "ENABLE_WORK_IQ": "true",
             },
         ):
+            _ready_event.set()
             return await _init_app()
 
     @pytest.mark.asyncio
@@ -219,6 +222,7 @@ class TestResponsesEndpointFormat(AioHTTPTestCase):
                 "ENABLE_WORK_IQ": "true",
             },
         ):
+            _ready_event.set()
             return await _init_app()
 
     @pytest.mark.asyncio
@@ -305,6 +309,7 @@ class TestResponsesToolDispatch(AioHTTPTestCase):
                 "ENABLE_WORK_IQ": "true",
             },
         ):
+            _ready_event.set()
             return await _init_app()
 
     @pytest.mark.asyncio
@@ -408,6 +413,7 @@ class TestResponsesErrorHandling(AioHTTPTestCase):
                 "ENABLE_WORK_IQ": "true",
             },
         ):
+            _ready_event.set()
             return await _init_app()
 
     @pytest.mark.asyncio
@@ -458,6 +464,7 @@ class TestCORS(AioHTTPTestCase):
                 "ENABLE_WORK_IQ": "true",
             },
         ):
+            _ready_event.set()
             return await _init_app()
 
     @pytest.mark.asyncio
@@ -469,3 +476,96 @@ class TestCORS(AioHTTPTestCase):
         # CORS middleware is present if we get any response (including 403)
         # Real CORS headers are set on actual POST requests
         assert resp.status in (200, 204, 403, 405)  # Various CORS/OPTIONS handling patterns
+
+
+# ---------------------------------------------------------------------------
+# Readiness gate tests
+# ---------------------------------------------------------------------------
+
+
+class TestReadinessEndpoint(AioHTTPTestCase):
+    """Tests for GET /readiness endpoint — Foundry container probe."""
+
+    async def get_application(self) -> web.Application:
+        with patch.dict(
+            "os.environ",
+            {
+                "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/",
+                "AZURE_OPENAI_DEPLOYMENT": "gpt-4.1",
+                "AZURE_OPENAI_API_KEY": "test-key-123",
+                "ENABLE_WORK_IQ": "true",
+            },
+        ):
+            # Do NOT set _ready_event here — individual tests control it
+            _ready_event.clear()
+            return await _init_app()
+
+    @pytest.mark.asyncio
+    async def test_readiness_returns_503_when_not_ready(self):
+        """GET /readiness returns 503 with status='starting' before startup completes."""
+        _ready_event.clear()
+        resp = await self.client.get("/readiness")
+        assert resp.status == 503
+        data = await resp.json()
+        assert data["status"] == "starting"
+
+    @pytest.mark.asyncio
+    async def test_readiness_returns_200_when_ready(self):
+        """GET /readiness returns 200 with status='ready' after startup completes."""
+        _ready_event.set()
+        resp = await self.client.get("/readiness")
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "ready"
+
+
+class TestResponsesStartupGate(AioHTTPTestCase):
+    """Tests for POST /responses startup gate — warmup vs normal behavior."""
+
+    async def get_application(self) -> web.Application:
+        with patch.dict(
+            "os.environ",
+            {
+                "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/",
+                "AZURE_OPENAI_DEPLOYMENT": "gpt-4.1",
+                "AZURE_OPENAI_API_KEY": "test-key-123",
+                "ENABLE_WORK_IQ": "true",
+            },
+        ):
+            _ready_event.clear()
+            return await _init_app()
+
+    @pytest.mark.asyncio
+    async def test_responses_returns_warmup_when_not_ready(self):
+        """POST /responses returns a friendly warmup message before startup completes."""
+        _ready_event.clear()
+        payload = {"input": "What is GPU utilization?", "stream": False}
+        resp = await self.client.post("/responses", json=payload)
+        assert resp.status == 200
+        data = await resp.json()
+        assert data["status"] == "completed"
+        # The warmup message should be in the output
+        output_text = data["output"][0]["content"][0]["text"]
+        assert "starting up" in output_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_responses_works_when_ready(self):
+        """POST /responses returns normal agent output after startup completes."""
+        _ready_event.set()
+        with patch("openai.AzureOpenAI") as mock_openai_class:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = make_openai_response(
+                content="GPU utilization is 85%"
+            )
+            mock_openai_class.return_value = mock_client
+
+            payload = {"input": "What is GPU utilization?", "stream": False}
+            resp = await self.client.post("/responses", json=payload)
+            data = await resp.json()
+
+            assert resp.status == 200
+            assert data["status"] == "completed"
+            # Should have the real agent response, not the warmup message
+            output_text = data["output"][0]["content"][0]["text"]
+            assert "starting up" not in output_text.lower()
+            assert "GPU utilization" in output_text

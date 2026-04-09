@@ -70,6 +70,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Module-level readiness flag — set after background init completes
+_ready_event = asyncio.Event()
+_startup_clock: float = 0.0
+
 # ---------------------------------------------------------------------------
 # Load system prompt
 # ---------------------------------------------------------------------------
@@ -293,6 +297,9 @@ async def _responses_handler(request) -> object:
             "status": "completed",
         }, status=http_status)
 
+    if not _ready_event.is_set():
+        return _error_response("Agent is starting up. Please retry in a few seconds.")
+
     try:
         return await _handle_responses_inner(request, deployment, _error_response)
     except Exception as exc:
@@ -421,6 +428,13 @@ async def _readiness_handler(request) -> object:
     from aiohttp import web
 
     version = os.environ.get("CONTAINER_IMAGE_TAG", "dev")
+    if not _ready_event.is_set():
+        return web.json_response({
+            "status": "starting",
+            "message": "Agent is initializing...",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "version": version,
+        }, status=503)
     return web.json_response({
         "status": "ready",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -451,6 +465,33 @@ async def _root_handler(request) -> object:
 # Server setup
 # ---------------------------------------------------------------------------
 
+async def _on_startup(app) -> None:
+    """Startup hook: launch background init task (DB seed + readiness)."""
+
+    async def _do_init() -> None:
+        t0 = time.monotonic()
+        logger.info("[STARTUP] mi_probe=skipped reason=deferred_to_request_time")
+        try:
+            await asyncio.to_thread(_ensure_db)
+            logger.info(
+                "[STARTUP] phase=db_seed status=complete elapsed=%.1fs",
+                time.monotonic() - t0,
+            )
+        except Exception as exc:
+            logger.error(
+                "[STARTUP] phase=db_seed status=failed error=%s elapsed=%.1fs",
+                exc,
+                time.monotonic() - t0,
+            )
+        _ready_event.set()
+        logger.info(
+            "[STARTUP] ready=true total_elapsed=%.1fs",
+            time.monotonic() - _startup_clock,
+        )
+
+    asyncio.create_task(_do_init())
+
+
 async def _init_app() -> object:
     """Initialize aiohttp application."""
     from aiohttp import web
@@ -478,6 +519,9 @@ async def _init_app() -> object:
     for route in list(app.router.routes()):
         cors.add(route)
 
+    # Register async startup hook — fires when app is served, not when instantiated
+    app.on_startup.append(_on_startup)
+
     return app
 
 # ---------------------------------------------------------------------------
@@ -485,6 +529,8 @@ async def _init_app() -> object:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    global _startup_clock
+
     # Check if MODE=cli (run run_local.py instead)
     mode = os.environ.get("MODE", "").lower()
     if mode == "cli":
@@ -492,32 +538,14 @@ def main() -> None:
         run_local_main()
         return
 
+    _startup_clock = time.monotonic()
+
     logger.info("Starting Agentic Ops Advisor hosted agent server …")
 
     # --- Startup diagnostics ---
     logger.info("AZURE_OPENAI_ENDPOINT: %s", os.environ.get("AZURE_OPENAI_ENDPOINT", "(not set)"))
     logger.info("AZURE_OPENAI_API_KEY: %s", "set" if os.environ.get("AZURE_OPENAI_API_KEY") else "not set")
     logger.info("AZURE_CLIENT_ID: %s", "set" if os.environ.get("AZURE_CLIENT_ID") else "not set")
-    # Skip managed identity probe at startup when API key is available.
-    # DefaultAzureCredential().get_token() probes IMDS at 169.254.169.254,
-    # which hangs ~2 min when no MI is configured — blocking server startup.
-    if not os.environ.get("AZURE_OPENAI_API_KEY"):
-        try:
-            from azure.identity import DefaultAzureCredential
-            cred = DefaultAzureCredential()
-            cred.get_token("https://cognitiveservices.azure.com/.default")
-            logger.info("Managed identity auth: SUCCESS")
-        except Exception as diag_exc:
-            logger.warning("Managed identity auth: FAILED (%s)", diag_exc)
-    else:
-        logger.info("API key available — skipping managed identity probe at startup")
-
-    # Ensure DB exists before starting server
-    try:
-        _ensure_db()
-    except (OSError, sqlite3.Error, ImportError) as exc:
-        logger.error(f"Failed to set up database: {exc}")
-        sys.exit(1)
 
     # Prefer SERVE_PORT; fall back to PORT for backward compat; default 8088.
     # Guard: Foundry sidecar occupies 8080 — never bind there.
@@ -526,8 +554,7 @@ def main() -> None:
         logger.warning("Port 8080 is reserved by Foundry sidecar — overriding to 8088")
         port = 8088
 
-    logger.info(f"Server starting on http://0.0.0.0:{port}")
-    logger.info("Endpoints: POST /responses, GET /health, GET /")
+    logger.info("[STARTUP] server listening on port %d", port)
 
     from aiohttp import web
 

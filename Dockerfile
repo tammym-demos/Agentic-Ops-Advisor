@@ -92,8 +92,8 @@ ENV DB_MODE=sqlite \
 EXPOSE 8088
 
 # ---- Health check ----
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${SERVE_PORT:-8088}/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:${SERVE_PORT:-8088}/readiness || exit 1
 
 # ---- Run as non-root ----
 USER agent
