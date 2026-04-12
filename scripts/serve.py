@@ -600,16 +600,28 @@ def _run_with_foundry_adapter(port: int) -> None:
             if not text:
                 text = "(no response)"
 
+            # Use Foundry-generated IDs from context (proper format with partition key)
+            resp_id = context.response_id
+            msg_id = context.id_generator.generate("msg")
+
             output_content = [ItemContentOutputText(text=text, annotations=[])]
+            conversation = context.get_conversation_object()
             return FoundryResponse(
                 metadata={},
                 temperature=0.0,
                 top_p=0.0,
                 user="",
-                id=f"resp_{uuid.uuid4().hex}",
+                id=resp_id,
                 created_at=dt.datetime.now(dt.timezone.utc),
+                status="completed",
+                error=None,
+                incomplete_details=None,
+                instructions=None,
+                parallel_tool_calls=False,
+                conversation=conversation,
                 output=[
                     ResponsesAssistantMessageItemResource(
+                        id=msg_id,
                         status="completed",
                         content=output_content,
                     )
