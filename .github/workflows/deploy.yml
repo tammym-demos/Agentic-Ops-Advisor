@@ -540,21 +540,19 @@ jobs:
                   # PRIMARY: az cognitiveservices agent create
                   # Handles version creation + container deploy + startup
                   # + publish (--protocol responses) in one command.
-                  # Delete existing agent first to avoid "already exists" error.
+                  #
+                  # NOTE: We intentionally do NOT delete the existing agent.
+                  # Deleting wipes agent-level config including target_port=8088.
+                  # When the SDK fallback recreates the agent, it cannot set
+                  # target_port (HostedAgentDefinition lacks that param), so
+                  # Foundry defaults to routing on port 80. The container
+                  # listens on 8088 → port mismatch → 100s timeout.
+                  # Instead, let create fail with "already exists" and fall
+                  # through to the SDK fallback, which adds a new version to
+                  # the EXISTING agent (preserving target_port=8088).
                   # ═══════════════════════════════════════════════════════════
                   echo ""
                   echo "═══ PRIMARY: az cognitiveservices agent create ═══"
-
-                  # Delete existing agent (if any) so create can work fresh
-                  echo "Cleaning up existing agent definition..."
-                  az cognitiveservices agent delete \
-                      --account-name "$ACCOUNT_NAME" \
-                      --project-name "$FOUNDRY_PROJECT" \
-                      --name "agentic-ops-advisor" \
-                      --yes 2>/dev/null && {
-                      echo "  Deleted existing agent — waiting 30s for cleanup..."
-                      sleep 30
-                  } || echo "  No existing agent to delete"
 
                   AGENT_CREATE_OUTPUT=$(az cognitiveservices agent create \
                       --account-name "$ACCOUNT_NAME" \
@@ -657,7 +655,37 @@ jobs:
                           echo "DEPLOYED_AGENT_ID=${AGENT_NAME}/${AGENT_VERSION}" >> "$GITHUB_ENV"
                           echo "AGENT_DEPLOY_METHOD=sdk-fallback" >> "$GITHUB_ENV"
 
-                          # SDK create_version does NOT auto-start — use agent start
+                          # SDK create_version does NOT auto-start — use agent start.
+                          # HostedAgentDefinition lacks target_port, so the SDK-created
+                          # version inherits the agent-level routing.  If the agent was
+                          # freshly created (no prior CLI deploy that set --target-port),
+                          # Foundry defaults to port 80 while the container listens on
+                          # 8088. As a safety net, attempt to reconfigure routing via
+                          # `agent create --target-port 8088` (idempotent update) before
+                          # starting the container.
+                          echo ""
+                          echo "═══ Ensuring target_port=8088 on existing agent ═══"
+                          az cognitiveservices agent create \
+                              --account-name "$ACCOUNT_NAME" \
+                              --project-name "$FOUNDRY_PROJECT" \
+                              --name "$AGENT_NAME" \
+                              --image "${CONTAINER_IMAGE}" \
+                              --cpu 2 --memory 4Gi \
+                              --min-replicas 1 --max-replicas 2 \
+                              --protocol responses --protocol-version v1 \
+                              --target-port 8088 \
+                              --env "AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}" \
+                                    "AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}" \
+                                    "AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}" \
+                                    "DB_MODE=sqlite" \
+                                    "ENABLE_WORK_IQ=true" \
+                                    "ENABLE_MCP=false" \
+                                    "SERVE_PORT=8088" \
+                                    "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
+                                    "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
+                              --show-logs --timeout 600 --skip-acr-check \
+                              2>&1 || echo "  (best-effort target-port set — may fail if already exists)"
+
                           echo ""
                           echo "═══ Starting agent container (version ${AGENT_VERSION}) ═══"
                           AGENT_START_OUTPUT=$(az cognitiveservices agent start \
