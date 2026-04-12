@@ -578,6 +578,7 @@ jobs:
                             "ENABLE_WORK_IQ=true" \
                             "ENABLE_MCP=false" \
                             "SERVE_PORT=8088" \
+                            "AZURE_AI_PROJECT_ENDPOINT=https://${ACCOUNT_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT}" \
                             "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                             "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
                       --show-logs --timeout 600 --skip-acr-check \

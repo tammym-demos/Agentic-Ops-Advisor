@@ -77,6 +77,16 @@ def main() -> None:
     # reading SERVE_PORT env var.
     env_vars["SERVE_PORT"] = "8088"
 
+    # Provide project endpoint for FoundryCBAgent adapter tracing/tool runtime.
+    project_conn = os.environ.get("AZURE_AI_PROJECT_CONNECTION_STRING", "")
+    if project_conn:
+        # Derive endpoint from connection string: <host>/api/projects/<project>
+        parts = project_conn.split(";")
+        host = parts[0] if parts else ""
+        proj = parts[1] if len(parts) > 1 else ""
+        if host and proj:
+            env_vars["AZURE_AI_PROJECT_ENDPOINT"] = f"https://{host}/api/projects/{proj}"
+
     agent_definition = HostedAgentDefinition(
         kind="hosted",
         container_protocol_versions=[

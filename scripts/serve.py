@@ -321,34 +321,10 @@ async def _handle_responses_inner(request, deployment: str, _error_response) -> 
 
     logger.info("POST /responses — keys: %s", list(body.keys()))
 
-    # Extract input (can be a string, list, or messages dict)
     input_data = body.get("input")
-    if isinstance(input_data, str):
-        messages = [{"role": "user", "content": input_data}]
-    elif isinstance(input_data, list):
-        # Foundry Responses API v1 sends input as array of typed items.
-        # We only convert "message" items; function_call / function_call_output
-        # and other internal types are skipped (our container handles tools).
-        messages = []
-        for item in input_data:
-            if not isinstance(item, dict):
-                continue
-            item_type = item.get("type", "message")
-            # Skip non-message items (function_call, function_call_output, etc.)
-            if item_type not in ("message",):
-                continue
-            role = item.get("role", "user")
-            content = item.get("content", "")
-            # Content may be a string or array of content parts
-            if isinstance(content, list):
-                text_parts = [p.get("text", "") for p in content if p.get("type") in ("input_text", "text")]
-                content = " ".join(text_parts)
-            if not content:
-                continue
-            messages.append({"role": role, "content": content})
-    elif isinstance(input_data, dict) and "messages" in input_data:
-        messages = input_data["messages"]
-    else:
+    messages = _parse_input_to_messages(input_data)
+
+    if messages is None:
         return _error_response(
             "Invalid input format. Send {\"input\": \"your question\"}.",
             http_status=400,
@@ -528,6 +504,142 @@ async def _init_app() -> object:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _resolve_port() -> int:
+    """Determine listen port. Foundry adapter uses DEFAULT_AD_PORT; we also check SERVE_PORT/PORT."""
+    port = int(
+        os.environ.get("SERVE_PORT")
+        or os.environ.get("DEFAULT_AD_PORT")
+        or os.environ.get("PORT")
+        or "8088"
+    )
+    if port == 8080:
+        logger.warning("Port 8080 is reserved by Foundry sidecar — overriding to 8088")
+        port = 8088
+    return port
+
+
+def _log_startup_diagnostics() -> None:
+    logger.info("Starting Agentic Ops Advisor hosted agent server …")
+    logger.info("AZURE_OPENAI_ENDPOINT: %s", os.environ.get("AZURE_OPENAI_ENDPOINT", "(not set)"))
+    logger.info("AZURE_OPENAI_API_KEY: %s", "set" if os.environ.get("AZURE_OPENAI_API_KEY") else "not set")
+    logger.info("AZURE_CLIENT_ID: %s", "set" if os.environ.get("AZURE_CLIENT_ID") else "not set")
+
+
+def _parse_input_to_messages(input_data) -> list[dict] | None:
+    """Parse Foundry Responses API input into OpenAI-style messages.
+
+    Returns None if input format is invalid.
+    """
+    if isinstance(input_data, str):
+        return [{"role": "user", "content": input_data}]
+    elif isinstance(input_data, list):
+        messages = []
+        for item in input_data:
+            if not isinstance(item, dict):
+                continue
+            item_type = item.get("type", "message")
+            if item_type not in ("message",):
+                continue
+            role = item.get("role", "user")
+            content = item.get("content", "")
+            if isinstance(content, list):
+                text_parts = [p.get("text", "") for p in content if p.get("type") in ("input_text", "text")]
+                content = " ".join(text_parts)
+            if not content:
+                continue
+            messages.append({"role": role, "content": content})
+        return messages
+    elif isinstance(input_data, dict) and "messages" in input_data:
+        return input_data["messages"]
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Foundry hosting adapter (production path)
+# ---------------------------------------------------------------------------
+
+def _run_with_foundry_adapter(port: int) -> None:
+    """Start the server using the official Foundry FoundryCBAgent adapter.
+
+    This is the production path for Azure AI Foundry hosted agents.
+    Uses uvicorn + Starlette with proper sidecar integration, tracing,
+    CORS, and graceful shutdown.
+    """
+    import datetime as dt
+
+    from azure.ai.agentserver.core import FoundryCBAgent, AgentRunContext
+    from azure.ai.agentserver.core.models import Response as FoundryResponse
+    from azure.ai.agentserver.core.models.projects import (
+        ItemContentOutputText,
+        ResponsesAssistantMessageItemResource,
+    )
+
+    # Seed DB synchronously before starting the adapter
+    _ensure_db()
+    _ready_event.set()
+
+    class AgenticOpsAgent(FoundryCBAgent):
+        async def agent_run(self, context: AgentRunContext):
+            payload = context.raw_payload
+            input_data = payload.get("input")
+            messages = _parse_input_to_messages(input_data)
+
+            if not messages:
+                text = "Invalid input format. Send {\"input\": \"your question\"}."
+            else:
+                endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
+                deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1").strip()
+                api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2025-01-01-preview").strip()
+
+                if not endpoint:
+                    text = "AZURE_OPENAI_ENDPOINT not configured. Agent cannot run."
+                else:
+                    result = await _run_agent_conversation(messages, endpoint, deployment, api_version)
+                    text = result["content"] if not result["error"] else f"Error: {result['error']}"
+
+            if not text:
+                text = "(no response)"
+
+            output_content = [ItemContentOutputText(text=text, annotations=[])]
+            return FoundryResponse(
+                metadata={},
+                temperature=0.0,
+                top_p=0.0,
+                user="",
+                id=f"resp_{uuid.uuid4().hex}",
+                created_at=dt.datetime.now(dt.timezone.utc),
+                output=[
+                    ResponsesAssistantMessageItemResource(
+                        status="completed",
+                        content=output_content,
+                    )
+                ],
+            )
+
+    agent = AgenticOpsAgent()
+    logger.info("[STARTUP] using Foundry hosting adapter (uvicorn + FoundryCBAgent)")
+    logger.info("[STARTUP] server listening on port %d", port)
+    agent.run(port=port)
+
+
+# ---------------------------------------------------------------------------
+# aiohttp fallback (local dev / tests)
+# ---------------------------------------------------------------------------
+
+def _run_with_aiohttp(port: int) -> None:
+    """Start the server using raw aiohttp (fallback for local dev/tests)."""
+    from aiohttp import web
+
+    app = asyncio.run(_init_app())
+    logger.info("[STARTUP] using aiohttp fallback server")
+    logger.info("[STARTUP] server listening on port %d", port)
+    web.run_app(app, host="0.0.0.0", port=port, print=None, access_log=logger)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
 def main() -> None:
     global _startup_clock
 
@@ -539,27 +651,16 @@ def main() -> None:
         return
 
     _startup_clock = time.monotonic()
+    _log_startup_diagnostics()
+    port = _resolve_port()
 
-    logger.info("Starting Agentic Ops Advisor hosted agent server …")
-
-    # --- Startup diagnostics ---
-    logger.info("AZURE_OPENAI_ENDPOINT: %s", os.environ.get("AZURE_OPENAI_ENDPOINT", "(not set)"))
-    logger.info("AZURE_OPENAI_API_KEY: %s", "set" if os.environ.get("AZURE_OPENAI_API_KEY") else "not set")
-    logger.info("AZURE_CLIENT_ID: %s", "set" if os.environ.get("AZURE_CLIENT_ID") else "not set")
-
-    # Prefer SERVE_PORT; fall back to PORT for backward compat; default 8088.
-    # Guard: Foundry sidecar occupies 8080 — never bind there.
-    port = int(os.environ.get("SERVE_PORT") or os.environ.get("PORT") or "8088")
-    if port == 8080:
-        logger.warning("Port 8080 is reserved by Foundry sidecar — overriding to 8088")
-        port = 8088
-
-    logger.info("[STARTUP] server listening on port %d", port)
-
-    from aiohttp import web
-
-    app = asyncio.run(_init_app())
-    web.run_app(app, host="0.0.0.0", port=port, print=None, access_log=logger)
+    # Use the official Foundry hosting adapter in production.
+    # Falls back to aiohttp for local dev or when the adapter isn't installed.
+    try:
+        _run_with_foundry_adapter(port)
+    except ImportError:
+        logger.info("azure-ai-agentserver-core not installed — falling back to aiohttp")
+        _run_with_aiohttp(port)
 
 
 if __name__ == "__main__":
