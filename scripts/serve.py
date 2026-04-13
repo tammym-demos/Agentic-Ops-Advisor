@@ -578,6 +578,15 @@ def _run_with_foundry_adapter(port: int) -> None:
     from azure.ai.agentserver.core.models import Response as FoundryResponse
     from azure.ai.agentserver.core.models.projects import (
         ItemContentOutputText,
+        ResponseCompletedEvent,
+        ResponseContentPartAddedEvent,
+        ResponseContentPartDoneEvent,
+        ResponseCreatedEvent,
+        ResponseInProgressEvent,
+        ResponseOutputItemAddedEvent,
+        ResponseOutputItemDoneEvent,
+        ResponseTextDeltaEvent,
+        ResponseTextDoneEvent,
         ResponsesAssistantMessageItemResource,
     )
 
@@ -607,13 +616,19 @@ def _run_with_foundry_adapter(port: int) -> None:
             if not text:
                 text = "(no response)"
 
-            # Use Foundry-generated IDs from context (proper format with partition key)
             resp_id = context.response_id
             msg_id = context.id_generator.generate("msg")
 
             output_content = [ItemContentOutputText(text=text, annotations=[])]
             conversation = context.get_conversation_object()
-            return FoundryResponse(
+
+            msg_item = ResponsesAssistantMessageItemResource(
+                id=msg_id,
+                status="completed",
+                content=output_content,
+            )
+
+            response = FoundryResponse(
                 metadata={},
                 temperature=0.0,
                 top_p=0.0,
@@ -626,13 +641,80 @@ def _run_with_foundry_adapter(port: int) -> None:
                 instructions=None,
                 parallel_tool_calls=False,
                 conversation=conversation,
-                output=[
-                    ResponsesAssistantMessageItemResource(
-                        id=msg_id,
-                        status="completed",
-                        content=output_content,
-                    )
-                ],
+                output=[msg_item],
+            )
+
+            # Non-streaming: return Response object directly
+            if not context.stream:
+                return response
+
+            # Streaming: return async generator of ResponseStreamEvent objects.
+            # The adapter iterates these and converts to SSE chunks.
+            return self._stream_response(response, msg_item, text)
+
+        async def _stream_response(self, response, msg_item, text):
+            """Yield Responses API streaming events for a completed response."""
+            seq = 0
+
+            # Build an in-progress snapshot of the response for early events
+            in_progress = response.as_dict()
+            in_progress["status"] = "in_progress"
+            in_progress["output"] = []
+
+            yield ResponseCreatedEvent(
+                type="response.created", sequence_number=seq, response=in_progress,
+            )
+            seq += 1
+
+            yield ResponseInProgressEvent(
+                type="response.in_progress", sequence_number=seq, response=in_progress,
+            )
+            seq += 1
+
+            item_dict = msg_item.as_dict()
+            item_dict["status"] = "in_progress"
+            item_dict["content"] = []
+            yield ResponseOutputItemAddedEvent(
+                type="response.output_item.added", sequence_number=seq,
+                output_index=0, item=item_dict,
+            )
+            seq += 1
+
+            yield ResponseContentPartAddedEvent(
+                type="response.content_part.added", sequence_number=seq,
+                output_index=0, content_index=0,
+                part={"type": "output_text", "text": ""},
+            )
+            seq += 1
+
+            yield ResponseTextDeltaEvent(
+                type="response.output_text.delta", sequence_number=seq,
+                output_index=0, content_index=0, delta=text,
+            )
+            seq += 1
+
+            yield ResponseTextDoneEvent(
+                type="response.output_text.done", sequence_number=seq,
+                output_index=0, content_index=0, text=text,
+            )
+            seq += 1
+
+            yield ResponseContentPartDoneEvent(
+                type="response.content_part.done", sequence_number=seq,
+                output_index=0, content_index=0,
+                part={"type": "output_text", "text": text},
+            )
+            seq += 1
+
+            yield ResponseOutputItemDoneEvent(
+                type="response.output_item.done", sequence_number=seq,
+                output_index=0, item=msg_item.as_dict(),
+            )
+            seq += 1
+
+            yield ResponseCompletedEvent(
+                type="response.completed", sequence_number=seq,
+                response=response.as_dict(),
             )
 
     agent = AgenticOpsAgent()
