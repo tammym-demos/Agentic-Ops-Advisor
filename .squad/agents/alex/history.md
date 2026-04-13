@@ -132,3 +132,13 @@
   6. `test_unknown_service_falls_back_to_default` — `totally-unknown-service` → `default`
   7. `test_tool_schema_service_enum` — TOOL_SCHEMA service enum contains `["gpu-cluster", "network", "cost"]`
 - **Why:** These tests directly exercise the edge cases from issue #92 where the LLM generated wrong table names, wrong column names, PostgreSQL syntax, and unresolved cluster names. They verify that the T1-schema, T2-system-prompt, and T3-fuzzy fixes produce clear errors and correct mappings.
+
+### Readiness Gate Tests for serve.py
+- **File updated:** `tests/test_serve.py` — added 4 new tests, updated 7 existing test classes (22 total, all pass)
+- **Problem:** serve.py was refactored with a module-level `_ready_event = asyncio.Event()` controlling readiness. Since `_init_app()` in tests does NOT trigger `on_startup`, `_ready_event` is never set — breaking all existing tests that hit `/responses` or `/readiness`.
+- **Fix for existing tests:** Added `_ready_event.set()` in every existing test class's `get_application()` method (TestHealthEndpoint, TestRootEndpoint, TestResponsesEndpointInputParsing, TestResponsesEndpointFormat, TestResponsesToolDispatch, TestResponsesErrorHandling, TestCORS) so they behave as before (server "ready").
+- **New test classes:**
+  1. **TestReadinessEndpoint** (2 tests): `test_readiness_returns_503_when_not_ready` (clear event → 503, status="starting"), `test_readiness_returns_200_when_ready` (set event → 200, status="ready")
+  2. **TestResponsesStartupGate** (2 tests): `test_responses_returns_warmup_when_not_ready` (clear event → 200, output contains "starting up"), `test_responses_works_when_ready` (set event + mocked OpenAI → normal agent response)
+- **Key pattern:** New test classes start with `_ready_event.clear()` in `get_application()` and then explicitly set/clear the event per test method.
+- **Result:** 22/22 tests passing in 7.5s.

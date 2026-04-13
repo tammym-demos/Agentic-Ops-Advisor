@@ -579,6 +579,7 @@ jobs:
                             "AZURE_AI_PROJECT_ENDPOINT=https://${ACCOUNT_NAME}.services.ai.azure.com/api/projects/${FOUNDRY_PROJECT}" \
                             "APPLICATIONINSIGHTS_CONNECTION_STRING=${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                             "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=false" \
+                            "ENABLE_APPLICATION_INSIGHTS_LOGGER=false" \
                       --show-logs --timeout 600 --skip-acr-check \
                       2>&1) && CREATE_RC=$? || CREATE_RC=$?
 

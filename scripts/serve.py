@@ -574,6 +574,15 @@ def _run_with_foundry_adapter(port: int) -> None:
     """
     import datetime as dt
 
+    # ── Disable App Insights BEFORE importing the adapter ──
+    # The adapter's __init__.py calls config_logging() at import time,
+    # which sets up AzureMonitorLogExporter.  If the App Insights
+    # connection string is invalid the exporter floods stderr with
+    # "Non-retryable server side error: Bad Request" on a background
+    # thread, which can starve I/O and interfere with SSE streaming.
+    # Disable it here; re-enable once telemetry config is validated.
+    os.environ["ENABLE_APPLICATION_INSIGHTS_LOGGER"] = "false"
+
     from azure.ai.agentserver.core import FoundryCBAgent, AgentRunContext
     from azure.ai.agentserver.core.models import Response as FoundryResponse
     from azure.ai.agentserver.core.models.projects import (
@@ -595,6 +604,19 @@ def _run_with_foundry_adapter(port: int) -> None:
     _ready_event.set()
 
     class AgenticOpsAgent(FoundryCBAgent):
+        def init_tracing(self):
+            """Skip App Insights tracing to avoid blocking export errors.
+
+            The base class sets up AzureMonitorTraceExporter via
+            BatchSpanProcessor.  If the connection string is invalid the
+            exporter retries on a background thread, flooding stderr and
+            potentially starving async I/O.  We create a no-op tracer
+            (spans are created but not exported anywhere).
+            """
+            from opentelemetry import trace as _trace
+            self.tracer = _trace.get_tracer(__name__)
+            logger.info("Tracing: using no-op tracer (App Insights export disabled)")
+
         async def agent_run(self, context: AgentRunContext):
             """Run the agent.
 
@@ -721,14 +743,18 @@ def _run_with_foundry_adapter(port: int) -> None:
             seq += 1
 
             # --- OpenAI call (adapter sends keep-alives while we await) ---
-            logger.info("Streaming: starting OpenAI call (keep-alives active)")
-            result = await _run_agent_conversation(
-                messages, endpoint, deployment, api_version,
-            )
-            text = result["content"] if not result["error"] else f"Error: {result['error']}"
-            if not text:
-                text = "(no response)"
-            logger.info("Streaming: OpenAI call complete, yielding content events")
+            try:
+                logger.info("Streaming: starting OpenAI call (keep-alives active)")
+                result = await _run_agent_conversation(
+                    messages, endpoint, deployment, api_version,
+                )
+                text = result["content"] if not result["error"] else f"Error: {result['error']}"
+                if not text:
+                    text = "(no response)"
+                logger.info("Streaming: OpenAI call complete, yielding content events")
+            except Exception as exc:
+                logger.exception("Streaming: OpenAI call raised exception")
+                text = f"Error: agent call failed: {exc}"
 
             # Build final objects
             output_content = [ItemContentOutputText(text=text, annotations=[])]

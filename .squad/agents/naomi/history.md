@@ -9,6 +9,52 @@
 
 ## Learnings
 
+### 2026-07-24: Early SSE Events — Streaming Keep-Alive Fix (Deploy #137)
+
+**Session:** Solo fix requested by Tammy
+**Status:** ✅ IMPLEMENTED → Commit 19bc764 pushed to main
+**Focus:** Foundry Playground silent hang — agent_run() blocked on OpenAI call before returning async generator, no SSE events flowed, gateway timeout killed connection.
+
+**Root Cause:**
+- `agent_run()` awaited `_run_agent_conversation()` (30s+) BEFORE returning the streaming generator
+- The adapter's `_iter_with_keep_alive` only activates after it starts iterating the generator
+- During the OpenAI call: zero SSE events → Foundry gateway timeout → silent hang
+
+**Fix (Approach C):**
+- `agent_run()` returns the async generator IMMEDIATELY for streaming (no blocking)
+- `_stream_with_keepalive()`: yields `response.created` + `response.in_progress` FIRST, then awaits OpenAI call inside generator, then yields content events
+- `_build_response()`: extracted helper for FoundryResponse construction
+- `_stream_text()`: lightweight streaming for error/fast responses (no OpenAI call needed)
+
+**Key Learnings:**
+- Foundry Playground ALWAYS sends stream:true — the streaming path is the production path
+- The adapter's keep-alive only activates after generator iteration begins — must yield early events before any long work
+- `asyncio.to_thread(sync_client)` is fine in uvicorn, but the blocking must happen inside the generator, not before it's returned
+- Deploy #136 smoke test showed `DeploymentNotFound` (404) — deployment may need provisioning time after creation
+- App Insights OTel exporter `Bad Request` errors are noisy but non-blocking — don't chase them
+
+**Files changed:** `scripts/serve.py`
+**Tests:** 345 passed (aiohttp path untouched)
+
+### 2026-07-24: Managed Identity Auth Priority Flip (AuthenticationTypeDisabled Fix)
+
+**Session:** Solo fix requested by Tammy
+**Status:** ✅ IMPLEMENTED
+**Focus:** Azure OpenAI resource has key-based auth disabled by policy → 403 AuthenticationTypeDisabled. Flipped auth priority to MI-first.
+
+**Changes:**
+- **serve.py:** Flipped auth order — `DefaultAzureCredential` tried first (production MI), API key fallback only if MI fails (local dev)
+- **deploy.yml:** Removed `AZURE_OPENAI_API_KEY` from job env block (line 289) and `az cognitiveservices agent create --env` (line 576) — container no longer receives the key
+- **deploy_agent.py:** Removed `AZURE_OPENAI_API_KEY` from SDK fallback env_vars list — consistent with CLI path
+
+**Key Learnings:**
+- Azure policy can disable key-based auth on OpenAI resources; always prefer MI in production
+- `DefaultAzureCredential()` should stay per-request (not module-level) to avoid IMDS timeout hangs at startup
+- Token scope for Azure OpenAI must be `https://cognitiveservices.azure.com/.default`
+- Foundry hosted containers get MI via the project's system-assigned managed identity — no extra config needed
+
+**Files changed:** `scripts/serve.py`, `.github/workflows/deploy.yml`, `scripts/deploy_agent.py`
+
 ### 2026-04-10: Non-Blocking Startup Refactor (RequestTimedOut Fix)
 
 **Session:** Solo fix requested by Tammy  
