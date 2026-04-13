@@ -596,29 +596,59 @@ def _run_with_foundry_adapter(port: int) -> None:
 
     class AgenticOpsAgent(FoundryCBAgent):
         async def agent_run(self, context: AgentRunContext):
+            """Run the agent.
+
+            For streaming (Foundry Playground always sends stream:true),
+            returns an async generator *immediately* — before the OpenAI
+            call starts.  The generator yields ``response.created`` and
+            ``response.in_progress`` first, then awaits the OpenAI work.
+            This keeps the adapter's SSE keep-alive mechanism active during
+            the entire agent conversation, preventing the Foundry gateway's
+            100 s timeout from closing the connection.
+            """
             payload = context.raw_payload
             input_data = payload.get("input")
             messages = _parse_input_to_messages(input_data)
 
+            # Fast validation — no OpenAI call needed for these errors
+            error_text = None
             if not messages:
-                text = "Invalid input format. Send {\"input\": \"your question\"}."
+                error_text = "Invalid input format. Send {\"input\": \"your question\"}."
             else:
                 endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "").strip()
                 deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4.1").strip()
                 api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2025-01-01-preview").strip()
-
                 if not endpoint:
-                    text = "AZURE_OPENAI_ENDPOINT not configured. Agent cannot run."
-                else:
-                    result = await _run_agent_conversation(messages, endpoint, deployment, api_version)
-                    text = result["content"] if not result["error"] else f"Error: {result['error']}"
+                    error_text = "AZURE_OPENAI_ENDPOINT not configured. Agent cannot run."
 
+            # --- Streaming path (Foundry Playground) ---
+            # Return the async generator IMMEDIATELY so the adapter can
+            # start sending SSE events (and keep-alive comments) right away.
+            if context.stream:
+                if error_text:
+                    return self._stream_text(context, error_text)
+                return self._stream_with_keepalive(
+                    context, messages, endpoint, deployment, api_version,
+                )
+
+            # --- Non-streaming path ---
+            if error_text:
+                text = error_text
+            else:
+                result = await _run_agent_conversation(
+                    messages, endpoint, deployment, api_version,
+                )
+                text = result["content"] if not result["error"] else f"Error: {result['error']}"
             if not text:
                 text = "(no response)"
+            return self._build_response(context, text)
 
+        # -- helpers --------------------------------------------------------
+
+        def _build_response(self, context, text: str):
+            """Build a completed FoundryResponse object."""
             resp_id = context.response_id
             msg_id = context.id_generator.generate("msg")
-
             output_content = [ItemContentOutputText(text=text, annotations=[])]
             conversation = context.get_conversation_object()
 
@@ -627,7 +657,86 @@ def _run_with_foundry_adapter(port: int) -> None:
                 status="completed",
                 content=output_content,
             )
+            return FoundryResponse(
+                metadata={},
+                temperature=0.0,
+                top_p=0.0,
+                user="",
+                id=resp_id,
+                created_at=dt.datetime.now(dt.timezone.utc),
+                status="completed",
+                error=None,
+                incomplete_details=None,
+                instructions=None,
+                parallel_tool_calls=False,
+                conversation=conversation,
+                output=[msg_item],
+            )
 
+        async def _stream_with_keepalive(
+            self, context, messages, endpoint, deployment, api_version,
+        ):
+            """Yield SSE events with the OpenAI call *inside* the generator.
+
+            Flow:
+              1. Yield ``response.created`` + ``response.in_progress``
+                 → adapter starts SSE stream and keep-alive timer
+              2. ``await _run_agent_conversation(...)`` (may take 30 s+)
+                 → adapter sends ``: keep-alive`` SSE comments while waiting
+              3. Yield content events once the answer is ready.
+
+            This prevents the Foundry gateway's 100 s timeout from killing
+            the connection during long agent conversations.
+            """
+            resp_id = context.response_id
+            msg_id = context.id_generator.generate("msg")
+            conversation = context.get_conversation_object()
+            seq = 0
+
+            # Skeleton response for early events
+            skeleton = {
+                "id": resp_id,
+                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "status": "in_progress",
+                "output": [],
+                "metadata": {},
+                "temperature": 0.0,
+                "top_p": 0.0,
+                "user": "",
+                "error": None,
+                "incomplete_details": None,
+                "instructions": None,
+                "parallel_tool_calls": False,
+            }
+
+            # --- Yield early events BEFORE the OpenAI call ---
+            yield ResponseCreatedEvent(
+                type="response.created", sequence_number=seq, response=skeleton,
+            )
+            seq += 1
+
+            yield ResponseInProgressEvent(
+                type="response.in_progress", sequence_number=seq, response=skeleton,
+            )
+            seq += 1
+
+            # --- OpenAI call (adapter sends keep-alives while we await) ---
+            logger.info("Streaming: starting OpenAI call (keep-alives active)")
+            result = await _run_agent_conversation(
+                messages, endpoint, deployment, api_version,
+            )
+            text = result["content"] if not result["error"] else f"Error: {result['error']}"
+            if not text:
+                text = "(no response)"
+            logger.info("Streaming: OpenAI call complete, yielding content events")
+
+            # Build final objects
+            output_content = [ItemContentOutputText(text=text, annotations=[])]
+            msg_item = ResponsesAssistantMessageItemResource(
+                id=msg_id,
+                status="completed",
+                content=output_content,
+            )
             response = FoundryResponse(
                 metadata={},
                 temperature=0.0,
@@ -644,19 +753,59 @@ def _run_with_foundry_adapter(port: int) -> None:
                 output=[msg_item],
             )
 
-            # Non-streaming: return Response object directly
-            if not context.stream:
-                return response
+            # --- Yield content events ---
+            item_dict = msg_item.as_dict()
+            item_dict["status"] = "in_progress"
+            item_dict["content"] = []
+            yield ResponseOutputItemAddedEvent(
+                type="response.output_item.added", sequence_number=seq,
+                output_index=0, item=item_dict,
+            )
+            seq += 1
 
-            # Streaming: return async generator of ResponseStreamEvent objects.
-            # The adapter iterates these and converts to SSE chunks.
-            return self._stream_response(response, msg_item, text)
+            yield ResponseContentPartAddedEvent(
+                type="response.content_part.added", sequence_number=seq,
+                output_index=0, content_index=0,
+                part={"type": "output_text", "text": ""},
+            )
+            seq += 1
 
-        async def _stream_response(self, response, msg_item, text):
-            """Yield Responses API streaming events for a completed response."""
+            yield ResponseTextDeltaEvent(
+                type="response.output_text.delta", sequence_number=seq,
+                output_index=0, content_index=0, delta=text,
+            )
+            seq += 1
+
+            yield ResponseTextDoneEvent(
+                type="response.output_text.done", sequence_number=seq,
+                output_index=0, content_index=0, text=text,
+            )
+            seq += 1
+
+            yield ResponseContentPartDoneEvent(
+                type="response.content_part.done", sequence_number=seq,
+                output_index=0, content_index=0,
+                part={"type": "output_text", "text": text},
+            )
+            seq += 1
+
+            yield ResponseOutputItemDoneEvent(
+                type="response.output_item.done", sequence_number=seq,
+                output_index=0, item=msg_item.as_dict(),
+            )
+            seq += 1
+
+            yield ResponseCompletedEvent(
+                type="response.completed", sequence_number=seq,
+                response=response.as_dict(),
+            )
+
+        async def _stream_text(self, context, text: str):
+            """Stream a pre-computed text (errors / fast responses)."""
+            response = self._build_response(context, text)
+            msg_item = response.output[0]
             seq = 0
 
-            # Build an in-progress snapshot of the response for early events
             in_progress = response.as_dict()
             in_progress["status"] = "in_progress"
             in_progress["output"] = []
