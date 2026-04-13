@@ -286,7 +286,6 @@ jobs:
             AZURE_AI_AGENTS_ENDPOINT: ${{ secrets.AZURE_AI_AGENTS_ENDPOINT }}
             AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
             AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
-            AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
             APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
             AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED: "false"
             ENABLE_WORK_IQ: "true"
@@ -573,7 +572,6 @@ jobs:
                       --protocol responses --protocol-version v1 \
                       --env "AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}" \
                             "AZURE_OPENAI_DEPLOYMENT=${AZURE_OPENAI_DEPLOYMENT}" \
-                            "AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}" \
                             "DB_MODE=sqlite" \
                             "ENABLE_WORK_IQ=true" \
                             "ENABLE_MCP=false" \

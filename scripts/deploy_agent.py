@@ -11,7 +11,6 @@ Required environment variables:
 Optional:
     AZURE_OPENAI_ENDPOINT     — Injected into container env
     AZURE_OPENAI_DEPLOYMENT   — Model deployment name (default: gpt-4.1)
-    AZURE_OPENAI_API_KEY      — Injected into container env
     ENABLE_WORK_IQ            — Feature flag (default: true)
     AZURE_CLIENT_ID           — Managed identity client ID
 
@@ -59,7 +58,6 @@ def main() -> None:
     for key in [
         "AZURE_OPENAI_ENDPOINT",
         "AZURE_OPENAI_DEPLOYMENT",
-        "AZURE_OPENAI_API_KEY",
         "APPLICATIONINSIGHTS_CONNECTION_STRING",
         "AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED",
         "DB_MODE",

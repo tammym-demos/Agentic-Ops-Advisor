@@ -178,38 +178,45 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
     REQUEST_TIMEOUT_S = 30.0
     loop_start = time.monotonic()
 
-    # --- Auth: API key first, managed identity fallback ---
-    # API key is preferred because DefaultAzureCredential's managed identity
-    # probe can hang for ~2 min when no MI is configured (IMDS timeout).
-    api_key = os.environ.get("AZURE_OPENAI_API_KEY", "")
-    if api_key:
-        logger.info("Using API key auth for Azure OpenAI")
+    # --- Auth: managed identity first (production), API key fallback (local dev) ---
+    # In production (Foundry hosted container), the project's system-assigned
+    # managed identity is available via DefaultAzureCredential.  API key auth
+    # is disabled by policy on the Azure OpenAI resource, so MI must be tried
+    # first.  The API key path is kept only for local dev scenarios where MI
+    # is unavailable.  Note: DefaultAzureCredential() is intentionally created
+    # per-request (not at module level) to avoid startup hangs when IMDS is
+    # unreachable.
+    client = None
+    try:
+        from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+
+        logger.info("Trying managed identity auth for Azure OpenAI")
+        credential = DefaultAzureCredential()
+        token_provider = get_bearer_token_provider(
+            credential, "https://cognitiveservices.azure.com/.default"
+        )
         client = AzureOpenAI(
             azure_endpoint=endpoint,
-            api_key=api_key,
+            azure_ad_token_provider=token_provider,
             api_version=api_version,
             timeout=REQUEST_TIMEOUT_S,
             max_retries=1,
         )
-    else:
-        try:
-            from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-
-            logger.info("No API key — trying managed identity auth")
-            credential = DefaultAzureCredential()
-            token_provider = get_bearer_token_provider(
-                credential, "https://cognitiveservices.azure.com/.default"
-            )
+    except Exception as cred_exc:
+        logger.warning("Managed identity auth unavailable: %s", cred_exc)
+        api_key = os.environ.get("AZURE_OPENAI_API_KEY", "")
+        if api_key:
+            logger.info("Falling back to API key auth for Azure OpenAI")
             client = AzureOpenAI(
                 azure_endpoint=endpoint,
-                azure_ad_token_provider=token_provider,
+                api_key=api_key,
                 api_version=api_version,
                 timeout=REQUEST_TIMEOUT_S,
                 max_retries=1,
             )
-        except Exception as cred_exc:
-            logger.error("Auth failed — no API key and managed identity unavailable: %s", cred_exc)
-            return {"content": "", "error": f"Auth failed (no API key or managed identity): {cred_exc}"}
+        else:
+            logger.error("Auth failed — managed identity unavailable and no API key set: %s", cred_exc)
+            return {"content": "", "error": f"Auth failed (no managed identity or API key): {cred_exc}"}
 
     # Prepend system prompt
     conversation: list[dict] = [{"role": "system", "content": _SYSTEM_PROMPT}] + messages
