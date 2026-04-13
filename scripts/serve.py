@@ -244,8 +244,17 @@ async def _run_agent_conversation(messages: list[dict], endpoint: str, deploymen
             logger.info("OpenAI call round %d completed in %.1fs", _round + 1, call_duration)
         except Exception as exc:
             call_duration = time.monotonic() - call_start
-            logger.exception("Azure OpenAI error after %.1fs", call_duration)
-            return {"content": "", "error": f"OpenAI call failed after {call_duration:.0f}s: {exc}"}
+            # Include endpoint domain + deployment in error for diagnostics
+            # (these are NOT secrets — just config values)
+            from urllib.parse import urlparse
+            ep_host = urlparse(endpoint).hostname or endpoint
+            logger.exception("Azure OpenAI error after %.1fs (endpoint=%s, model=%s)",
+                             call_duration, ep_host, deployment)
+            return {
+                "content": "",
+                "error": (f"OpenAI call failed after {call_duration:.0f}s "
+                          f"(endpoint={ep_host}, model={deployment}): {exc}"),
+            }
 
         choice = response.choices[0]
         message = choice.message
@@ -527,9 +536,20 @@ def _resolve_port() -> int:
 
 def _log_startup_diagnostics() -> None:
     logger.info("Starting Agentic Ops Advisor hosted agent server …")
-    logger.info("AZURE_OPENAI_ENDPOINT: %s", os.environ.get("AZURE_OPENAI_ENDPOINT", "(not set)"))
+    ep = os.environ.get("AZURE_OPENAI_ENDPOINT", "(not set)")
+    deploy = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "(not set)")
+    logger.info("AZURE_OPENAI_ENDPOINT: %s", ep)
+    logger.info("AZURE_OPENAI_DEPLOYMENT: %s", deploy)
     logger.info("AZURE_OPENAI_API_KEY: %s", "set" if os.environ.get("AZURE_OPENAI_API_KEY") else "not set")
     logger.info("AZURE_CLIENT_ID: %s", "set" if os.environ.get("AZURE_CLIENT_ID") else "not set")
+    # Log parsed hostname for diagnostics (even if full URL is masked)
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(ep)
+        if parsed.hostname:
+            logger.info("Parsed endpoint hostname: %s", parsed.hostname)
+    except Exception:
+        pass
 
 
 def _parse_input_to_messages(input_data) -> list[dict] | None:

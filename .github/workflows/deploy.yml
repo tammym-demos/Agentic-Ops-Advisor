@@ -531,6 +531,20 @@ jobs:
                   echo "  Project: ${FOUNDRY_PROJECT}"
                   echo "  Image:   ${CONTAINER_IMAGE}"
 
+                  # --- Diagnostics: log OpenAI config (hostname only, not full secret) ---
+                  OPENAI_EP_HOST=$(echo "${AZURE_OPENAI_ENDPOINT}" | python3 -c "
+                  import sys
+                  from urllib.parse import urlparse
+                  ep = sys.stdin.read().strip()
+                  p = urlparse(ep)
+                  print(p.hostname or '(unparseable)')
+                  " 2>/dev/null || echo '(parse-failed)')
+                  echo "  OpenAI endpoint hostname: ${OPENAI_EP_HOST}"
+                  echo "  OpenAI endpoint length: ${#AZURE_OPENAI_ENDPOINT}"
+                  echo "  OpenAI deployment length: ${#AZURE_OPENAI_DEPLOYMENT}"
+                  # Expected: endpoint hostname=hub-agentops-prod.openai.azure.com
+                  #           deployment length=7 (gpt-4.1)
+
                   # --- CLI version check ---
                   CLI_VER=$(az version -o json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("azure-cli","?"))' 2>/dev/null || echo 'unknown')
                   echo "Azure CLI version: ${CLI_VER}"
@@ -547,7 +561,7 @@ jobs:
                       --account-name "$ACCOUNT_NAME" \
                       --project-name "$FOUNDRY_PROJECT" \
                       --name "agentic-ops-advisor" \
-                      --yes 2>&1 || echo "  (no existing agent to delete — OK)"
+                      2>&1 || echo "  (no existing agent to delete — OK)"
 
                   # ═══════════════════════════════════════════════════════════
                   # PRIMARY: az cognitiveservices agent create
