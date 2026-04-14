@@ -9,6 +9,23 @@
 
 ## Learnings
 
+### 2026-07-25: CI Pipeline + Script Cleanup — Stale Import Fix
+
+**Session:** Task from Tammy  
+**Status:** ✅ IMPLEMENTED  
+**Focus:** Fix broken imports in run_foundry_agent.py and audit deploy.yml + other scripts
+
+**Findings:**
+- `deploy.yml` — CLEAN. No references to deleted artifacts (run_local.py, aiohttp, test_local_scripts.py, test_health_endpoint.py, TOOL_DEFINITIONS, TOOL_SCHEMA, TOOL_CALLABLES, azure-ai-agentserver-core).
+- `scripts/run_regression_demo.py` — CLEAN. Self-contained demo, no imports from deleted modules.
+- `eval/run_eval.py` — CLEAN. Uses its own evaluator imports, no dependency on removed exports.
+
+**Files edited:**
+- `scripts/run_foundry_agent.py` — Rewrote `_get_function_tool_definitions()` to use inline FunctionTool schemas instead of importing removed `TOOL_DEFINITIONS` / `ACTION_STUB_TOOL_DEFINITIONS` constants from tool modules. Schemas match actual function signatures (query_telemetry, propose_change, request_approval, get_work_context).
+- `scripts/deploy_agent.py` — Updated stale comment referencing `FoundryCBAgent` → `Agent Framework`.
+
+**Key Learning:** Tool modules now export only functions (query_telemetry, propose_change, etc.) — no more `TOOL_DEFINITIONS` / `TOOL_SCHEMA` / `TOOL_CALLABLES` constants. Any script needing OpenAI-format tool schemas for SDK registration must define them inline.
+
 ### 2026-07-25: Remove Local Dev Mode — Container-Only Decision
 
 **Session:** Task from Tammy  

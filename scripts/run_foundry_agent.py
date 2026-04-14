@@ -87,37 +87,102 @@ def _dispatch_tool(name: str, arguments: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _get_function_tool_definitions() -> list:
-    """Collect tool schemas from all tool modules for PromptAgent registration.
+    """Build FunctionTool objects for PromptAgent registration.
 
-    Converts the OpenAI-format tool dicts ({"type":"function","function":{...}})
-    into azure-ai-projects FunctionTool objects that the SDK expects.
+    Defines tool schemas inline to match the function signatures exported
+    by the tool modules (query_telemetry, propose_change, request_approval,
+    get_full_context).
     """
     from azure.ai.projects.models import FunctionTool
-    from tools.sql_telemetry import TOOL_DEFINITIONS as sql_tools
-    from tools.action_stub import ACTION_STUB_TOOL_DEFINITIONS as action_tools
-    from tools.work_context_stub import (
-        TOOL_DEFINITIONS as work_ctx_tools,
-        ENABLE_WORK_IQ,
-    )
+    from tools.work_context_stub import ENABLE_WORK_IQ
 
-    raw_tools = list(sql_tools) + list(action_tools)
+    tools = [
+        FunctionTool(
+            name="query_telemetry",
+            description=(
+                "Query infrastructure telemetry data. Use 'table' for raw rows, "
+                "'aggregate' for pre-built summaries (e.g. gpu_avg_util_24h, "
+                "net_avg_latency_1h, cost_by_service_24h, open_incidents), or "
+                "'sql' for a custom SELECT query."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "table": {
+                        "type": "string",
+                        "description": "Table name: telemetry_gpu, telemetry_net, telemetry_cost, incidents",
+                    },
+                    "aggregate": {
+                        "type": "string",
+                        "description": "Pre-built aggregate query key",
+                    },
+                    "sql": {
+                        "type": "string",
+                        "description": "Custom SELECT SQL query",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max rows to return (default 100)",
+                    },
+                },
+            },
+            strict=False,
+        ),
+        FunctionTool(
+            name="propose_change",
+            description="Propose a simulated infrastructure change. Returns a structured change request with risk assessment.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "plan": {
+                        "type": "string",
+                        "description": "Free-text description of the intended change",
+                    },
+                },
+                "required": ["plan"],
+            },
+            strict=False,
+        ),
+        FunctionTool(
+            name="request_approval",
+            description="Check simulated approval status for a change request.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "change_request_id": {
+                        "type": "string",
+                        "description": "The UUID returned by propose_change",
+                    },
+                },
+                "required": ["change_request_id"],
+            },
+            strict=False,
+        ),
+    ]
+
     if ENABLE_WORK_IQ:
-        raw_tools.extend(work_ctx_tools)
-
-    # Convert {"type":"function","function":{"name":..,"description":..,"parameters":..}}
-    # into FunctionTool(name=.., description=.., parameters=..)
-    sdk_tools = []
-    for t in raw_tools:
-        fn = t.get("function", t)
-        sdk_tools.append(
+        tools.append(
             FunctionTool(
-                name=fn["name"],
-                description=fn.get("description", ""),
-                parameters=fn.get("parameters", {}),
+                name="get_work_context",
+                description=(
+                    "Get work context for a service: recent changes, decisions, "
+                    "ownership, and runbooks. (Simulated Work IQ data.)"
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "service": {
+                            "type": "string",
+                            "description": "Service or cluster name to look up",
+                        },
+                    },
+                    "required": ["service"],
+                },
                 strict=False,
             )
         )
-    return sdk_tools
+
+    return tools
 
 
 # ---------------------------------------------------------------------------
