@@ -608,8 +608,14 @@ def _run_with_foundry_adapter(port: int) -> None:
     from azure.ai.agentserver.core.models.projects import (
         ItemContentOutputText,
         ResponseCompletedEvent,
+        ResponseContentPartAddedEvent,
+        ResponseContentPartDoneEvent,
         ResponseCreatedEvent,
         ResponseInProgressEvent,
+        ResponseOutputItemAddedEvent,
+        ResponseOutputItemDoneEvent,
+        ResponseTextDeltaEvent,
+        ResponseTextDoneEvent,
         ResponsesAssistantMessageItemResource,
     )
 
@@ -712,28 +718,31 @@ def _run_with_foundry_adapter(port: int) -> None:
         async def _stream_with_keepalive(
             self, context, messages, endpoint, deployment, api_version,
         ):
-            """Yield SSE events with the OpenAI call *inside* the generator.
+            """Yield full SSE event sequence with OpenAI call *inside* generator.
 
-            Uses a minimal 3-event sequence (created → in_progress →
-            completed) to maximise compatibility with the Foundry gateway
-            proxy.  Intermediate content events are intentionally omitted —
-            the ``response.completed`` payload carries the full output.
-
-            Flow:
-              1. Yield ``response.created`` + ``response.in_progress``
-                 → adapter starts SSE stream and keep-alive timer
-              2. ``await _run_agent_conversation(...)`` (may take 30 s+)
-                 → adapter sends ``: keep-alive`` SSE comments while waiting
-              3. Yield ``response.completed`` with full output.
+            Uses the standard Foundry Responses API streaming protocol:
+              1. response.created          — skeleton (adapter starts SSE)
+              2. response.in_progress      — skeleton
+              -- OpenAI call happens here (adapter sends keep-alive) --
+              3. response.output_item.added — message item placeholder
+              4. response.content_part.added — text part placeholder
+              5. response.output_text.delta — full text as single delta
+              6. response.output_text.done  — text finalised
+              7. response.content_part.done — part finalised
+              8. response.output_item.done  — item finalised (conversation store)
+              9. response.completed         — full response object
             """
             resp_id = context.response_id
             msg_id = context.id_generator.generate("msg")
+            conversation = context.get_conversation_object()
             seq = 0
 
             # Skeleton response for early events
             skeleton = {
+                "object": "response",
                 "id": resp_id,
-                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                "conversation": {"id": conversation.id} if conversation else None,
+                "created_at": int(dt.datetime.now(dt.timezone.utc).timestamp()),
                 "status": "in_progress",
                 "output": [],
                 "metadata": {},
@@ -746,16 +755,16 @@ def _run_with_foundry_adapter(port: int) -> None:
                 "parallel_tool_calls": False,
             }
 
-            # --- Yield early events BEFORE the OpenAI call ---
+            # --- Events 1-2: yield BEFORE the OpenAI call ---
             logger.info("STREAM[%s]: yielding response.created (seq=%d)", resp_id, seq)
             yield ResponseCreatedEvent(
-                type="response.created", sequence_number=seq, response=skeleton,
+                sequence_number=seq, response=skeleton,
             )
             seq += 1
 
             logger.info("STREAM[%s]: yielding response.in_progress (seq=%d)", resp_id, seq)
             yield ResponseInProgressEvent(
-                type="response.in_progress", sequence_number=seq, response=skeleton,
+                sequence_number=seq, response=skeleton,
             )
             seq += 1
 
@@ -768,88 +777,188 @@ def _run_with_foundry_adapter(port: int) -> None:
                 text = result["content"] if not result["error"] else f"Error: {result['error']}"
                 if not text:
                     text = "(no response)"
-                logger.info("STREAM[%s]: OpenAI call complete, text=%.80s", resp_id, text)
+                logger.info("STREAM[%s]: OpenAI call complete, text len=%d", resp_id, len(text))
             except Exception as exc:
                 logger.exception("STREAM[%s]: OpenAI call raised exception", resp_id)
                 text = f"Error: agent call failed: {exc}"
 
-            # --- Build completed response and yield as single event ---
+            # --- Events 3-9: content delivery ---
             try:
-                output_content = [ItemContentOutputText(text=text, annotations=[])]
-                msg_item = ResponsesAssistantMessageItemResource(
-                    id=msg_id,
-                    status="completed",
-                    content=output_content,
+                # 3. output_item.added — message placeholder
+                item_placeholder = {
+                    "type": "message", "id": msg_id,
+                    "status": "in_progress", "role": "assistant",
+                    "content": [],
+                }
+                logger.info("STREAM[%s]: yielding output_item.added (seq=%d)", resp_id, seq)
+                yield ResponseOutputItemAddedEvent(
+                    sequence_number=seq, output_index=0, item=item_placeholder,
                 )
-                conversation = context.get_conversation_object()
-                response = FoundryResponse(
-                    metadata={},
-                    temperature=0.0,
-                    top_p=0.0,
-                    user="",
-                    id=resp_id,
-                    created_at=dt.datetime.now(dt.timezone.utc),
-                    status="completed",
-                    error=None,
-                    incomplete_details=None,
-                    instructions=None,
-                    parallel_tool_calls=False,
-                    conversation=conversation,
-                    output=[msg_item],
+                seq += 1
+
+                # 4. content_part.added — text part placeholder
+                logger.info("STREAM[%s]: yielding content_part.added (seq=%d)", resp_id, seq)
+                yield ResponseContentPartAddedEvent(
+                    sequence_number=seq, item_id=msg_id,
+                    output_index=0, content_index=0,
+                    part={"type": "output_text", "text": "", "annotations": []},
                 )
-                resp_dict = response.as_dict()
+                seq += 1
+
+                # 5. output_text.delta — full text as single delta
+                logger.info("STREAM[%s]: yielding text.delta (seq=%d, len=%d)", resp_id, seq, len(text))
+                yield ResponseTextDeltaEvent(
+                    sequence_number=seq, item_id=msg_id,
+                    output_index=0, content_index=0,
+                    delta=text,
+                )
+                seq += 1
+
+                # 6. output_text.done
+                logger.info("STREAM[%s]: yielding text.done (seq=%d)", resp_id, seq)
+                yield ResponseTextDoneEvent(
+                    sequence_number=seq, item_id=msg_id,
+                    output_index=0, content_index=0,
+                    text=text,
+                )
+                seq += 1
+
+                # 7. content_part.done
+                logger.info("STREAM[%s]: yielding content_part.done (seq=%d)", resp_id, seq)
+                yield ResponseContentPartDoneEvent(
+                    sequence_number=seq, item_id=msg_id,
+                    output_index=0, content_index=0,
+                    part={"type": "output_text", "text": text, "annotations": []},
+                )
+                seq += 1
+
+                # 8. output_item.done — needed for conversation store
+                completed_item = {
+                    "type": "message", "id": msg_id,
+                    "status": "completed", "role": "assistant",
+                    "content": [{"type": "output_text", "text": text, "annotations": []}],
+                }
+                logger.info("STREAM[%s]: yielding output_item.done (seq=%d)", resp_id, seq)
+                yield ResponseOutputItemDoneEvent(
+                    sequence_number=seq, output_index=0, item=completed_item,
+                )
+                seq += 1
+
+                # 9. response.completed — full response
+                completed_resp = dict(skeleton)
+                completed_resp["status"] = "completed"
+                completed_resp["output"] = [completed_item]
                 logger.info("STREAM[%s]: yielding response.completed (seq=%d)", resp_id, seq)
                 yield ResponseCompletedEvent(
-                    type="response.completed", sequence_number=seq,
-                    response=resp_dict,
+                    sequence_number=seq, response=completed_resp,
                 )
-                logger.info("STREAM[%s]: all events yielded successfully", resp_id)
+                logger.info("STREAM[%s]: all 9 events yielded successfully", resp_id)
             except Exception as exc:
-                logger.exception("STREAM[%s]: error building completed event", resp_id)
-                # Yield a minimal completed response with the error
+                logger.exception("STREAM[%s]: error building content events", resp_id)
                 err_resp = dict(skeleton)
-                err_resp["status"] = "failed"
+                err_resp["status"] = "completed"
                 err_resp["output"] = [{
-                    "type": "message",
-                    "id": msg_id,
-                    "status": "completed",
-                    "role": "assistant",
+                    "type": "message", "id": msg_id,
+                    "status": "completed", "role": "assistant",
                     "content": [{"type": "output_text", "text": f"Error: {exc}", "annotations": []}],
                 }]
                 yield ResponseCompletedEvent(
-                    type="response.completed", sequence_number=seq,
-                    response=err_resp,
+                    sequence_number=seq, response=err_resp,
                 )
 
         async def _stream_text(self, context, text: str):
             """Stream a pre-computed text (errors / fast responses).
 
-            Uses minimal 3-event sequence: created → in_progress → completed.
+            Uses the same 9-event sequence as _stream_with_keepalive.
             """
             resp_id = context.response_id
-            response = self._build_response(context, text)
+            msg_id = context.id_generator.generate("msg")
+            conversation = context.get_conversation_object()
             seq = 0
 
-            in_progress = response.as_dict()
-            in_progress["status"] = "in_progress"
-            in_progress["output"] = []
+            skeleton = {
+                "object": "response",
+                "id": resp_id,
+                "conversation": {"id": conversation.id} if conversation else None,
+                "created_at": int(dt.datetime.now(dt.timezone.utc).timestamp()),
+                "status": "in_progress",
+                "output": [],
+                "metadata": {},
+                "temperature": 0.0,
+                "top_p": 0.0,
+                "user": "",
+                "error": None,
+                "incomplete_details": None,
+                "instructions": None,
+                "parallel_tool_calls": False,
+            }
 
             logger.info("STREAM_TEXT[%s]: yielding response.created (seq=%d)", resp_id, seq)
-            yield ResponseCreatedEvent(
-                type="response.created", sequence_number=seq, response=in_progress,
-            )
+            yield ResponseCreatedEvent(sequence_number=seq, response=skeleton)
             seq += 1
 
             logger.info("STREAM_TEXT[%s]: yielding response.in_progress (seq=%d)", resp_id, seq)
-            yield ResponseInProgressEvent(
-                type="response.in_progress", sequence_number=seq, response=in_progress,
+            yield ResponseInProgressEvent(sequence_number=seq, response=skeleton)
+            seq += 1
+
+            # output_item.added
+            item_placeholder = {
+                "type": "message", "id": msg_id,
+                "status": "in_progress", "role": "assistant", "content": [],
+            }
+            yield ResponseOutputItemAddedEvent(
+                sequence_number=seq, output_index=0, item=item_placeholder,
             )
             seq += 1
 
+            # content_part.added
+            yield ResponseContentPartAddedEvent(
+                sequence_number=seq, item_id=msg_id,
+                output_index=0, content_index=0,
+                part={"type": "output_text", "text": "", "annotations": []},
+            )
+            seq += 1
+
+            # text.delta
+            yield ResponseTextDeltaEvent(
+                sequence_number=seq, item_id=msg_id,
+                output_index=0, content_index=0, delta=text,
+            )
+            seq += 1
+
+            # text.done
+            yield ResponseTextDoneEvent(
+                sequence_number=seq, item_id=msg_id,
+                output_index=0, content_index=0, text=text,
+            )
+            seq += 1
+
+            # content_part.done
+            yield ResponseContentPartDoneEvent(
+                sequence_number=seq, item_id=msg_id,
+                output_index=0, content_index=0,
+                part={"type": "output_text", "text": text, "annotations": []},
+            )
+            seq += 1
+
+            # output_item.done
+            completed_item = {
+                "type": "message", "id": msg_id,
+                "status": "completed", "role": "assistant",
+                "content": [{"type": "output_text", "text": text, "annotations": []}],
+            }
+            yield ResponseOutputItemDoneEvent(
+                sequence_number=seq, output_index=0, item=completed_item,
+            )
+            seq += 1
+
+            # response.completed
+            completed_resp = dict(skeleton)
+            completed_resp["status"] = "completed"
+            completed_resp["output"] = [completed_item]
             logger.info("STREAM_TEXT[%s]: yielding response.completed (seq=%d)", resp_id, seq)
             yield ResponseCompletedEvent(
-                type="response.completed", sequence_number=seq,
-                response=response.as_dict(),
+                sequence_number=seq, response=completed_resp,
             )
             logger.info("STREAM_TEXT[%s]: all events yielded", resp_id)
 
