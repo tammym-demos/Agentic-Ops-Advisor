@@ -597,11 +597,14 @@ def _run_with_foundry_adapter(port: int) -> None:
     # ── Disable App Insights BEFORE importing the adapter ──
     # The adapter's __init__.py calls config_logging() at import time,
     # which sets up AzureMonitorLogExporter.  If the App Insights
-    # connection string is invalid the exporter floods stderr with
-    # "Non-retryable server side error: Bad Request" on a background
-    # thread, which can starve I/O and interfere with SSE streaming.
-    # Disable it here; re-enable once telemetry config is validated.
-    os.environ["ENABLE_APPLICATION_INSIGHTS_LOGGER"] = "false"
+    # connection string is invalid/mismatched the exporter floods stderr
+    # with "Non-retryable server side error: Bad Request" on a background
+    # thread, starving async I/O and blocking SSE streaming.
+    #
+    # CRITICAL: The adapter checks AGENT_APP_INSIGHTS_ENABLED
+    # (Constants.ENABLE_APPLICATION_INSIGHTS_LOGGER), NOT the literal
+    # string "ENABLE_APPLICATION_INSIGHTS_LOGGER".
+    os.environ["AGENT_APP_INSIGHTS_ENABLED"] = "false"
 
     from azure.ai.agentserver.core import FoundryCBAgent, AgentRunContext
     from azure.ai.agentserver.core.models import Response as FoundryResponse
