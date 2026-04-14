@@ -9,6 +9,29 @@
 
 ## Learnings
 
+### 2026-04-09: Migration Plan Rewrite — Gap Analysis Incorporation
+
+**Session:** Solo doc rewrite (Holden)  
+**Status:** Complete — `docs/agent-framework-migration-plan.md` rewritten  
+
+**Key Architecture Decisions:**
+- **Client class:** `AzureOpenAIChatClient` (from `agent_framework.azure`), NOT `FoundryChatClient`. Aligns with existing `AZURE_OPENAI_ENDPOINT` config and matches official hosted agent samples.
+- **Agent creation:** `chat_client.create_agent(name=..., instructions=..., tools=[...])` factory method — NOT `Agent(client=..., tools=[...])`.
+- **Tools:** Plain Python functions with type annotations. `@ai_function` decorator is optional (schema customization only).
+- **Hosting:** `from_agent_framework(agent).run()` from `azure.ai.agentserver.agentframework` — serves `/responses` on port 8088 (confirmed).
+- **Container-only:** Decision to remove local dev mode entirely. Delete `run_local.py`, remove aiohttp fallback, remove MODE=cli.
+- **Token scope:** `https://cognitiveservices.azure.com/.default` (matches existing auth).
+
+**Patterns:**
+- Packages: `agent-framework-foundry` (GA) + `azure-ai-agentserver-agentframework` (beta adapter)
+- Official sample path: `microsoft-foundry/foundry-samples/samples/python/hosted-agents/agent-framework/agent-with-foundry-tools/`
+- Tool modules export removal: ALL 3 exports (`TOOL_SCHEMA`, `TOOL_DEFINITIONS`, `TOOL_CALLABLES`) removed, not just `TOOL_DEFINITIONS`
+- Test rewrite scope: near-complete rewrite of `test_serve.py`; delete `test_health_endpoint.py` and `test_local_scripts.py`
+
+**Open unknowns:** health/readiness endpoints from adapter, `openai` transitive version, `uvicorn`/`starlette` bundling.
+
+**File:** `docs/agent-framework-migration-plan.md` — expanded from 164 lines / 8 todos to ~240 lines / 14 todos.
+
 ### 2026-04-08: Full Diagnostic Session — Deploy Cascade Failure Analysis
 
 **Session:** Three-agent diagnostic audit (Holden lead, Naomi backend analysis, Amos infra audit)  
