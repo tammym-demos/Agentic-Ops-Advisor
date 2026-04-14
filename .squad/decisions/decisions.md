@@ -861,3 +861,35 @@ Port 8088 avoids the Foundry sidecar conflict while remaining a non-privileged p
 - **Naomi:** `serve.py` reads `PORT` env var — no code change needed, just aware of the default shift.
 - **Amos:** All infra/deploy files already updated. Future Dockerfile or pipeline changes must preserve 8088.
 - **Everyone:** Do NOT change the container port back to 8080 — it will break Foundry deployment.
+
+---
+
+## Remove Local Dev Mode — Container-Only Architecture
+
+**Author:** Amos (DevOps)  
+**Date:** 2026-07-25  
+**Status:** IMPLEMENTED
+
+## What Changed
+
+Removed all local dev mode artifacts. This project is container-only.
+
+### Deleted
+- `scripts/run_local.py` — standalone CLI runner
+- `tests/test_local_scripts.py` — local script tests
+- `tests/test_health_endpoint.py` — run_local health server tests
+
+### Edited
+- `scripts/serve.py` — Removed `MODE=cli` code path
+- `README.md` — All local dev references → container-based instructions
+- `scripts/setup_local_db.py`, `data/seed_telemetry.py`, `tools/sql_telemetry.py` — Updated comments
+- `docs/index.html`, `.env.example` — Updated references
+
+## Impact
+- Single entrypoint: `scripts/serve.py` (no MODE switching)
+- Local development = `docker build` + `docker run`
+- Health checks served by serve.py on port 8088 (not run_local's 8080)
+
+## Team Notes
+- Historical references in `.squad/` and `docs/specs/` left as-is (they're documentation of past decisions)
+- `scripts/setup_local_db.py` still exists for seeding the DB during container build

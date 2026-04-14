@@ -601,3 +601,22 @@
 - Container no longer blocked on IMDS probe
 
 **Files to Review:** scripts/serve.py (lines ~40 for on_startup hook, _ready_event gate, [STARTUP] logging)
+
+### 2026-04-14: Dockerfile Review — Agent Framework Migration
+
+**Session:** Task from Tammy
+**Status:** ✅ NO CHANGES NEEDED
+
+**Verification checklist:**
+- No references to deleted `run_local.py` — confirmed clean
+- No references to `aiohttp` (removed dep) — confirmed clean
+- No `MODE=cli` env var — confirmed absent (only `MODE=serve`)
+- `EXPOSE 8088` — present and correct
+- SQLite seeding (`data/` copy + `scripts/setup_local_db.py`) — intact
+- `ENTRYPOINT ["python", "scripts/serve.py"]` — intact
+- Multi-stage build (builder → runtime) — intact
+- Non-root `USER agent` — intact
+- Azure/OpenAI/tracing ENV vars — not hardcoded (correct, set at deploy time)
+- `requirements.txt` changes (aiohttp removed, agent-framework-foundry added) are picked up automatically via `COPY requirements.txt` + `pip install`
+
+**Conclusion:** Dockerfile needs zero changes for the migration. The multi-stage build copies `requirements.txt` and installs from it, so the new deps flow through automatically.
