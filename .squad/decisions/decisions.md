@@ -893,3 +893,59 @@ Removed all local dev mode artifacts. This project is container-only.
 ## Team Notes
 - Historical references in `.squad/` and `docs/specs/` left as-is (they're documentation of past decisions)
 - `scripts/setup_local_db.py` still exists for seeding the DB during container build
+
+---
+
+## Tool Schemas Are Now Inline in Client Scripts
+
+**Date:** 2026-04-14T22:03:00Z  
+**Author:** Amos (DevOps)  
+**Status:** Implemented  
+
+### Context
+
+The tool modules (`tools/sql_telemetry.py`, `tools/action_stub.py`, `tools/work_context_stub.py`) previously exported `TOOL_DEFINITIONS` / `ACTION_STUB_TOOL_DEFINITIONS` / `TOOL_SCHEMA` constants — OpenAI-format JSON dicts describing each tool's parameters. These were consumed by client scripts for PromptAgent registration.
+
+Those constants were removed during the framework migration. The tool modules now export only callable functions.
+
+### Decision
+
+Client-side scripts that need tool schemas for SDK registration (e.g., `run_foundry_agent.py` PromptAgent mode) define the schemas inline rather than importing them from tool modules.
+
+### Rationale
+
+- Tool modules are now pure function surfaces — cleaner separation of concerns
+- Schema definitions for SDK registration are a client concern, not a tool concern
+- `serve.py` (production path) uses the Agent Framework which auto-discovers tool schemas from function signatures — no constants needed
+
+### Impact
+
+- Any future client script that registers tools with the Foundry SDK must define its own `FunctionTool` schemas
+- If tool signatures change, update both the tool module AND any client-side schemas
+- The production path (`serve.py` + Agent Framework) is unaffected — it uses function introspection
+
+---
+
+## Relax AZURE_AI_AGENTS_ENDPOINT Requirement in Config
+
+**Author:** Naomi (Backend Dev)  
+**Date:** 2026-04-14T22:03:00Z  
+**Status:** Implemented  
+
+### Context
+
+The new `serve.py` uses `AzureOpenAIChatClient` which only needs `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_DEPLOYMENT`. The old validation in `agent/config.py` required at least one of `AZURE_AI_AGENTS_ENDPOINT` or `AZURE_AI_PROJECT_CONNECTION_STRING`, which would cause `Settings.from_env()` to fail even when the agent doesn't need those values.
+
+### Decision
+
+Made `AZURE_AI_AGENTS_ENDPOINT` and `AZURE_AI_PROJECT_CONNECTION_STRING` fully optional in config validation. Only `AZURE_OPENAI_ENDPOINT` is required. The Foundry-specific fields remain in the `Settings` dataclass for backward compatibility — they're just not enforced at startup.
+
+### Impact
+
+- `serve.py` can start with only `AZURE_OPENAI_ENDPOINT` set
+- Existing deployments that set the Foundry endpoint are unaffected
+- Test fixtures simplified (no longer need dummy connection strings)
+
+### Tracing Note
+
+`agent/tracing.py` is already clean — no old class references. `serve.py` intentionally does NOT call `setup_tracing()` because the Agent Framework manages its own tracing. The `AGENT_APP_INSIGHTS_ENABLED=false` workaround in `deploy.yml` was left in place.

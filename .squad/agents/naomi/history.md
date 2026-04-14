@@ -527,3 +527,23 @@
 - pyproject.toml has a `[project.dependencies]` section — must keep it in sync with requirements.txt
 - pyproject.toml had `azure-ai-agents>=1.0.0` which requirements.txt didn't — left it alone per instructions
 - `agent-framework-foundry` is unpinned (GA) while `azure-ai-agentserver-agentframework` is pinned to beta b12
+
+### 2025-07-26: Config & Tracing Cleanup — Post-serve.py Rewrite
+
+**Task:** Align agent/config.py and agent/tracing.py with the new AzureOpenAIChatClient-based serve.py.
+
+**Config (agent/config.py):**
+- No `MODE`, `run_local`, `aiohttp`, or `FoundryCBAgent` fields existed — already clean from prior work.
+- **Relaxed validation:** `AZURE_AI_AGENTS_ENDPOINT` and `AZURE_AI_PROJECT_CONNECTION_STRING` were required (at least one). The new serve.py only needs `AZURE_OPENAI_ENDPOINT` (for AzureOpenAIChatClient). Made them fully optional — they're still in the dataclass for Foundry deployments, just not enforced.
+- Updated `from_env()` validation: only `AZURE_OPENAI_ENDPOINT` is required now.
+
+**Tracing (agent/tracing.py):**
+- Already clean — no references to `AgenticOpsAgent`, `FoundryCBAgent`, or aiohttp.
+- `setup_tracing()` is fully standalone, not dependent on any deleted classes.
+- serve.py doesn't call `setup_tracing()` directly — this is intentional (noted in earlier history: "No tracing init was needed as a standalone call — the old code had a no-op tracer override in the agent class").
+- `AGENT_APP_INSIGHTS_ENABLED=false` workaround still present in deploy.yml — left untouched.
+
+**Tests:**
+- Updated `tests/test_config.py`: Removed `AZURE_AI_PROJECT_CONNECTION_STRING` from `REQUIRED_ENV`. Replaced `test_raises_when_project_conn_missing` with `test_succeeds_without_agents_endpoint`. Updated `test_raises_for_both_missing` → `test_raises_when_only_required_missing`.
+- Updated `tests/conftest.py`: Removed `AZURE_AI_PROJECT_CONNECTION_STRING` from `_TEST_ENV` and test fixtures.
+- All 48 config+tracing tests pass.
