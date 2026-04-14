@@ -2,6 +2,44 @@
 
 ## Active Decisions
 
+### 2026-04-14T19:20:00Z: serve.py Migration to Agent Framework Pattern (Implementation Complete)
+
+**Date:** 2026-04-14  
+**Author:** Naomi (Backend Dev)  
+**Status:** IMPLEMENTED  
+**Related:** Batch 3 cleanup (2026-04-14T19:15)
+
+## What Changed
+
+`scripts/serve.py` rewritten from ~1009 lines (custom aiohttp + SSE + manual function-calling loop) to ~194 lines using the official Agent Framework pattern (`AzureOpenAIChatClient` + `from_agent_framework`).
+
+`tests/test_serve.py` rewritten from 571 lines (9 AioHTTPTestCase classes testing HTTP endpoints) to 95 lines (3 pytest classes testing helper functions).
+
+## Key Decisions Made
+
+1. **No port configuration exposed** — `from_agent_framework(agent).run()` uses default port 8088. If port override is needed, it's the framework's responsibility.
+
+2. **No tracing init** — the old code had a no-op tracer override. If tracing is needed, it should be configured via environment variables per the Agent Framework docs.
+
+3. **`_parse_input_to_messages()` removed** — the Agent Framework handles Responses API input parsing. This was only used by the custom agent loop.
+
+4. **DefaultAzureCredential only** — removed the API key fallback auth path. The framework pattern uses managed identity exclusively.
+
+## Team Impact
+
+- **Amos (DevOps):** Dockerfile CMD still works (`python scripts/serve.py`). Port is 8088 by default. No aiohttp dependency needed.
+- **Holden (Architect):** This aligns with the "single agent path" decision. `run_local.py` is the remaining non-framework path.
+- **Sable (Tester):** Old aiohttp-based tests replaced. New tests cover helper functions only — the Agent Framework's server behavior is tested by the framework itself.
+
+## Artifacts
+
+- serve.py (194 LOC, down from 1009)
+- tests/test_serve.py (95 LOC, down from 571)
+- All 294 tests passing
+- Code reduction: ~80% (1009 → 194 LOC)
+
+---
+
 ### 2026-04-07T21:45:00Z: Architecture Decision: agent.py Legacy Path (Removed)
 **Decision Date:** 2026-04-07  
 **Lead:** Holden  

@@ -9,6 +9,55 @@
 
 ## Learnings
 
+### 2025-07-25: serve.py Rewrite — Agent Framework Pattern
+
+**Task:** Rewrite scripts/serve.py from ~1009 lines of custom aiohttp/SSE/function-calling code to ~194 lines using the official Agent Framework pattern (AzureOpenAIChatClient + from_agent_framework).
+
+**Kept:**
+- `_ensure_db()` — SQLite seeding (unchanged)
+- `_load_system_prompt()` — reads agent/system_prompt.md (refactored from module-level to function)
+- `_log_startup_diagnostics()` — env var logging (unchanged)
+- `_get_tools()` — feature-flag-driven tool list (new function, replaces scattered tool dispatch)
+- sys.path bootstrap, .env loading, env defaults
+
+**Removed (~815 lines):**
+- `AgenticOpsAgent(FoundryCBAgent)` class and `agent_run()` method
+- `_run_agent_conversation()` — manual OpenAI function-calling loop
+- `_call_tool()` — manual tool dispatch
+- `_stream_with_keepalive()`, `_stream_text()`, `_build_response()` — all SSE streaming
+- `_run_with_foundry_adapter()`, `_run_with_aiohttp()`, `_init_app()` — server factories
+- `_parse_input_to_messages()` — Responses API input parsing (framework handles this)
+- `_resolve_port()` — port resolution (framework default 8088)
+- `_ready_event` — asyncio readiness gate
+- All aiohttp, SSE event, uuid, json, time, asyncio imports
+- All TOOL_SCHEMA/TOOL_DEFINITIONS imports (already removed from tool modules)
+
+**Tests:** Rewrote test_serve.py from 571 lines (9 AioHTTPTestCase classes) to 95 lines (3 pytest classes, 6 tests). All 294 project tests pass.
+
+**Final line count:** 194 lines (serve.py), 95 lines (test_serve.py)
+
+**Surprises:**
+- work_context_stub has `get_work_context` as alias for `get_full_context` with __name__ overridden — works cleanly with Agent Framework's function introspection
+- No tracing init was needed as a standalone call — the old code had a no-op tracer override in the agent class
+
+### 2025-07-25: Tool Module Schema Removal — Agent Framework Migration
+
+**Task:** Remove TOOL_SCHEMA, TOOL_DEFINITIONS, TOOL_CALLABLES, get_tool_definition from all 3 tool modules. Update tests to match.
+
+**Function Signatures Found:**
+- `sql_telemetry.py`: `async query_telemetry(*, table, aggregate, sql, limit, filters) -> str` — keyword-only, complex types (dict[str,Any] for filters). Also has sync wrappers: `query_gpu_utilization`, `query_network_telemetry`, `query_cost_trends`, `query_incidents`, `list_aggregates`.
+- `work_context_stub.py`: 5 sync functions — `get_change_events(service: str) -> list`, `get_decisions(service: str) -> list`, `get_ownership(service: str) -> dict`, `get_runbooks(service: str) -> list`, `get_full_context(service: str) -> dict`. Plus `get_work_context` alias pointing to `get_full_context`.
+- `action_stub.py`: `propose_change(plan: str) -> str`, `request_approval(change_request_id: str) -> str` — both sync, clean signatures with docstrings.
+
+**Artifacts Removed:**
+- `sql_telemetry.py`: TOOL_SCHEMA (72-line dict), get_tool_definition(), TOOL_CALLABLES, TOOL_DEFINITIONS
+- `work_context_stub.py`: TOOL_SCHEMA (29-line dict), get_tool_definition(), TOOL_DEFINITIONS, TOOL_CALLABLES
+- `action_stub.py`: ACTION_STUB_TOOL_DEFINITIONS (50-line list with 2 function schemas)
+
+**Tests Updated:** Removed 14 schema-assertion tests across test_tools.py, test_action_stub.py, test_sql_telemetry.py. Kept all 81 behavior tests — all passing.
+
+**Note:** `serve.py` and `run_foundry_agent.py` still import these removed artifacts — will break until the rewrite-serve task completes.
+
 ### 2026-07-24: Early SSE Events — Streaming Keep-Alive Fix (Deploy #137)
 
 **Session:** Solo fix requested by Tammy
