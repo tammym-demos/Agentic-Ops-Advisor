@@ -520,10 +520,148 @@ Implement `scripts/serve.py` exposing Foundry Responses API on port 8088.
 
 ---
 
+## Readiness Gate Test Pattern
+
+**Date:** 2026-04-07
+**Author:** Alex (Tester)
+**Status:** IMPLEMENTED
+
+### Context
+`serve.py` was refactored to use `_ready_event = asyncio.Event()` for readiness gating. In tests, `_init_app()` is called directly (not via `web.run_app()`), so the `on_startup` hook never fires and `_ready_event` stays unset.
+
+### Decision
+- All existing test classes explicitly call `_ready_event.set()` in `get_application()` to preserve pre-refactor behavior.
+- New readiness tests use `_ready_event.clear()` in `get_application()` and control the event per-test.
+- Import `_ready_event` from `scripts.serve` alongside `_init_app`.
+
+### Rationale
+This keeps readiness control explicit in tests, avoids hidden coupling to startup hooks, and ensures both "ready" and "not ready" paths are covered.
+
+### Impact
+Any future test class for `serve.py` that uses `AioHTTPTestCase` must call `_ready_event.set()` in `get_application()` or tests will get startup-gate responses.
+
+---
+
+## Container-Only Demo + Local Dev Mode Removal
+
+**Date:** 2026-04-09  
+**Lead:** Holden  
+**Status:** DECIDED  
+**Related:** Agent Framework Migration Plan (`docs/agent-framework-migration-plan.md`)
+
+### Context
+
+The migration plan originally assumed both local dev mode (via `run_local.py` + aiohttp fallback) and container deployment would be supported. The gap analysis revealed this creates unnecessary complexity.
+
+### Decision
+
+Remove local dev mode entirely. This is a **container-only demo**.
+
+#### Artifacts to Delete
+- `scripts/run_local.py`
+- `tests/test_local_scripts.py`
+- `tests/test_health_endpoint.py`
+
+#### Code to Remove
+- aiohttp fallback in `serve.py`
+- `MODE=cli` code path in `serve.py` and `agent/config.py`
+- `aiohttp` and `aiohttp-cors` from `requirements.txt`
+
+### Rationale
+
+1. Local dev mode adds ~200 lines of fallback code with zero production value
+2. The demo runs in a Foundry-hosted container — no other deployment target exists
+3. aiohttp is redundant when `from_agent_framework(agent).run()` handles HTTP serving
+4. Fewer code paths = fewer things to test, break, and maintain
+
+### Consequences
+
+- ✅ Simpler serve.py (~150 lines vs ~873)
+- ✅ Fewer dependencies (no aiohttp/aiohttp-cors)
+- ✅ Fewer test files to maintain
+- ⚠️ Developers must use Docker to run the agent locally (acceptable for a demo)
+
+---
+
+## Managed Identity Auth Priority for Azure OpenAI
+
+**Author:** Naomi (Backend Dev)
+**Date:** 2026-07-24
+**Status:** Implemented
+
+### Context
+
+The Azure OpenAI resource has key-based authentication disabled by policy. The deployed container was getting `403 AuthenticationTypeDisabled` on every LLM call because `serve.py` tried API key auth first.
+
+### Decision
+
+Flip the auth priority in `_run_agent_conversation()`:
+
+1. **Primary (production):** `DefaultAzureCredential` → managed identity token with scope `https://cognitiveservices.azure.com/.default`
+2. **Fallback (local dev):** `AZURE_OPENAI_API_KEY` environment variable, only if MI fails
+
+Additionally, stop injecting `AZURE_OPENAI_API_KEY` into the Foundry container environment (both CLI and SDK deploy paths). The container now relies entirely on the project's system-assigned managed identity.
+
+### Rationale
+
+- Azure policy disables key auth — MI is the only viable path in production
+- `DefaultAzureCredential` per-request (not startup) avoids IMDS timeout hangs
+- API key fallback preserved for local dev where MI isn't available
+- Secret stays in GitHub — just not passed to the container
+
+### Impact
+
+- **serve.py:** Auth block rewritten (MI first, API key fallback)
+- **deploy.yml:** `AZURE_OPENAI_API_KEY` removed from job env and `agent create --env`
+- **deploy_agent.py:** `AZURE_OPENAI_API_KEY` removed from container env_vars list
+- **Tests:** All 345 pass — tests use API key via monkeypatch, which still works as fallback path
+
+### Team Notes
+
+- **Amos (DevOps):** The GitHub Secret `AZURE_OPENAI_API_KEY` is retained but no longer injected into the container. No workflow secret changes needed.
+- **Holden (Infra):** The Foundry project's system-assigned MI must have `Cognitive Services OpenAI User` role on the Azure OpenAI resource. Verify this is in the Bicep templates.
+
+---
+
+## Move OpenAI Call Inside Streaming Generator
+
+**Date:** 2026-07-24
+**Author:** Naomi (Backend Dev)
+**Status:** IMPLEMENTED
+**Commit:** 19bc764
+
+### Context
+
+The Foundry Playground always sends `stream: true`. The previous implementation awaited the full `_run_agent_conversation()` (30s+) inside `agent_run()` before returning the async generator. During that time, zero SSE events flowed on the HTTP response. The Foundry gateway's 100s timeout could close the connection, causing a silent hang.
+
+### Decision
+
+Restructured the streaming path so `agent_run()` returns the async generator **immediately**. The generator yields `response.created` and `response.in_progress` events first, then awaits the OpenAI call. The adapter's SSE keep-alive mechanism (`_iter_with_keep_alive`) is now active during the entire agent conversation.
+
+### Approach Considered
+
+- **A — Move work into generator only:** Minimal change, just reorganize.
+- **B — Switch to AsyncAzureOpenAI:** Cleaner async, but requires updating all callers + mocks.
+- **C — Both (chosen):** Reorganize generator AND keep door open for async client later. Went with C minus the async client swap (lower risk), since `asyncio.to_thread` works fine in uvicorn.
+
+### Impact
+
+- `scripts/serve.py` only — 3 new methods, 1 restructured method
+- Non-streaming path unchanged
+- aiohttp fallback (tests) unchanged — all 345 tests pass
+- No new dependencies
+
+### Team Notes
+
+- Holden: Architecture unchanged — same tool surfaces, same auth flow, just event ordering.
+- Amos: Deploy #137 will trigger automatically from the push. Watch the smoke test for `DeploymentNotFound` — may need a few minutes after provisioning.
+
+---
+
 ## Dynamic Seed Dates for Synthetic Telemetry
 
 **Date:** 2026-04-07  
-**Decided by:** Naomi (Backend Dev)  
+**Decided by:** Naomi (Backend Dev)
 **Status:** ✅ Implemented
 
 ### Context

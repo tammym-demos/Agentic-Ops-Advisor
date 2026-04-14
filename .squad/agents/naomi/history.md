@@ -462,3 +462,19 @@
 - **Tests:** 341 passed, 0 failed. YAML valid.
 - **Commit:** d91908e. Pushed to main.
 - **Key files:** `.github/workflows/deploy.yml` (Steps 6-7, lines 377-625).
+
+### 2026-04-14: requirements.txt — Agent Framework Migration Deps
+
+**Session:** Task from Tammy
+**Status:** ✅ IMPLEMENTED — files updated, no pip install (Dockerfile validates)
+
+**Changes (requirements.txt + pyproject.toml):**
+- **Added:** `agent-framework-foundry` (GA selective install — core + Foundry integration) and `azure-ai-agentserver-agentframework==1.0.0b12` (hosting adapter, beta, used by official samples)
+- **Removed:** `aiohttp>=3.9.0` and `aiohttp-cors>=0.7.0` (no longer needed — adapter handles HTTP)
+- **Removed:** `azure-ai-agentserver-core>=1.0.0b17` from requirements.txt (replaced by agent-framework-foundry which bundles correct adapter deps)
+- **Kept:** `openai>=2.8.0` — will verify transitivity after install
+
+**Key Learnings:**
+- pyproject.toml has a `[project.dependencies]` section — must keep it in sync with requirements.txt
+- pyproject.toml had `azure-ai-agents>=1.0.0` which requirements.txt didn't — left it alone per instructions
+- `agent-framework-foundry` is unpinned (GA) while `azure-ai-agentserver-agentframework` is pinned to beta b12

@@ -9,6 +9,36 @@
 
 ## Learnings
 
+### 2026-07-25: Remove Local Dev Mode — Container-Only Decision
+
+**Session:** Task from Tammy  
+**Status:** ✅ IMPLEMENTED  
+**Focus:** Remove all local dev mode artifacts per container-only decision
+
+**Files deleted (git rm):**
+- `scripts/run_local.py` — standalone local CLI runner
+- `tests/test_local_scripts.py` — tests for local scripts
+- `tests/test_health_endpoint.py` — tests for run_local's health server
+
+**Files edited:**
+- `scripts/serve.py` — Removed MODE=cli code path (lines 995-1000) and updated docstring
+- `README.md` — Replaced all `run_local.py` references with container-based instructions throughout (Quick Start, Options A/B, Step 6, local dev modes, regression demo, troubleshooting, env vars table)
+- `scripts/setup_local_db.py` — Updated two print messages referencing run_local.py
+- `data/seed_telemetry.py` — Updated comments referencing run_local.py
+- `tools/sql_telemetry.py` — Updated comment referencing run_local.py
+- `docs/index.html` — Updated quick start code block
+- `.env.example` — Updated HEALTH_PORT comment (no longer used by run_local.py)
+
+**Other files with run_local references (not modified — docs/squad only):**
+- `.squad/decisions/decisions.md` — historical references
+- `.squad/decisions.md` — historical references
+- `.squad/agents/*/history.md` — historical references
+- `.squad/plans/container-support.md` — historical reference
+- `docs/specs/container-deployment-completion.md` — historical reference
+- `docs/agent-framework-migration-plan.md` — migration plan (correctly notes deletion)
+
+**Key Learning:** Container-only means one entrypoint: `scripts/serve.py`. No MODE switching, no fallback CLI. Docker is the only local dev path.
+
 ### 2026-04-09: Smoke Test Hardening + Response Handling (Deploy #126 Recovery)
 
 **Session:** Joint work with Naomi (Backend)  
