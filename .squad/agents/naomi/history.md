@@ -9,6 +9,34 @@
 
 ## Learnings
 
+### 2025-07-25: Post-Migration Script Audit — All Clear
+
+**Task:** Audit all scripts for broken imports from the Agent Framework migration (Phases 1-4).
+
+**Files Audited:**
+- `scripts/deploy_agent.py` ✅ — Uses `azure.ai.projects` for Foundry management API (CORRECT)
+- `scripts/run_foundry_agent.py` ✅ — Uses `FunctionTool`, `PromptAgentDefinition`, `AIProjectClient` (CORRECT)
+- `scripts/setup_local_db.py` ✅ — No azure.ai imports
+- `scripts/run_regression_demo.py` ✅ — Pure synthetic demo, no azure.ai imports
+- `scripts/export_dashboard_data.py` ✅ — Queries SQLite directly, no azure.ai imports
+- `agent/config.py` ✅ — Clean config dataclass, no old class names or exports
+- `eval/run_eval.py` + `eval/evaluators.py` ✅ — No azure.ai imports, uses evaluator pattern cleanly
+
+**Key Findings:**
+- `serve.py:48` has `import azure.ai.projects.models` — this is the **compat shim** for Agent Framework (documented at line 45-46), not a real dependency. It patches renamed symbols (`PromptAgentDefinitionText`, etc.) before Agent Framework imports. This is intentional and correct.
+- `deploy_agent.py` and `run_foundry_agent.py` legitimately use `azure.ai.projects` for Foundry Agent Service **management operations** (deployment, registration). These are NOT part of the container runtime.
+- NO references to deleted/renamed classes found: no `FoundryCBAgent`, `AgenticOpsAgent`, `run_local.py`, or manual `aiohttp` server code.
+
+**Result:** 🎯 **ALL SCRIPTS CLEAN.** Migration complete. No fixes needed.
+
+### 2026-04-15T13:40:00Z: Phase 5 Post-Migration Audit — Script Import Audit (COMPLETE)
+- **Task:** Audit scripts/ for old imports post-migration
+- **Outcome:** SUCCESS — all scripts clean, no broken imports, azure.ai.projects usage legitimate
+- **Scripts audited:** 7 script files total
+- **Key validation:** Confirmed azure.ai.projects is intentional for deploy automation, not part of hosted agent runtime
+- **Cross-team impact:** Alex's test suite wiring validated; Amos's CI/CD workflows confirmed clean
+- **Documentation:** findgs recorded in orchestration log
+
 ### 2025-07-25: serve.py Rewrite — Agent Framework Pattern
 
 **Task:** Rewrite scripts/serve.py from ~1009 lines of custom aiohttp/SSE/function-calling code to ~194 lines using the official Agent Framework pattern (AzureOpenAIChatClient + from_agent_framework).

@@ -1614,3 +1614,68 @@ The Foundry-hosted container was returning `RequestTimedOut` because `serve.py` 
 - No changes to agent loop, tool dispatch, or Responses API format
 - `status: "completed"` convention maintained for all response envelopes
 
+
+### 2026-04-15T13:40:00Z: Decision: Agent Framework Test Coverage Pattern
+
+**Date:** 2026-04-15  
+**Author:** Alex (Tester)  
+**Status:** IMPLEMENTED
+
+## Context
+The `scripts/serve.py` migration to Agent Framework introduced `main()` with lazy imports of SDK classes (`AzureOpenAIChatClient`, `from_agent_framework`, `DefaultAzureCredential`). These are not importable in test environments without the full Azure SDK stack.
+
+## Decision
+Use `patch.dict("sys.modules", {...})` to inject mock modules for lazy imports inside `main()`. This avoids requiring agent_framework and azure.ai.agentserver packages in the test environment while still verifying the complete wiring sequence.
+
+## Implementation
+- `tests/test_serve.py` expanded with TestMain (7 tests) and TestCompatShim (3 tests)
+- All 304 repository tests passing
+- Pattern enables safe testing of framework-dependent code without pulling full framework dependencies into test environment
+
+## Team Impact
+- **Naomi (Backend Dev):** If new lazy imports added to `main()`, matching entries needed in TestMain's `sys.modules` dict
+- **Amos (DevOps):** No CI changes needed — existing pytest setup covers these tests
+- **Holden (Architect):** Pattern consistent with "test helper functions directly, mock framework boundaries" approach from migration decision
+
+---
+
+### 2026-04-15T13:40:00Z: CI/CD Workflow Audit — Agent Framework Migration Alignment
+
+**Date:** 2026-04-15  
+**Author:** Amos (DevOps)  
+**Status:** COMPLETE
+
+## Problem Statement
+After the Agent Framework migration, CI/CD workflows needed audit to:
+1. Verify pip install steps reference correct new packages
+2. Check for stale references to deleted files/packages
+3. Ensure test suites run correctly against new architecture
+4. Validate Dockerfile compatibility
+
+## Findings
+
+### Clean Items (No Changes Required)
+1. **`deploy.yml`** — Pip install correctly uses `requirements.txt`; test gates working
+2. **`ci-eval.yml`** — Eval workflow correctly configured
+3. **`Dockerfile`** — Multi-stage build correct; ODBC for Debian 13 correct
+4. **No stale references** — All old imports/files cleaned up
+
+### Fixed Item
+**`.github/workflows/copilot-setup-steps.yml`** (Line 47)
+
+**Enhancement:** Package verification step updated to include new Agent Framework packages:
+- Added: `agent_framework`, `azure-ai-agentserver-agentframework`, `uvicorn`, `starlette`
+- Rationale: Post-migration workflows now use new hosting ecosystem. Enhanced verification catches version conflicts between legacy SDK and new framework early in CI.
+
+## Verification
+- All new packages verified importable
+- No test regressions
+- Workflows syntactically valid
+- Low-risk verification-only change — no new dependencies
+
+## Impact
+**Low Risk:** Verification-only change; no new dependencies added.  
+**Benefit:** Catches framework package version conflicts in CI before deployment.
+
+---
+

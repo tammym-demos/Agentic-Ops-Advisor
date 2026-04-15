@@ -142,3 +142,30 @@
   2. **TestResponsesStartupGate** (2 tests): `test_responses_returns_warmup_when_not_ready` (clear event → 200, output contains "starting up"), `test_responses_works_when_ready` (set event + mocked OpenAI → normal agent response)
 - **Key pattern:** New test classes start with `_ready_event.clear()` in `get_application()` and then explicitly set/clear the event per test method.
 - **Result:** 22/22 tests passing in 7.5s.
+
+### Agent Framework Migration — Test Coverage Expansion
+- **File updated:** `tests/test_serve.py` — expanded from 6 tests (3 classes) to 16 tests (5 classes), all passing
+- **New test classes added:**
+  1. **TestMain** (7 tests): Full `main()` wiring verification with mocked SDK classes
+     - `_ensure_db()` called before client creation
+     - `_log_startup_diagnostics()` called
+     - `AzureOpenAIChatClient` created with correct params (endpoint, model, ad_token_provider)
+     - `create_agent()` called with name="agentic-ops-advisor", instructions, tools
+     - `from_agent_framework(agent)` called and `.run()` invoked
+     - `DefaultAzureCredential` + `get_bearer_token_provider` wired correctly
+  2. **TestCompatShim** (3 tests): SDK compatibility shim validation
+     - Verifies shim patches missing old names from new names
+     - Verifies shim does NOT overwrite existing old names
+     - Verifies shim skips when neither name exists
+- **Testing pattern:** `patch.dict("sys.modules", {...})` to mock lazy imports inside `main()` (agent_framework, azure.identity, azure.ai.agentserver)
+- **All other test files reviewed:** No broken imports or references to old patterns (aiohttp, TOOL_DEFINITIONS, FoundryCBAgent, etc.) found in any of the 12 other test files
+- **Full suite result:** 304/304 passed, 0 failed in 27.75s
+
+### 2026-04-15T13:40:00Z: Phase 5 Post-Migration Audit — Test Coverage Expansion (COMPLETE)
+- **Task:** Expand test_serve.py for Agent Framework migration validation
+- **Outcome:** SUCCESS — expanded from 6 tests (3 classes) to 16 tests (5 classes), all 304 tests passing
+- **New test classes:**
+  1. TestMain (7 tests): `_ensure_db()`, `_log_startup_diagnostics()`, `AzureOpenAIChatClient` creation, `create_agent()` call, `from_agent_framework()` wiring, `DefaultAzureCredential` + `get_bearer_token_provider`
+  2. TestCompatShim (3 tests): SDK shim patches old names, doesn't overwrite existing names, skips when neither exists
+- **Cross-team validation:** Naomi confirmed no broken script imports; Amos confirmed CI/CD workflows clean
+- **Decision documented:** Agent Framework Test Coverage Pattern pattern now in decisions.md

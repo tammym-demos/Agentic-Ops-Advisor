@@ -9,6 +9,92 @@
 
 ## Learnings
 
+### 2026-08-01: CI/CD Audit — Workflow Alignment with Agent Framework Migration
+
+**Session:** Audit from Tammy  
+**Status:** ✅ COMPLETED  
+**Focus:** Verify CI/CD workflows reference correct packages post-migration
+
+**Audit Results:**
+
+1. **`deploy.yml` (lines 358-370)** — ✅ CLEAN
+   - pip install step correctly installs from `requirements.txt` (includes new framework packages)
+   - Test step runs `pytest tests/` with current test suite — no stale references
+   - Pre-deploy tests gate deployment (good security posture)
+
+2. **`copilot-setup-steps.yml` (line 47)** — ⚠️ **FIXED**
+   - Original: only verified `azure.ai.projects`, `azure.ai.agents`, `azure.ai.evaluation`, core packages
+   - Fix: Added verification for new framework packages:
+     - `agent_framework` (Agent Framework core)
+     - `azure.ai.agentserver.agentframework` (Foundry hosting adapter)
+     - `uvicorn` (ASGI server for Responses API)
+     - `starlette` (ASGI web framework)
+
+3. **`ci-eval.yml`** — ✅ CLEAN
+   - pip install from `requirements.txt`, no stale references
+   - Eval test gating is working
+
+4. **`Dockerfile`** — ✅ CLEAN
+   - Multi-stage build correctly installs from `requirements.txt`
+   - No references to deleted files (`run_local.py`, etc.)
+   - Base image Debian 13 ODBC install is correct
+
+5. **No stale references found** — ✅ CLEAN
+   - No `run_local.py`, `aiohttp`, `TOOL_DEFINITIONS`, `TOOL_CALLABLES` in workflows
+
+**Files edited:**
+- `.github/workflows/copilot-setup-steps.yml` — Enhanced verification step to check new Agent Framework packages
+
+**Key Learning:** Post-migration package verification should explicitly check both the legacy deployment SDK (`azure.ai.projects`) and new hosting packages (`agent_framework*`, `uvicorn`, `starlette`) to catch version conflicts early in CI.
+
+### 2026-04-15T13:40:00Z: Phase 5 Post-Migration Audit — CI/CD Workflow Audit (COMPLETE)
+- **Task:** Audit CI/CD workflows post-migration for stale references and package verification
+- **Outcome:** SUCCESS — all workflows clean, enhanced package verification in copilot-setup-steps.yml
+- **Workflows audited:** 3 (deploy.yml, ci-eval.yml, copilot-setup-steps.yml)
+- **Issues found & fixed:** 1 (package verification enhancement)
+- **New packages verified in CI:** agent_framework, azure-ai-agentserver-agentframework, uvicorn, starlette
+- **Cross-team impact:** Alex's tests all passing; Naomi's scripts verified clean
+- **Decision documented:** CI/CD Workflow Audit decision now in decisions.md
+
+### 2026-07-14: Docker Build & Smoke Test — Post Agent Framework Migration
+
+**Session:** Task from Tammy
+**Status:** ✅ BUILD PASSES, SERVER STARTS, HEALTH CHECK OK
+
+**Issues Found & Fixed:**
+
+1. **Debian version mismatch (Dockerfile):** `python:3.11-slim` base image upgraded from Debian 12 (bookworm) to Debian 13 (trixie). ODBC driver install referenced `debian/12/prod bookworm` repo. Fixed to use official Microsoft `.deb` package for Debian 13 (`packages-microsoft-prod.deb`).
+
+2. **`$PYTHONPATH` warning:** Dockerfile referenced `$PYTHONPATH` which was undefined at that stage. Changed to plain `PYTHONPATH=/app`.
+
+3. **`agent-framework-foundry` conflict:** The standalone `agent-framework-foundry` package (stable) requires `agent-framework-core>=1.0.0` (stable), but `azure-ai-agentserver-agentframework==1.0.0b12` requires beta `agent-framework-core>=1.0.0b251112,<=1.0.0b260107`. Ranges don't overlap. Fix: removed `agent-framework-foundry` from requirements.txt — the agentserver package already pulls in `agent-framework-azure-ai` + `agent-framework-core` which provide `AzureOpenAIChatClient`.
+
+4. **SDK symbol renames (azure-ai-projects 2.0.x):** `agent-framework-azure-ai` (both b251112 and b260107) imports symbols that were renamed in `azure-ai-projects>=2.0.0`:
+   - `PromptAgentDefinitionText` → `PromptAgentDefinitionTextOptions`
+   - `ResponseTextFormatConfigurationJsonObject` → `TextResponseFormatJsonObject`
+   - `ResponseTextFormatConfigurationJsonSchema` → `TextResponseFormatJsonSchema`
+   - `ResponseTextFormatConfigurationText` → `TextResponseFormatText`
+   Fix: added compatibility shim in `serve.py` that monkey-patches `azure.ai.projects.models` before framework imports.
+
+5. **Starlette 1.0 breaking change:** `azure-ai-agentserver-core` uses `app.on_event("startup")` which was removed in Starlette 1.0. Fix: pinned `starlette>=0.37.0,<1.0.0` in requirements.txt.
+
+6. **Deployment env var name:** SDK's `AzureOpenAIChatClient` expects `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` (not `AZURE_OPENAI_DEPLOYMENT`). The `serve.py` passes it as `model=` parameter, so when running via container, set `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` or rely on the code passing it explicitly. Noted for deploy config.
+
+**Files edited:**
+- `Dockerfile` — Debian 13 ODBC install method, PYTHONPATH fix
+- `requirements.txt` — removed `agent-framework-foundry`, added explicit `agent-framework-azure-ai`/`agent-framework-core` pins, pinned `starlette<1.0.0`
+- `scripts/serve.py` — added SDK compatibility shim for renamed `azure.ai.projects.models` symbols
+
+**Smoke Test Results:**
+- ✅ `docker build` — succeeds (pip install, ODBC driver, SQLite seed all pass)
+- ✅ Container starts — all imports succeed, no `ModuleNotFoundError`
+- ✅ Server listens on port 8088 — Uvicorn running, health check passes
+- ✅ `/readiness` returns `{"status":"ready"}`
+- ✅ Container status: healthy
+- ✅ 294 tests still passing after changes
+
+**Key Learning:** The Agent Framework SDK ecosystem (agent-framework-foundry, agent-framework-azure-ai, agent-framework-core, azure-ai-agentserver-agentframework, azure-ai-projects) has tight cross-version coupling. Pin versions carefully and test the full import chain in Docker, not just individual packages.
+
 ### 2026-07-25: CI Pipeline + Script Cleanup — Stale Import Fix
 
 **Session:** Task from Tammy  
