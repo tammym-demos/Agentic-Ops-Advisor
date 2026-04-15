@@ -81,6 +81,7 @@ RUN chown -R agent:agent /app
 ENV DB_MODE=sqlite \
     ENABLE_WORK_IQ=true \
     ENABLE_MCP=false \
+    AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=${AZURE_OPENAI_DEPLOYMENT:-gpt-4.1} \
     MODE=serve
 
 # ---- Expose hosted agent service port ----

@@ -166,6 +166,11 @@ def main() -> None:
 
     _log_startup_diagnostics()
 
+    # Belt-and-suspenders: ensure the SDK's env var fallback works too
+    _deploy = os.environ.get("AZURE_OPENAI_DEPLOYMENT")
+    if _deploy and not os.environ.get("AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"):
+        os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"] = _deploy
+
     # 1. Seed database (must run before the blocking .run() call)
     _ensure_db()
 
@@ -181,7 +186,7 @@ def main() -> None:
     chat_client = AzureOpenAIChatClient(
         ad_token_provider=token_provider,
         endpoint=settings.azure_openai_endpoint,
-        model=settings.azure_openai_deployment,
+        deployment_name=settings.azure_openai_deployment,
     )
 
     # 4. Create agent with tools

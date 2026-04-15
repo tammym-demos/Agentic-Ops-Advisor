@@ -9,6 +9,19 @@
 
 ## Learnings
 
+### 2026-04-15T15:52Z: AzureOpenAIChatClient deployment_name Parameter Fix
+
+**Session:** Test assertion fix; code already correct
+**Status:** ✅ COMPLETED
+**Scope:** 1 file modified (test fix)
+**Details:**
+- Investigation revealed serve.py already uses correct `deployment_name=` parameter
+- AZURE_OPENAI_CHAT_DEPLOYMENT_NAME env var fallback already present
+- Bug was in test suite: assertion checked `model` instead of `deployment_name`
+- Fixed test assertion in `test_chat_client_created_with_correct_params`
+- All 16 tests pass
+- Container crash resolved by correcting test validation
+
 ### 2026-08-02: Agent Framework Migration — Commit & Deploy
 
 **Session:** Deploy request from Tammy
