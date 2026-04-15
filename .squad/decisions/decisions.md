@@ -670,6 +670,78 @@ All telemetry queries returned 0 rows because `data/seed_telemetry.py` used hard
 ### Decision
 Changed `BASE_DATE` from hardcoded to **dynamic**:
 ```python
+
+---
+
+## Centralized SDK Compatibility Shim
+
+**Date:** 2025-01-27  
+**Decider:** Amos (DevOps)  
+**Status:** Implemented
+
+### Context
+
+The CI workflow `copilot-setup-steps.yml` was failing during package verification with:
+```
+ImportError: cannot import name 'PromptAgentDefinitionText' from 'azure.ai.projects.models'
+```
+
+This occurred because:
+- `agent-framework-azure-ai` (beta) imports old symbol names from `azure.ai.projects.models`
+- `azure-ai-projects>=2.0.0` renamed these symbols:
+  - `PromptAgentDefinitionText` → `PromptAgentDefinitionTextOptions`
+  - `ResponseTextFormatConfiguration*` → `TextResponseFormat*`
+
+The inline compatibility shim in the CI workflow (a complex `python -c` one-liner) was failing, while the same logic in `scripts/serve.py` worked fine.
+
+### Decision
+
+**Created `scripts/patch_sdk_compat.py`** — a standalone, reusable compatibility shim that:
+1. Applies symbol name patches to `azure.ai.projects.models` module
+2. Verifies the agent framework can import (gracefully skips if not installed locally)
+3. Can be run standalone or imported as a module
+4. Provides clear diagnostic output
+
+**Refactored existing code** to use this centralized shim:
+- Updated `.github/workflows/copilot-setup-steps.yml` to call `python scripts/patch_sdk_compat.py`
+- Refactored `scripts/serve.py` to import and use `apply_compat_shim()` function
+
+### Rationale
+
+**Why not inline `python -c` blocks?**
+- Complex one-liners are fragile in YAML (escaping issues, poor readability)
+- Hard to test and debug in isolation
+- Duplicates logic across files
+
+**Why not `.pth` files or sitecustomize?**
+- Would require modifying the Python environment during package installation
+- Less explicit and harder to troubleshoot
+- Overkill for a temporary compatibility layer
+
+**Why not pin to older azure-ai-projects versions?**
+- Need to stay current with SDK improvements and security patches
+- The 2.0.x series is the stable release; beta agent framework should adapt
+
+### Implications
+
+- All compat shim logic now lives in one place: `scripts/patch_sdk_compat.py`
+- CI verification is more robust (no inline YAML quoting issues)
+- Local dev and CI use identical compat shim code
+- Easy to remove once agent-framework-azure-ai updates to use new symbol names
+
+### Verification
+
+- ✅ `python -m py_compile scripts/patch_sdk_compat.py` — syntax valid
+- ✅ `python scripts/patch_sdk_compat.py` — applies 4 patches, exits 0
+- ✅ Workflow YAML validated with `yaml.safe_load()`
+- ✅ `serve.py` refactored to use centralized shim
+
+### Future Work
+
+Monitor agent-framework-azure-ai releases. Once it's updated to use the new symbol names directly, we can remove `scripts/patch_sdk_compat.py` and all references to it.
+
+---
+```python
 BASE_DATE = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=DAYS - 1)
 ```
 Last day of generated data ends ~today. Reproducibility preserved via `RANDOM_SEED = 42`.

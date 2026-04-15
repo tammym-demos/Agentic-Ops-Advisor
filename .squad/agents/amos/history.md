@@ -790,3 +790,32 @@
 **Final structure (133 lines):** Header comments → metadata → model → protocol → instructions_file → tool comment → container config
 
 **Key insight:** Agent Framework auto-registers tools from function type annotations in tools/*.py, making manual schemas in agent.yaml redundant and a maintenance burden.
+
+
+### 2025-01-27: SDK Compatibility Shim Centralization
+
+**Problem:** CI workflow failing on ImportError: cannot import name 'PromptAgentDefinitionText' during verification step. Inline python -c compat shim in .github/workflows/copilot-setup-steps.yml wasn't working, though same logic in serve.py worked fine.
+
+**Root cause:** 
+- gent-framework-azure-ai (beta) imports old symbol names from zure.ai.projects.models
+- zure-ai-projects>=2.0.0 renamed symbols (e.g., PromptAgentDefinitionText → PromptAgentDefinitionTextOptions)
+- Inline YAML python -c one-liners are fragile (quoting/escaping issues, hard to debug)
+
+**Solution:** Created scripts/patch_sdk_compat.py — a standalone, reusable compat shim:
+- Applies 4 symbol patches to zure.ai.projects.models module
+- Can run standalone or be imported
+- Clear diagnostics, graceful degradation if agent server not installed
+- Updated workflow to call python scripts/patch_sdk_compat.py instead of inline block
+- Refactored serve.py to import pply_compat_shim() function (DRY principle)
+
+**Key files:**
+- scripts/patch_sdk_compat.py — centralized compat shim (new)
+- .github/workflows/copilot-setup-steps.yml — simplified verification step
+- scripts/serve.py — refactored to use centralized shim
+- .squad/decisions/inbox/amos-sdk-compat-shim.md — decision doc
+
+**Learnings:**
+- Avoid complex inline python -c blocks in CI YAML — hard to debug, fragile
+- Centralize compat shims in standalone scripts for reusability and testability
+- Always provide clear diagnostics (applied N patches, verification status)
+- Make verification steps gracefully degrade in local dev vs. CI environments
