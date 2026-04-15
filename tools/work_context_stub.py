@@ -254,48 +254,4 @@ get_work_context.__name__ = "get_work_context"
 get_work_context.__qualname__ = "get_work_context"
 
 
-# ---------------------------------------------------------------------------
-# Azure AI Agent Service tool schema
-# ---------------------------------------------------------------------------
 
-TOOL_SCHEMA: dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "get_work_context",
-        "strict": False,
-        "description": (
-            "Retrieve synthetic work context (change events, decisions, ownership, runbooks) "
-            "for a service category. All data is synthetic for demo purposes. "
-            "Simulates Work IQ outputs — Work IQ is in public preview and requires "
-            "Microsoft 365 Copilot licensing + admin consent."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "service": {
-                    "type": "string",
-                    "description": (
-                        "Service category — not a cluster or host name. "
-                        "Common cluster names (e.g. 'prod-east-01') are "
-                        "resolved automatically."
-                    ),
-                    "enum": ["gpu-cluster", "network", "cost"],
-                },
-            },
-            "required": ["service"],
-            "additionalProperties": False,
-        },
-    },
-}
-
-
-def get_tool_definition() -> dict[str, Any]:
-    """Return the Azure AI Agent Service-compatible tool definition for this tool."""
-    return TOOL_SCHEMA
-
-
-TOOL_DEFINITIONS: list[dict[str, Any]] = [TOOL_SCHEMA]
-
-TOOL_CALLABLES: dict[str, Any] = {
-    "get_work_context": get_work_context,
-}

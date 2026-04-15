@@ -30,30 +30,8 @@ def tmp_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Schema / metadata tests (no DB required)
+# Utility tests (no DB required)
 # ---------------------------------------------------------------------------
-
-
-def test_tool_schema_structure() -> None:
-    from tools.sql_telemetry import TOOL_SCHEMA
-
-    assert TOOL_SCHEMA["type"] == "function"
-    fn = TOOL_SCHEMA["function"]
-    assert fn["name"] == "query_telemetry"
-    assert "description" in fn
-    params = fn["parameters"]
-    assert params["type"] == "object"
-    assert "properties" in params
-    # Must expose all four telemetry table names in the enum
-    table_enum = params["properties"]["table"]["enum"]
-    for tbl in ("telemetry_gpu", "telemetry_net", "telemetry_cost", "incidents"):
-        assert tbl in table_enum
-
-
-def test_get_tool_definition_returns_schema() -> None:
-    from tools.sql_telemetry import TOOL_SCHEMA, get_tool_definition
-
-    assert get_tool_definition() is TOOL_SCHEMA
 
 
 def test_list_aggregates_returns_known_keys() -> None:

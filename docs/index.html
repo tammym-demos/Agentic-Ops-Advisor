@@ -870,8 +870,9 @@ pip install -r requirements.txt
 <span class="code-comment"># 2. Seed the synthetic telemetry database</span>
 python -m data.seed_telemetry
 
-<span class="code-comment"># 3. Run in demo mode (no Azure creds needed)</span>
-python scripts/run_local.py
+<span class="code-comment"># 3. Run the container</span>
+docker build -t agentic-ops-advisor .
+docker run -p 8088:8088 --env-file .env agentic-ops-advisor
 
 <span class="code-comment"># 4. Run the test suite</span>
 python -m pytest tests/ -q</code></pre>

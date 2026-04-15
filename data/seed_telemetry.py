@@ -41,7 +41,7 @@ DATA_DIR = Path(__file__).parent
 DB_PATH = DATA_DIR / "telemetry.db"
 SQL_PATH = DATA_DIR / "seed_data.sql"
 
-# Compat alias used by scripts/setup_local_db.py and scripts/run_local.py
+# Compat alias used by scripts/setup_local_db.py
 DEFAULT_DB_PATH = str(DB_PATH)
 
 # ---------------------------------------------------------------------------
@@ -319,8 +319,8 @@ def seed_connection(
 ) -> dict[str, int]:
     """Seed synthetic data into an open connection. Returns {table_name: row_count}.
 
-    Used by scripts/setup_local_db.py and scripts/run_local.py which manage
-    their own connection lifecycle.
+    Used by scripts/setup_local_db.py which manages
+    its own connection lifecycle.
     """
     rng = random.Random(random_seed)
     gpu_rows = generate_gpu_rows(rng)

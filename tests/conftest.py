@@ -55,7 +55,6 @@ def in_memory_db() -> sqlite3.Connection:
 
 # Minimal env values for Settings.from_env() to succeed without real Azure credentials.
 _TEST_ENV = {
-    "AZURE_AI_PROJECT_CONNECTION_STRING": "https://test.openai.azure.com/;project=test",
     "AZURE_OPENAI_ENDPOINT": "https://test.openai.azure.com/",
 }
 
@@ -64,7 +63,6 @@ _TEST_ENV = {
 def test_settings() -> Settings:
     """Return a Settings instance suitable for unit tests (no real Azure credentials)."""
     return Settings(
-        azure_ai_project_connection_string=_TEST_ENV["AZURE_AI_PROJECT_CONNECTION_STRING"],
         azure_openai_endpoint=_TEST_ENV["AZURE_OPENAI_ENDPOINT"],
         azure_openai_deployment="gpt-4.1",
         db_mode="sqlite",
@@ -77,7 +75,6 @@ def test_settings() -> Settings:
 def test_settings_work_iq_off() -> Settings:
     """Return a Settings instance with Work IQ disabled."""
     return Settings(
-        azure_ai_project_connection_string=_TEST_ENV["AZURE_AI_PROJECT_CONNECTION_STRING"],
         azure_openai_endpoint=_TEST_ENV["AZURE_OPENAI_ENDPOINT"],
         enable_work_iq=False,
         enable_mcp=False,

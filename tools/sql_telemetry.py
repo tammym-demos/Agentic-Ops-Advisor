@@ -5,9 +5,8 @@ Dual-backend support:
   - DB_MODE=azure_sql → pyodbc against Azure SQL (connection string from env)
 
 Exposes:
-  - ``TOOL_SCHEMA``      — Azure AI Agent Service function definition dict
   - ``query_telemetry``  — async function the agent calls directly
-  - ``get_tool_definition`` — helper that returns the schema dict
+  - ``list_aggregates``  — returns available aggregate query keys
 """
 
 from __future__ import annotations
@@ -282,89 +281,6 @@ async def _dispatch(
 
 
 # ---------------------------------------------------------------------------
-# Azure AI Agent Service tool schema
-# ---------------------------------------------------------------------------
-
-TOOL_SCHEMA: dict[str, Any] = {
-    "type": "function",
-    "function": {
-        "name": "query_telemetry",
-        "strict": False,
-        "description": (
-            "Query synthetic infrastructure telemetry data stored in SQL. "
-            "Covers GPU utilization, network throughput/latency, cost, and incidents. "
-            "All data is synthetic and for demo purposes only. "
-            "IMPORTANT: The ONLY valid tables are: telemetry_gpu, telemetry_net, "
-            "telemetry_cost, incidents. Do NOT use any other table names."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "table": {
-                    "type": "string",
-                    "description": (
-                        "Return raw rows from one of the telemetry tables. "
-                        + " | ".join(
-                            f"'{name}' ({', '.join(meta['columns'])})"
-                            for name, meta in TELEMETRY_TABLES.items()
-                        )
-                    ),
-                    "enum": list(TELEMETRY_TABLES.keys()),
-                },
-                "aggregate": {
-                    "type": "string",
-                    "description": (
-                        "Run a pre-built aggregate query. Available keys: "
-                        + ", ".join(
-                            f"'{k}'" for k in sorted(_AGG_QUERIES.keys())
-                        )
-                        + ". gpu_avg_util_1h/24h: avg/max/min GPU util by cluster+node. "
-                        "net_avg_latency_1h: avg/max latency + loss by site. "
-                        "cost_by_service_24h: total cost/token cost by cluster. "
-                        "open_incidents: unresolved incidents by severity. "
-                        "recent_incidents_24h: all incidents in last 24 h. "
-                        "Use 'list_aggregates' pseudo-value to see full SQL."
-                    ),
-                },
-                "sql": {
-                    "type": "string",
-                    "description": (
-                        "A raw SELECT statement scoped to the known telemetry tables. "
-                        "Only SELECT is permitted; no DDL or DML. "
-                        "CRITICAL — SQLite ONLY: Use datetime('now', '-24 hours') for time filters. "
-                        "Do NOT use PostgreSQL syntax like NOW(), INTERVAL, or CURRENT_TIMESTAMP. "
-                        "Example: SELECT * FROM telemetry_gpu WHERE ts >= datetime('now', '-24 hours')"
-                    ),
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of rows to return for plain table queries (default 100, max 500).",
-                    "default": 100,
-                    "minimum": 1,
-                    "maximum": 500,
-                },
-                "filters": {
-                    "type": "object",
-                    "description": (
-                        "Optional key/value pairs applied as equality WHERE filters for plain table queries. "
-                        "Example: {\"host\": \"gpu-node-01\", \"severity\": \"P1\"}"
-                    ),
-                    "additionalProperties": {"type": "string"},
-                },
-            },
-            "required": [],
-            "additionalProperties": False,
-        },
-    },
-}
-
-
-def get_tool_definition() -> dict[str, Any]:
-    """Return the Azure AI Agent Service-compatible tool definition for this tool."""
-    return TOOL_SCHEMA
-
-
-# ---------------------------------------------------------------------------
 # Utility: list available aggregate queries
 # ---------------------------------------------------------------------------
 
@@ -375,7 +291,7 @@ def list_aggregates() -> dict[str, str]:
 
 
 # ---------------------------------------------------------------------------
-# Sync convenience wrappers for run_local.py demo and agent modes
+# Sync convenience wrappers for demo and agent modes
 # ---------------------------------------------------------------------------
 
 import asyncio as _asyncio  # noqa: E402
@@ -415,12 +331,4 @@ def _sync_query_telemetry(**kwargs: Any) -> dict[str, Any]:
     return json.loads(result_str)
 
 
-TOOL_CALLABLES: dict[str, Any] = {
-    "query_telemetry": _sync_query_telemetry,
-    "query_gpu_utilization": query_gpu_utilization,
-    "query_network_telemetry": query_network_telemetry,
-    "query_cost_trends": query_cost_trends,
-    "query_incidents": query_incidents,
-}
 
-TOOL_DEFINITIONS: list[dict[str, Any]] = [TOOL_SCHEMA]

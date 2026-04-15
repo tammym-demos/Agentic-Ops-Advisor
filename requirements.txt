@@ -10,14 +10,14 @@ opentelemetry-instrumentation>=0.50b0
 python-dotenv>=1.0.1
 pyodbc>=5.2.0
 aiosqlite>=0.20.0
-aiohttp>=3.9.0
-aiohttp-cors>=0.7.0
+azure-ai-agentserver-agentframework==1.0.0b12
+agent-framework-azure-ai>=1.0.0b251112,<=1.0.0b260107
+agent-framework-core>=1.0.0b251112,<=1.0.0b260107
 openai>=2.8.0,<3.0.0
 
 # Foundry hosting adapter (production container)
-azure-ai-agentserver-core>=1.0.0b17
 uvicorn>=0.30.0
-starlette>=0.37.0
+starlette>=0.37.0,<1.0.0
 
 # Dev
 pytest>=8.3.0

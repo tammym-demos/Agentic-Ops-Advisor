@@ -171,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
                 conn.close()
             if ok:
                 _print_header("Setup complete ✓")
-                print("\n  Run `python scripts/run_local.py` to start the agent.\n")
+                print("\n  Run the container to start the agent.\n")
                 return 0
             else:
                 _print_warn("Verification failed. Run with --force to re-seed.")
@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if ok:
         _print_header("Setup complete ✓")
-        print("\n  Run `python scripts/run_local.py` to start the agent.\n")
+        print("\n  Run the container to start the agent.\n")
         return 0
     else:
         _print_err("Setup finished with warnings — see above.")

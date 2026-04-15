@@ -13,7 +13,6 @@ from agent.config import Settings, _get_bool
 # ---------------------------------------------------------------------------
 
 REQUIRED_ENV = {
-    "AZURE_AI_PROJECT_CONNECTION_STRING": "https://example.openai.azure.com/;project=demo",
     "AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com/",
 }
 
@@ -65,12 +64,14 @@ class TestGetBool:
 
 
 class TestSettingsValidation:
-    def test_raises_when_project_conn_missing(self, monkeypatch):
+    def test_succeeds_without_agents_endpoint(self, monkeypatch):
+        """AZURE_AI_AGENTS_ENDPOINT is optional — only needed for Foundry deployments."""
         monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com/")
         monkeypatch.delenv("AZURE_AI_PROJECT_CONNECTION_STRING", raising=False)
         monkeypatch.delenv("AZURE_AI_AGENTS_ENDPOINT", raising=False)
-        with pytest.raises(ValueError, match="AZURE_AI_AGENTS_ENDPOINT"):
-            Settings.from_env()
+        s = Settings.from_env()
+        assert s.azure_ai_agents_endpoint is None
+        assert s.azure_ai_project_connection_string is None
 
     def test_raises_when_openai_endpoint_missing(self, monkeypatch):
         monkeypatch.setenv(
@@ -81,14 +82,13 @@ class TestSettingsValidation:
         with pytest.raises(ValueError, match="AZURE_OPENAI_ENDPOINT"):
             Settings.from_env()
 
-    def test_raises_for_both_missing(self, monkeypatch):
+    def test_raises_when_only_required_missing(self, monkeypatch):
         monkeypatch.delenv("AZURE_AI_PROJECT_CONNECTION_STRING", raising=False)
         monkeypatch.delenv("AZURE_AI_AGENTS_ENDPOINT", raising=False)
         monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
         with pytest.raises(ValueError) as exc_info:
             Settings.from_env()
         msg = str(exc_info.value)
-        assert "AZURE_AI_AGENTS_ENDPOINT" in msg
         assert "AZURE_OPENAI_ENDPOINT" in msg
 
     def test_error_message_mentions_env_example(self, monkeypatch):

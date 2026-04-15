@@ -30,32 +30,22 @@ A **governed, production-style AI agent** that performs root-cause + change-cont
 
 ## Quick Start
 
-### For Local Development (No Azure)
+### For Local Development (Container-Based)
 
 ```bash
 # 1. Clone and enter the repo
 git clone https://github.com/tammym-demos/Agentic-Ops-Advisor.git
 cd Agentic-Ops-Advisor
 
-# 2. Create virtual environment
-python -m venv .venv
-source .venv/bin/activate        # Linux / macOS
-# .venv\Scripts\activate         # Windows (PowerShell)
+# 2. Build and run the container
+docker build -t agentic-ops-advisor .
+docker run -p 8088:8088 --env-file .env agentic-ops-advisor
 
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Seed the local SQLite database (12,966 rows of synthetic telemetry)
-python scripts/setup_local_db.py
-
-# 5. Run the advisor (Demo mode — no Azure credentials needed)
-python scripts/run_local.py
-
-# 6. Run the test suite (346 tests)
+# 3. Run the test suite
 python -m pytest tests/ -q
 ```
 
-> **Demo mode** runs without Azure OpenAI — queries hit the local tools directly. Set `AZURE_OPENAI_ENDPOINT` in `.env` to enable full **Agent mode** with LLM-powered reasoning.
+> This project is **container-only**. Use `docker build` and `docker run` for local testing. The container runs `scripts/serve.py` which implements the Foundry Responses API v1.
 
 ### For Production Deployment to Azure (azd-based)
 
@@ -99,31 +89,18 @@ unset AZURE_OPENAI_ENDPOINT
 # Windows PowerShell:
 $env:AZURE_OPENAI_ENDPOINT = ""
 
-# Run the agent
-python scripts/run_local.py
+# Run the container
+docker build -t agentic-ops-advisor .
+docker run -p 8088:8088 --env-file .env agentic-ops-advisor
 ```
 
 > **💡 Tip:** If the agent crashes with `Missing credentials`, your `.env` file has `AZURE_OPENAI_ENDPOINT` set. Clear it as shown above to use demo mode.
 
-### Option B — Local Agent Mode (Azure OpenAI)
+### Option B — Agent Mode (Azure OpenAI via Container)
 
 Full LLM-powered reasoning with GPT-4.1. The agent correlates telemetry with change context and provides root-cause analysis with confidence scores.
 
-#### B1. Interactive CLI Mode
-
-```bash
-# 1. Log in to Azure (for DefaultAzureCredential)
-az login --tenant <your-tenant-id>
-
-# 2. Ensure .env has these variables set:
-#    AZURE_OPENAI_ENDPOINT=https://hub-agentops-prod.openai.azure.com
-#    AZURE_OPENAI_DEPLOYMENT=gpt-4.1
-
-# 3. Run the agent
-python scripts/run_local.py
-```
-
-#### B2. HTTP Server Mode (matches production)
+#### HTTP Server Mode
 
 Runs the hosted agent HTTP server locally — same code path as production deployment.
 
@@ -270,7 +247,7 @@ az provider register --namespace Microsoft.ContainerRegistry
 **Required Azure resources** (provisioned automatically via `azd up` — see [Deploying to Azure](#6-deploying-to-azure)):
 
 - Azure AI Foundry project (includes Azure OpenAI)
-- Azure SQL Database (production) or SQLite (local dev — no setup needed)
+- Azure SQL Database (production) or SQLite (container-embedded — no setup needed)
 - Application Insights workspace
 
 ---
@@ -306,7 +283,7 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Open `.env` in your editor and fill in the required values. For local dev in **Demo mode** (no LLM), you only need:
+Open `.env` in your editor and fill in the required values. For container-based **Demo mode** (no LLM), you only need:
 
 ```dotenv
 DB_MODE=sqlite
@@ -354,7 +331,7 @@ Expected output:
 
   Setup complete ✓
 
-  Run `python scripts/run_local.py` to start the agent.
+  Run the container to start the agent (see Quick Start).
 ```
 
 #### Telemetry Schema
@@ -374,31 +351,21 @@ Expected output:
 | 22 | Network latency spike | `site-west` latency exceeds 180 ms, packet loss spikes |
 | 25 | Cost surge | `cluster-a` spend jumps 5–7× baseline |
 
-### Step 6 — Run the agent
+### Step 6 — Run the agent (container)
 
 ```bash
-python scripts/run_local.py
+docker build -t agentic-ops-advisor .
+docker run -p 8088:8088 --env-file .env agentic-ops-advisor
 ```
 
-The runner detects your environment and starts in one of two modes:
+The container runs `scripts/serve.py` which implements the Foundry Responses API v1 on port 8088.
 
-| Mode | When | Description |
-|---|---|---|
-| **Agent mode** | `AZURE_OPENAI_ENDPOINT` is set | Full reasoning loop powered by GPT-4.1 with function-calling against the local SQLite database. Requires Azure OpenAI credentials. |
-| **Demo mode** | No Azure credentials | Tool-only mode — queries are executed directly against the local database and results are printed as JSON. No LLM required; useful for validating the data layer. |
-
-> See [Demo Query Suggestions](#demo-query-suggestions) for the full list with descriptions.
-
-Type a number (1–4) to run a suggested query, or type your own question. Type `quit` or press `Ctrl+C` to exit.
-
-**Health endpoint:** The runner also starts a health check server on port 8080. You can verify it's running:
+**Health endpoint:** Verify the container is healthy:
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8088/health
 # Response: {"status": "healthy", "timestamp": "2024-...", "version": "0.1.0"}
 ```
-
-This endpoint is used by the Docker HEALTHCHECK and doesn't require Azure credentials.
 
 ### Step 7 — Run the test suite
 
@@ -546,7 +513,7 @@ python scripts/deploy_agent.py
 
 The agent is deployed as a **hosted agent** implementing the **Azure AI Foundry Responses API v1**. The container includes the agent code, all three custom tool surfaces, and a seeded SQLite database with synthetic telemetry. The hosted agent pattern provides server-side tool dispatch, stateless request handling, and seamless integration with Foundry's observability features.
 
-> **Production Server:** `scripts/serve.py` is the HTTP server that handles all production requests. It implements the Responses API v1 and is automatically deployed in the Docker container. For local testing, you can run it directly with `python scripts/serve.py` (see [Local development modes](#local-development-modes)).
+> **Production Server:** `scripts/serve.py` is the HTTP server that handles all production requests. It implements the Responses API v1 and is automatically deployed in the Docker container.
 
 ### Hosted Agent Pattern
 
@@ -595,23 +562,16 @@ The hosted agent pattern requires all tool code to be deployed with the agent. C
 | `static/index.html` | Local chat UI for testing the hosted agent |
 | `.dockerignore` | Excludes secrets, docs, and build artifacts from image |
 
-### Local development modes
+### Local development (container-only)
 
-The agent supports two local run modes:
+This project uses **container-only** development. Run the same container locally that deploys to production:
 
-#### 1. Interactive CLI mode (default)
 ```bash
-python scripts/run_local.py
+docker build -t agentic-ops-advisor .
+docker run -p 8088:8088 --env-file .env agentic-ops-advisor
 ```
-- Interactive prompt for queries
-- Great for manual testing and demos
-- Runs the agent loop locally (no HTTP server)
 
-#### 2. HTTP server mode (matches production)
-```bash
-python scripts/serve.py
-```
-- Starts aiohttp server on port 8088
+- Starts the HTTP server on port 8088
 - Implements POST `/responses` endpoint (Foundry Responses API v1)
 - GET `/health` for health checks
 - GET `/` serves `static/index.html` (chat UI)
@@ -677,9 +637,8 @@ This is the canonical 7-step demo script. Run it in order to show the full build
 
 **Command:**
 ```bash
-python scripts/run_local.py
-# Then type: Why did GPU utilization drop in the last 24h?
-# Or just type: 1  (to select the first suggested query)
+docker run -p 8088:8088 --env-file .env agentic-ops-advisor
+# Then open http://localhost:8088 and ask: Why did GPU utilization drop in the last 24h?
 ```
 
 **What to show the audience:**
@@ -787,7 +746,7 @@ python eval/run_eval.py --compare-baseline
 
 ## 9. Environment Variables Reference
 
-Copy `.env.example` to `.env` and fill in these values. Variables marked **Required for Azure** are only needed for cloud deployment; local dev works with just the **Required for local** variables.
+Copy `.env.example` to `.env` and fill in these values. Variables marked **Required for Azure** are only needed for cloud deployment; container-based local testing works with just the **Required for local** variables.
 
 | Variable | Default | Required | Description |
 |---|---|---|---|
@@ -795,7 +754,7 @@ Copy `.env.example` to `.env` and fill in these values. Variables marked **Requi
 | `AZURE_OPENAI_ENDPOINT` | _(empty)_ | Both | Azure OpenAI endpoint URL (e.g. `https://your-resource.openai.azure.com/`) |
 | `AZURE_OPENAI_DEPLOYMENT` | `gpt-4.1` | Both | Azure OpenAI model deployment name |
 | `AZURE_OPENAI_API_VERSION` | `2025-01-01-preview` | Both | Azure OpenAI API version |
-| `DB_MODE` | `sqlite` | Both | `sqlite` for local dev, `azure_sql` for production |
+| `DB_MODE` | `sqlite` | Both | `sqlite` for container-embedded dev, `azure_sql` for production |
 | `DB_CONNECTION_STRING` | _(empty)_ | Azure | Full ODBC connection string for Azure SQL (used when `DB_MODE=azure_sql`) |
 | `SQLITE_DB_PATH` | `data/telemetry.db` | Local | Path to the local SQLite database file (used when `DB_MODE=sqlite`) |
 | `ENABLE_WORK_IQ` | `true` | Both | Enable the Work IQ context tool (`true`/`false`) |
@@ -871,7 +830,7 @@ For a production integration, replace `tools/work_context_stub.py` with a live W
 **Fix:**
 1. Check that `tools/sql_telemetry.py`, `tools/work_context_stub.py`, and `tools/action_stub.py` are all importable: `python -c "import tools.sql_telemetry"`
 2. Check that `ENABLE_WORK_IQ=true` in `.env` if you expect the Work IQ tool to be called
-3. Re-run `python scripts/run_local.py` and check the startup banner for mode and tool info
+3. Rebuild and re-run the container and check the startup banner for mode and tool info
 
 ---
 

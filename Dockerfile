@@ -33,21 +33,19 @@ LABEL maintainer="Agentic Ops Advisor Team" \
 # ---- Python behaviour ----
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app:$PYTHONPATH
+    PYTHONPATH=/app
 
 # ---- System dependencies & Microsoft ODBC Driver 18 ----
-# Combine into single RUN to reduce layers and exploit caching
+# Base image is Debian 13 (trixie) — use official Microsoft .deb package
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         gnupg && \
-    # Add Microsoft package repository (Debian 12 / bookworm)
-    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | \
-        gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg && \
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] \
-        https://packages.microsoft.com/debian/12/prod bookworm main" \
-        > /etc/apt/sources.list.d/mssql-release.list && \
+    curl -fsSL https://packages.microsoft.com/config/debian/13/packages-microsoft-prod.deb \
+        -o /tmp/packages-microsoft-prod.deb && \
+    dpkg -i /tmp/packages-microsoft-prod.deb && \
+    rm /tmp/packages-microsoft-prod.deb && \
     apt-get update && \
     ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 && \
     apt-get purge -y --auto-remove gnupg && \

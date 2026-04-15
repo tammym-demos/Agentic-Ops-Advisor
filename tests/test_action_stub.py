@@ -3,7 +3,6 @@
 import json
 
 from tools.action_stub import (
-    ACTION_STUB_TOOL_DEFINITIONS,
     propose_change,
     request_approval,
 )
@@ -203,46 +202,3 @@ class TestRequestApproval:
                 assert "rejected" in payload["message"].lower() or "revise" in payload["message"].lower()
                 break
 
-
-# ---------------------------------------------------------------------------
-# Tool schema tests
-# ---------------------------------------------------------------------------
-
-
-class TestToolDefinitions:
-    def test_two_tool_definitions(self):
-        assert len(ACTION_STUB_TOOL_DEFINITIONS) == 2
-
-    def test_all_definitions_are_function_type(self):
-        for defn in ACTION_STUB_TOOL_DEFINITIONS:
-            assert defn["type"] == "function"
-
-    def test_propose_change_schema(self):
-        names = {d["function"]["name"] for d in ACTION_STUB_TOOL_DEFINITIONS}
-        assert "propose_change" in names
-
-    def test_request_approval_schema(self):
-        names = {d["function"]["name"] for d in ACTION_STUB_TOOL_DEFINITIONS}
-        assert "request_approval" in names
-
-    def test_propose_change_has_plan_parameter(self):
-        defn = next(d for d in ACTION_STUB_TOOL_DEFINITIONS if d["function"]["name"] == "propose_change")
-        params = defn["function"]["parameters"]
-        assert "plan" in params["properties"]
-        assert "plan" in params["required"]
-
-    def test_request_approval_has_change_request_id_parameter(self):
-        defn = next(d for d in ACTION_STUB_TOOL_DEFINITIONS if d["function"]["name"] == "request_approval")
-        params = defn["function"]["parameters"]
-        assert "change_request_id" in params["properties"]
-        assert "change_request_id" in params["required"]
-
-    def test_all_parameters_have_descriptions(self):
-        for defn in ACTION_STUB_TOOL_DEFINITIONS:
-            for param_name, param_schema in defn["function"]["parameters"]["properties"].items():
-                assert "description" in param_schema, f"Missing description for {param_name}"
-
-    def test_all_functions_have_descriptions(self):
-        for defn in ACTION_STUB_TOOL_DEFINITIONS:
-            assert "description" in defn["function"]
-            assert len(defn["function"]["description"]) > 0
