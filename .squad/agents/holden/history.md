@@ -9,10 +9,40 @@
 
 ## Learnings
 
+### 2026-04-15T13:57:00Z: Migration Deployment Phase — Framework Integration Complete
+
+**Session:** Amos (DevOps) background agent → Scribe consolidation  
+**Task:** Verify Agent Framework integration end-to-end  
+**Status:** ✅ MIGRATION COMPLETE
+
+**Deliverables:**
+1. Agent Framework hosting via `from_agent_framework(agent).run()`
+2. All 3 tool surfaces (SQL telemetry, Work IQ stub, actions) integrated
+3. Responses API protocol v1 implemented
+4. Container deployment pipeline (Dockerfile → ACR → Foundry hosted agent)
+5. Pre-deploy test gate enforcing 304/304 tests pass
+6. Non-blocking startup in serve.py (background DB seed via asyncio.Event)
+
+**Architecture Alignment:**
+- Client: `AzureOpenAIChatClient` from `agent_framework.azure`
+- Tools: Plain Python functions with type annotations
+- Hosting: `azure.ai.agentserver.agentframework` adapter
+- Auth: `DefaultAzureCredential` + API key fallback, token scope `https://cognitiveservices.azure.com/.default`
+- Container: Multi-stage Dockerfile, <450 MB, runs as non-root, health/readiness endpoints
+
+**Cross-Team Verification:**
+- **Alex (Tester):** All 304 post-migration tests passing; test framework updated for lazy SDK imports
+- **Naomi (Backend):** Script audit completed; zero broken imports; migration patterns validated
+- **Amos (DevOps):** CI/CD audit complete; package verification enhanced for new framework ecosystem
+
+**Next Gate:** Deploy workflow completion; hosted agent activation in Foundry
+
+---
+
 ### 2026-04-09: Migration Plan Rewrite — Gap Analysis Incorporation
 
 **Session:** Solo doc rewrite (Holden)  
-**Status:** Complete — `docs/agent-framework-migration-plan.md` rewritten  
+**Status:** Complete — `docs/agent-framework-migration-plan.md` rewritten
 
 **Key Architecture Decisions:**
 - **Client class:** `AzureOpenAIChatClient` (from `agent_framework.azure`), NOT `FoundryChatClient`. Aligns with existing `AZURE_OPENAI_ENDPOINT` config and matches official hosted agent samples.
