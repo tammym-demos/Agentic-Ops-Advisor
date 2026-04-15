@@ -51,6 +51,6 @@ jobs:
                   python -c "import dotenv; print('python-dotenv OK')"
                   python -c "import aiosqlite; print('aiosqlite OK')"
                   python -c "import agent_framework; print('agent_framework OK')"
-                  python -c "from azure.ai.agentserver.agentframework import from_agent_framework; print('azure-ai-agentserver-agentframework OK')"
+                  python scripts/patch_sdk_compat.py
                   python -c "import uvicorn; print('uvicorn OK')"
                   python -c "import starlette; print('starlette OK')"

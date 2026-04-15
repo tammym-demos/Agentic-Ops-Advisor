@@ -45,17 +45,8 @@ os.environ.setdefault("ENABLE_MCP", "false")
 # SDK compatibility shim: agent-framework-azure-ai references symbols that
 # were renamed in azure-ai-projects 2.0.x.  Patch before any framework import.
 # ---------------------------------------------------------------------------
-import azure.ai.projects.models as _proj_models  # noqa: E402
-
-_COMPAT_MAP = {
-    "PromptAgentDefinitionText": "PromptAgentDefinitionTextOptions",
-    "ResponseTextFormatConfigurationJsonObject": "TextResponseFormatJsonObject",
-    "ResponseTextFormatConfigurationJsonSchema": "TextResponseFormatJsonSchema",
-    "ResponseTextFormatConfigurationText": "TextResponseFormatText",
-}
-for _old, _new in _COMPAT_MAP.items():
-    if not hasattr(_proj_models, _old) and hasattr(_proj_models, _new):
-        setattr(_proj_models, _old, getattr(_proj_models, _new))
+from scripts.patch_sdk_compat import apply_compat_shim  # noqa: E402
+apply_compat_shim()
 
 # Load .env (best-effort; ignored if file absent)
 try:
