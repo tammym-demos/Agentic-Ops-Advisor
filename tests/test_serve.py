@@ -174,7 +174,7 @@ class TestMain:
         kwargs = self.mock_chat_client_cls.call_args
         assert kwargs.kwargs["ad_token_provider"] == self.mock_token_provider
         assert kwargs.kwargs["endpoint"] is not None
-        assert kwargs.kwargs["model"] is not None
+        assert kwargs.kwargs["deployment_name"] is not None
 
     def test_create_agent_called_with_correct_args(self):
         self._run_main()
