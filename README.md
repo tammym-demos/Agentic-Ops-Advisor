@@ -24,7 +24,8 @@ A **governed, production-style AI agent** that performs root-cause + change-cont
 9. [Environment Variables Reference](#9-environment-variables-reference)
 10. [Monitoring Setup](#10-monitoring-setup)
 11. [Disclaimers](#11-disclaimers)
-12. [Troubleshooting / FAQ](#12-troubleshooting--faq)
+12. [Lessons Learned](#12-lessons-learned)
+13. [Troubleshooting / FAQ](#13-troubleshooting--faq)
 
 ---
 
@@ -207,15 +208,28 @@ graph TD
 | Layer | Technology |
 |---|---|
 | Language | Python 3.11+ |
-| Agent Framework | Azure AI Agent Service SDK (`azure-ai-projects`) — hosted agent pattern |
-| Deployment Pattern | Hosted agent implementing Foundry Responses API (server-side tool dispatch) |
-| LLM | GPT-4.1 via Azure OpenAI |
+| Agent Framework | `agent-framework-azure-ai` (v1.0.0b251112+) with `AzureOpenAIChatClient` |
+| Deployment Pattern | Hosted agent implementing Foundry Responses API v1 (server-side tool dispatch) |
+| Host Adapter | `azure-ai-agentserver-agentframework` v1.0.0b12 |
+| Core SDK | `azure-ai-projects>=2.0.0` (with SDK compatibility shim — see [SDK Compatibility](#sdk-compatibility)) |
+| LLM | GPT-4.1 via Azure OpenAI (`AZURE_OPENAI_DEPLOYMENT` / `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME`) |
 | Local Database | SQLite (dev) / Azure SQL (production) |
 | Evaluation | `azure-ai-evaluation` + custom evaluators |
 | Observability | OpenTelemetry → Application Insights / Azure Monitor |
 | IaC | Bicep templates (`infra/`) |
-| CI/CD | GitHub Actions |
-| Container | Docker → Azure Container Registry (ACR) |
+| CI/CD | GitHub Actions (`.github/workflows/deploy.yml`) |
+| Container | Docker → Azure Container Registry (ACR), non-root user, multi-stage build |
+
+### SDK Compatibility Note
+
+The project uses **`agent-framework-azure-ai` (beta)** with **`azure-ai-projects >= 2.0.0`**. The framework references symbol names that were renamed in `azure-ai-projects` 2.0.x. To resolve this, a **compatibility shim** (`scripts/patch_sdk_compat.py`) is applied automatically at runtime (see `scripts/serve.py` line 48).
+
+**What the shim does:**
+- Maps 4 old symbol names (`PromptAgentDefinitionText`, `ResponseTextFormatConfigurationJsonObject`, etc.) to their new equivalents in `azure-ai-projects.models`
+- Runs once per startup, before any agent framework imports
+- Enables the project to use `azure-ai-projects>=2.0.0,<3.0.0` without code changes
+
+**For local development:** No action needed — the shim is applied automatically. For troubleshooting SDK import errors, see [Troubleshooting / FAQ](#12-troubleshooting--faq).
 
 ---
 
@@ -442,6 +456,8 @@ Evaluations run automatically on every pull request via the `.github/workflows/c
 ---
 
 ## 6. Deploying to Azure
+
+> ✅ **Deployment Status: LIVE** — The agent is deployed to Azure AI Foundry Agent Service as a hosted agent. Smoke tests pass. Latest deployment via GitHub Actions (`.github/workflows/deploy.yml`). See [Lessons Learned](#lessons-learned-deployment-insights) for deployment history and insights.
 
 ### Quick Deploy (Recommended)
 
@@ -752,7 +768,8 @@ Copy `.env.example` to `.env` and fill in these values. Variables marked **Requi
 |---|---|---|---|
 | `AZURE_AI_PROJECT_CONNECTION_STRING` | _(empty)_ | Azure | Foundry project connection string from the Azure AI Foundry portal |
 | `AZURE_OPENAI_ENDPOINT` | _(empty)_ | Both | Azure OpenAI endpoint URL (e.g. `https://your-resource.openai.azure.com/`) |
-| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4.1` | Both | Azure OpenAI model deployment name |
+| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4.1` | Both | Azure OpenAI model deployment name (legacy name) |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` | `gpt-4.1` | Both | Azure OpenAI chat model deployment name (current, used by agent framework) |
 | `AZURE_OPENAI_API_VERSION` | `2025-01-01-preview` | Both | Azure OpenAI API version |
 | `DB_MODE` | `sqlite` | Both | `sqlite` for container-embedded dev, `azure_sql` for production |
 | `DB_CONNECTION_STRING` | _(empty)_ | Azure | Full ODBC connection string for Azure SQL (used when `DB_MODE=azure_sql`) |
@@ -819,7 +836,23 @@ For a production integration, replace `tools/work_context_stub.py` with a live W
 
 ---
 
-## 12. Troubleshooting / FAQ
+## 12. Lessons Learned
+
+### Deployment Insights
+
+The `lessons_learned/` directory contains deployment chronicles and key insights from containerizing and deploying the agent to Azure AI Foundry Agent Service:
+
+- **Framework modernization:** Migration from legacy `agent.py` CLI to production-ready `scripts/serve.py` (Responses API v1) 
+- **SDK compatibility:** Resolution of naming conflicts between `agent-framework-azure-ai` (beta) and `azure-ai-projects>=2.0.0` via `scripts/patch_sdk_compat.py`
+- **Container optimization:** Multi-stage Docker build achieving ~450 MB image size with ODBC drivers, non-root user, and health checks
+- **CI/CD hardening:** GitHub Actions workflow enforces pre-deploy testing, Bicep validation, and RBAC automation
+- **Smoke test patterns:** Validation of Foundry Responses API token audience (`ai.azure.com/.default` vs `cognitiveservices.azure.com/.default`)
+
+See the `lessons_learned/` directory for full deployment chronicles and decision logs.
+
+---
+
+## 13. Troubleshooting / FAQ
 
 ### Agent doesn't call tools
 
@@ -869,6 +902,26 @@ python eval/run_eval.py
    az role assignment list --assignee $(az account show --query user.name -o tsv) --scope /subscriptions/$(az account show --query id -o tsv)
    ```
 3. Re-run `cd infra && ./deploy.sh`
+
+---
+
+### "PromptAgentDefinitionText not found" or SDK compatibility errors
+
+**Symptom:** Import error like `AttributeError: module 'azure.ai.projects.models' has no attribute 'PromptAgentDefinitionText'`
+
+**Likely cause:** The SDK compatibility shim did not apply, or `azure-ai-projects` 2.0.x renamed symbols but the agent framework still references old names.
+
+**Fix:**
+1. Check that `azure-ai-projects>=2.0.0,<3.0.0` is installed:
+   ```bash
+   pip list | grep azure-ai-projects
+   ```
+2. Verify the compat shim runs before any framework imports. In `scripts/serve.py`, this happens at line 48.
+3. Manually test the shim:
+   ```bash
+   python scripts/patch_sdk_compat.py
+   ```
+   Should output: `✓ SDK compatibility shim verified`
 
 ---
 
