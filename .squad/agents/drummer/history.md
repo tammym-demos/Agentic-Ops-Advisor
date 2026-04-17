@@ -88,3 +88,35 @@
 - **Cross-agent update:** Naomi completed legacy code cleanup (460 lines agent.py + 570 lines tests removed, 329 tests passing). Commit 84e2f46.
 - **Cross-agent update:** Amos resolved OpenAI dependency conflict (`<2.0.0` → `>=2.8.0,<3.0.0`). Commit b1c735a. Run #97 in progress.
 - **Orchestration:** All team deliverables logged to `.squad/orchestration-log/`. Sprint orchestration complete.
+
+### 2026-04-08: README Update — Deployment Status & SDK Compatibility Documentation
+- **Task:** Update README.md to reflect current implementation state (live deployment, SDK compatibility shim, architecture)
+- **Changes made:**
+  1. **Tech Stack table:** Added precise framework versions (`agent-framework-azure-ai` v1.0.0b251112+, `azure-ai-agentserver-agentframework` v1.0.0b12, `azure-ai-projects>=2.0.0`)
+  2. **New SDK Compatibility section:** Documented the compatibility shim (`scripts/patch_sdk_compat.py`), explaining 4 symbol name mappings and automatic runtime application
+  3. **Deployment status banner:** Added "✅ Deployment Status: LIVE" to section 6, confirming smoke test passes and GitHub Actions CI/CD integration
+  4. **Environment variables:** Added `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` (current agent framework convention) alongside legacy `AZURE_OPENAI_DEPLOYMENT`
+  5. **New Lessons Learned section:** Summarized key deployment insights from `lessons_learned/` directory (framework migration, SDK compat, container optimization, CI/CD hardening, smoke test patterns)
+  6. **SDK troubleshooting:** Added FAQ entry for `PromptAgentDefinitionText` and SDK import errors with fix steps
+  7. **Table of Contents:** Updated numbering to reflect new section
+- **Deliverable:** Commit fc7b9b8 to main branch. README now documents the actual architecture and deployment in use.
+- **Status:** ✅ COMPLETE — README reflects live deployment status, SDK compatibility requirement, and deployment insights. Team can now reference current state without manual investigation.
+
+
+### 2026-04-15: SDK Compatibility & Deployment Name Issue Resolution
+- **Issues resolved:** Two deployment blockers fixed in single session
+- **Issue #1 — ImportError: PromptAgentDefinitionText**
+  - Root cause: `agent-framework-azure-ai` beta imports old symbol names from `azure.ai.projects.models`, but `azure-ai-projects>=2.0.0` renamed them
+  - Symbol mappings: `PromptAgentDefinitionText` → `PromptAgentDefinitionTextOptions` (+ 3 others)
+  - Fix: Created centralized `scripts/patch_sdk_compat.py` using `setattr()` to create aliases before any framework import
+  - Previous approach (inline Python in YAML) failed due to shell escaping and YAML indentation bugs
+  - Commit: 6dcd6eb
+  - Lesson: Always centralize SDK compat shims as standalone Python scripts, not inline YAML. Import chain is: `from_agent_framework()` → `agent_framework.azure.AzureAIClient` → `agent_framework_azure_ai._client` → `from azure.ai.projects.models import PromptAgentDefinitionText`
+- **Issue #2 — ServiceInitializationError: deployment_name required**
+  - Root cause: `AzureOpenAIChatClient` from agent_framework expects `deployment_name=` parameter, NOT `model=` (which is standard Azure OpenAI SDK convention)
+  - Fix: Changed serve.py instantiation from `model=settings.azure_openai_deployment` to `deployment_name=settings.azure_openai_deployment`. Added belt-and-suspenders env var fallback for `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME`
+  - Commit: 87118f4
+  - Lesson: Agent framework SDK uses non-standard parameter names. Always check SDK source, not assumptions.
+- **Smoke test result:** After both fixes, smoke test PASSED for the first time — agent fully deployed, responded with real LLM output
+- **Document created:** `lessons_learned/sdk-compatibility-and-deployment-name.md` with full issue tables, architecture decisions, debugging techniques, and CI/CD updates
+- **Decision file:** `.squad/decisions/inbox/drummer-sdk-compat-lesson.md` (team-relevant decision on SDK shim location)
