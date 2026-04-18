@@ -9,6 +9,39 @@
 
 ## Learnings
 
+### 2025-07-27: SRE Agent Integration — Architecture Decisions
+
+**Session:** Architecture review of Amos's ARM/Bicep research + Naomi's API surface research  
+**Status:** DECIDED — 5 architecture questions resolved  
+**Output:** `.squad/decisions/inbox/holden-sre-agent-architecture.md`
+
+**Decisions Made:**
+1. **MCP exposure:** Internet-accessible with Azure AD auth now; VNet-restrict later when SRE Agent networking is clearer
+2. **Bidirectional:** Yes, both directions, but phased — MCP connector (Phase 1), REST chat tool (Phase 2), sub-agent (Phase 3)
+3. **Auth:** `DefaultAzureCredential` with SRE Agent resource scope (`59f0a04a-b322-4310-adc9-39ac41e9631e`). RBAC scoping, not separate credential.
+4. **Feature flags:** `ENABLE_SRE_AGENT` (new, default: false) for REST tool. `ENABLE_MCP` (existing) for MCP server. Orthogonal.
+5. **Memory push:** Pull-only via MCP. Do NOT build on undocumented `#remember` chat hack. Quick spike for research only.
+
+**Key Patterns Confirmed:**
+- One feature flag per tool surface (consistent with `ENABLE_WORK_IQ`, `ENABLE_MCP`)
+- Synthetic fallback when flag disabled (consistent with `work_context_stub.py`)
+- `DefaultAzureCredential` for all external auth (consistent with `serve.py`, `deploy_agent.py`)
+- Per-request credential creation, never at module/startup level (lesson from IMDS timeout bugs)
+
+**Key Files:**
+- `tools/sre_agent.py` (to be created — Phase 2)
+- `tools/work_context_mcp.py` (to be extended with auth validation — Phase 1)
+- `agent/config.py` (add `enable_sre_agent` field)
+- SRE Agent resource ID: `59f0a04a-b322-4310-adc9-39ac41e9631e`
+- SRE Agent base URL pattern: `https://{agent-name}--{hash}.{hash}.{region}.azuresre.ai`
+
+**Disagreements Logged:**
+- Naomi: deprioritized sub-agent registration from "tertiary" to explicit Phase 3
+- Naomi: rejected `#remember` via chat API as a buildable feature (research spike only)
+- Both researchers' core recommendations otherwise validated
+
+---
+
 ### 2026-04-15T13:57:00Z: Migration Deployment Phase — Framework Integration Complete
 
 **Session:** Amos (DevOps) background agent → Scribe consolidation  
