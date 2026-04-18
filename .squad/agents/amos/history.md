@@ -5,7 +5,31 @@
 - **Stack:** Python 3.11, Azure AI Agent Service SDK, GPT-4.1, Bicep, OpenTelemetry
 - **Repo:** tammym-demos/Agentic-Ops-Advisor
 - **User:** Tammy
-- **Status:** All 22 PRs merged. Remaining: tests, Azure deployment, integration test, Docker optimization.
+- **Status:** All 22 PRs merged. SRE Agent integration architecture decisions finalized (Phase 1 MCP ready). Remaining: tests, Azure deployment, integration test, Docker optimization.
+
+## Holden Architecture Review — SRE Agent Integration Impact on Amos Work
+
+### 2026-04-18T21:42:00Z: Decisions Affecting Amos Responsibilities
+
+**From Holden's architecture review (5 decisions, 7 action items), these items directly impact Amos:**
+
+1. **Decision 3 (Auth Model):** Use `DefaultAzureCredential` + RBAC scoping
+   - **Amos Impact:** When implementing REST chat tool, assign `SRE Agent Standard User` role to managed identity via RBAC, not separate service principal
+   - **Benefit:** Aligns with codebase-wide credential pattern; reduces maintenance complexity
+
+2. **Decision 4 (Feature Flag Naming):** Separate `ENABLE_SRE_AGENT` flag
+   - **Amos Task (Action Item 3):** Add `ENABLE_SRE_AGENT`, `SRE_AGENT_URL` to `.env.example`, `agent/config.py`, `agent.yaml` environment list
+   - **Timeline:** Needed before Phase 2 (REST tool implementation)
+
+3. **Phasing + Infrastructure:**
+   - **Amos Task (Action Item 4):** Document SRE Agent portal creation steps in README or ops runbook
+   - **Amos Task (Action Item 5):** Add RBAC assignment Bicep module for SRE Agent managed identity → resource group (Reader + Log Analytics Reader roles)
+   - **Timeline:** Supporting items; can be done in parallel with Phase 1/2
+
+4. **Disagreement Noted:** Holden deprioritized sub-agent registration to Phase 3 (Naomi proposed tertiary; Holden agrees but emphasizes "Phase 3, not Phase 2")
+   - **Amos Impact:** No immediate changes; relevant when Phase 2 (REST chat) is validated
+
+**Summary:** Amos's work unblocked. Phased approach (MCP Phase 1, REST Phase 2) gives Amos time to prepare infrastructure support while Naomi works on tool implementation. Feature flag + Bicep RBAC module are standard DevOps tasks aligning with existing patterns.
 
 ## Learnings
 
@@ -832,3 +856,24 @@
 - Centralize compat shims in standalone scripts for reusability and testability
 - Always provide clear diagnostics (applied N patches, verification status)
 - Make verification steps gracefully degrade in local dev vs. CI environments
+
+### 2025-07-24: Azure SRE Agent ARM/Bicep Research
+
+**Session:** Research task from Tammy
+**Status:** ✅ COMPLETED
+**Scope:** Research only, no code changes
+**Details:**
+- ARM resource type confirmed: `Microsoft.App/sreAgents` under `Microsoft.App` provider
+- Stable API version: `2026-01-01` (published in azure-rest-api-specs)
+- Regions unchanged: East US 2, Sweden Central, Australia East
+- Primary creation path is portal-only at sre.azure.com; no official Bicep examples yet
+- Managed identity is UAMI (user-assigned), auto-created with the agent
+- Auto-created resources: App Insights, Log Analytics workspace, UAMI
+- RBAC assignments post-creation can be automated via Bicep
+- Findings written to `.squad/decisions/inbox/amos-sre-agent-arm-research.md`
+**Key paths:**
+- .squad/decisions/inbox/amos-sre-agent-arm-research.md — full research findings
+**Learnings:**
+- Azure SRE Agent uses Microsoft.App provider (same as Container Apps), not its own namespace
+- API spec exists but official Bicep/ARM examples not yet published by Microsoft
+- For preview services, treat creation as manual prerequisite and automate RBAC separately

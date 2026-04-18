@@ -2,6 +2,216 @@
 
 ## Active Decisions
 
+### 2026-04-18T21:42:00Z: SRE Agent Integration — Architecture Decisions (5 Decisions, 7 Action Items)
+
+**Date:** 2026-04-18  
+**Author:** Holden (Lead)  
+**Status:** DECIDED  
+**Input:** Amos's ARM/Bicep research + Naomi's API surface research  
+**Scope:** MCP exposure, bidirectional integration, auth model, feature flags, memory strategy
+
+---
+
+## Summary
+
+Holden's architecture review synthesized Amos's infrastructure research and Naomi's API surface mapping into 5 concrete architectural decisions, a phased 3-phase implementation plan, and 7 assigned action items. Key findings: MCP connector is documented and lower-risk than REST chat API; bidirectional integration should be phased (MCP Phase 1, REST Phase 2, sub-agents Phase 3); DefaultAzureCredential + RBAC scoping avoids credential divergence; `#remember` via chat API is unverified and architecturally unsound (pull-model via MCP is preferred).
+
+---
+
+## Decision 1: MCP Exposure Model
+
+**Question:** Should our MCP server be internet-accessible or VNet-restricted?
+
+**Decision: Option C — Internet-accessible now, VNet-restrict later**
+
+- Deploy MCP server with public HTTPS endpoint
+- Require Azure AD token validation on every request (not just "has a token" — validate audience, issuer, tenant)
+- Document VNet hardening path for when SRE Agent's networking model is clearer
+- Add `MCP_REQUIRE_AUTH` environment variable (default: true) for local dev flexibility
+
+**Rationale:** SRE Agent's outbound VNet routing for MCP connections is not documented well enough to guarantee private endpoint connectivity. Our data is synthetic with bounded security risk. Starting public with strong auth gives us a working demo and a clear hardening roadmap.
+
+---
+
+## Decision 2: Bidirectional Integration Strategy
+
+**Question:** Do we need BOTH patterns (MCP connector for SRE Agent → us, AND REST chat tool for us → SRE Agent)? Or is one direction sufficient?
+
+**Decision: Option C — Both, but phased**
+
+**Phase 1 (now):** MCP connector only. Extend `tools/work_context_mcp.py` to serve as the SRE Agent connector endpoint. Low-risk, documented, extends existing work.
+
+**Phase 2 (after Phase 1 validated):** REST chat tool (`tools/sre_agent.py`). Build with synthetic fallback. Accept API fragility risk because fallback ensures working demo.
+
+**Phase 3 (optional):** Custom sub-agent registration via REST v2. This is a distribution mechanism, not core integration. Deprioritize.
+
+**Rationale:** MCP (SRE Agent → us) provides organizational context (who deployed what, decisions, runbooks) — our unique value. REST (us → SRE Agent) provides Azure-native triage — SRE Agent's unique value. Both create complementary value. Phasing manages risk — don't ship two untested surfaces simultaneously.
+
+**Disagreement with Naomi:** Naomi presented all three patterns at roughly equal priority. Holden explicitly sequences them. Sub-agent registration is interesting but premature — it adds value only after MCP works.
+
+---
+
+## Decision 3: Authentication Model
+
+**Question:** Should `tools/sre_agent.py` use `DefaultAzureCredential` (same as other tools) or a separate service principal?
+
+**Decision: Option C — DefaultAzureCredential + dedicated RBAC**
+
+```python
+from azure.identity import DefaultAzureCredential
+
+SRE_AGENT_RESOURCE_ID = "59f0a04a-b322-4310-adc9-39ac41e9631e"
+
+credential = DefaultAzureCredential()
+token = credential.get_token(f"{SRE_AGENT_RESOURCE_ID}/.default")
+```
+
+- Consistent with all existing tools in codebase
+- Assign `SRE Agent Standard User` RBAC role (chat-only access) to managed identity
+- Scoped RBAC achieves blast-radius containment without credential divergence
+- Get token per-request, never at module load (follows existing pattern)
+
+**Rationale:** Codebase uses `DefaultAzureCredential` everywhere. Separate credentials introduce maintenance liabilities and duplicate failure modes. Our auth history shows that credential divergence causes bugs. RBAC is the correct lever for permission scoping. Adding a service principal introduces secret management, rotation, and a second failure mode we don't need.
+
+---
+
+## Decision 4: Feature Flag Naming
+
+**Question:** Should `ENABLE_SRE_AGENT` be a separate flag from `ENABLE_MCP`?
+
+**Decision: Option C — Separate `ENABLE_SRE_AGENT` flag**
+
+```python
+# tools/sre_agent.py
+ENABLE_SRE_AGENT: bool = os.getenv("ENABLE_SRE_AGENT", "false").lower() not in ("false", "0", "no")
+```
+
+Add to `agent/config.py` Settings dataclass:
+```python
+enable_sre_agent: bool = False
+"""Enable SRE Agent REST integration tool (default: False)."""
+```
+
+Add to `.env.example`:
+```
+ENABLE_SRE_AGENT=false
+```
+
+**Rationale:** Codebase follows one-flag-per-surface convention. `ENABLE_MCP` controls the MCP server (SRE Agent → us); `ENABLE_SRE_AGENT` controls the REST chat tool (us → SRE Agent). These are orthogonal capabilities. You might want MCP without SRE Agent, or vice versa.
+
+---
+
+## Decision 5: Memory Push Strategy
+
+**Question:** Is it worth testing `#remember` via chat API to push context into SRE Agent's memory? Or pull-only via MCP?
+
+**Decision: Option B — Pull-only via MCP. Do NOT build on `#remember`.**
+
+- MCP connector provides fresh, on-demand context
+- Configure SRE Agent instructions/skills to use our MCP tools for change-context questions
+- If static organizational context is needed, use Knowledge Base upload (documented, portal-driven)
+- File feature request with SRE Agent team for proper memory/knowledge API
+
+**Rationale:** `#remember` via chat API is (1) unverified — Naomi flagged it needs testing; (2) undocumented — memory commands are chat-interface only, no API contract; (3) fire-and-forget — no confirmation of storage, no query capability; (4) data staleness — context changes after push, agent sees stale data; (5) architecture smell — encoding operational context as chat messages to exploit a command prefix is a hack, not an integration pattern.
+
+The MCP pull model is superior on every dimension except discoverability. Solve discoverability via SRE Agent's instructions/skills system.
+
+**One concession:** A 30-minute spike to test whether `#remember` works via REST has value as a research finding. Document whether it works, response format, retention behavior. But do NOT build production code around it.
+
+**Disagreement with Naomi:** Naomi presented `#remember` as a "workaround" worth exploring. Holden is more definitive: don't build on it. Pull model is architecturally cleaner, documented, reliable.
+
+---
+
+## Pattern Alignment
+
+Proposed `tools/sre_agent.py` aligns with existing module patterns:
+
+| Pattern | `sql_telemetry.py` | `work_context_stub.py` | `action_stub.py` | `work_context_mcp.py` | Proposed `sre_agent.py` |
+|---------|--------------------|-----------------------|-------------------|----------------------|------------------------|
+| Module-level config | ✅ | ✅ | ✅ | ✅ | ✅ Config + flag + resource ID |
+| Feature flag | N/A | `ENABLE_WORK_IQ` (default: true) | N/A | `ENABLE_MCP` (default: false) | `ENABLE_SRE_AGENT` (default: false) |
+| Synthetic fallback | Implicit | ✅ | N/A | Exits process | ✅ Returns synthetic SRE response |
+| Auth | N/A | N/A | N/A | N/A (stdio MCP) | `DefaultAzureCredential` + SRE Agent resource scope |
+| Async | ✅ | Sync | Sync | Async MCP | ✅ Async (HTTP calls) |
+| Disclaimer | ✅ Every response | ✅ | ✅ | Inherits | ✅ Must include disclaimer |
+
+No pattern deviations required.
+
+---
+
+## Phasing Summary
+
+| Phase | Work | Flag | Risk | Owner |
+|-------|------|------|------|-------|
+| **1 (now)** | MCP connector: extend `work_context_mcp.py` for SRE Agent, add auth validation | `ENABLE_MCP` | Low | Naomi |
+| **2 (next)** | REST chat tool: `tools/sre_agent.py` with synthetic fallback | `ENABLE_SRE_AGENT` | Medium | Naomi |
+| **3 (later)** | Custom sub-agent registration via REST v2 | `ENABLE_SRE_AGENT` | Low | TBD |
+| **Spike** | Test `#remember` via REST (30 min, research only) | N/A | None | Holden |
+
+---
+
+## Action Items (7 total)
+
+1. **Naomi:** Extend `tools/work_context_mcp.py` with Azure AD token validation for incoming MCP requests (Phase 1)
+2. **Naomi:** Build `tools/sre_agent.py` skeleton with synthetic fallback and `ENABLE_SRE_AGENT` flag (Phase 2)
+3. **Amos:** Add `ENABLE_SRE_AGENT`, `SRE_AGENT_URL` to `.env.example`, `agent/config.py`, `agent.yaml` environment list
+4. **Amos:** Document SRE Agent portal creation steps in README or ops runbook
+5. **Amos:** Add RBAC assignment Bicep module for SRE Agent managed identity → our resource group (Reader + Log Analytics Reader roles)
+6. **Holden:** 30-minute spike to test `#remember` via REST — log finding, don't build on it
+7. **Alex (Tester):** Test fixtures for `ENABLE_SRE_AGENT` flag (follow `conftest.py` pattern for `ENABLE_WORK_IQ`/`ENABLE_MCP`)
+
+---
+
+## Agreement/Disagreement Register
+
+| Topic | Amos | Naomi | Holden |
+|-------|------|-------|--------|
+| SRE Agent creation: portal prerequisite | ✅ Agree | — | ✅ Agree. Correct call. |
+| RBAC automation via Bicep | ✅ Agree | — | ✅ Agree. Automate what's automatable. |
+| MCP connector as primary pattern | — | ✅ Agree | ✅ Agree. Highest value, lowest risk. |
+| REST chat as secondary pattern | — | ✅ Agree | ⚠️ Agree with phasing; document API fragility risk |
+| Sub-agent registration | — | ✅ (tertiary) | ❌ Deprioritize to Phase 3 |
+| `#remember` via chat API | — | "worth testing" | ❌ Do not build on it. Spike only. |
+| `DefaultAzureCredential` for auth | — | ✅ Proposed | ✅ Agree. Add RBAC scoping. |
+| `ENABLE_SRE_AGENT` flag naming | — | ✅ Proposed | ✅ Agree. Orthogonal from `ENABLE_MCP`. |
+
+---
+
+## Related Research Documents (merged from inbox)
+
+### Amos: Azure SRE Agent — ARM/Bicep IaC Research
+- **Date:** 2025-07-24
+- **Status:** Research Complete
+- **Key Findings:**
+  - ARM resource type: `Microsoft.App/sreAgents`
+  - Stable API version: `2026-01-01`
+  - Regions: East US 2, Sweden Central, Australia East (unchanged)
+  - Programmatic creation: Portal primary (undocumented REST API available; CLI extension in preview/private)
+  - Managed identity: User-assigned (auto-created, RBAC-configurable post-creation)
+  - **Recommendation:** Portal-provisioned prerequisite; automate RBAC assignments via Bicep
+
+### Naomi: Azure SRE Agent API Surface Research
+- **Date:** 2025-07-27
+- **Status:** Research Complete
+- **Key Findings:**
+  - Chat API: `POST /api/v2/chat` (discovered via DevTools, undocumented schema)
+  - **MCP Connector (HIGHEST VALUE):** SRE Agent supports generic MCP servers as custom connectors
+  - Skills API: Portal-driven (no public REST API for skill creation)
+  - Memory API: No public REST API; `#remember` commands are chat-interface only (unverified via REST)
+  - Sub-agent/Custom Agent API: REST v2 available for programmatic creation
+  - Authentication: Custom resource ID `59f0a04a-b322-4310-adc9-39ac41e9631e`
+  - **Recommendation:** MCP connector (primary), REST chat (secondary), sub-agents (tertiary)
+
+---
+
+## Key Quote
+
+*"Good architecture is the art of making the right things easy and the wrong things hard. Building on undocumented APIs is neither."*
+
+The memory push (`#remember`) pattern feels proactive but creates a maintenance liability with no observability. The pull model (MCP) is cleaner, documented, and reliable.
+
+---
+
 ### 2026-04-14T19:20:00Z: serve.py Migration to Agent Framework Pattern (Implementation Complete)
 
 **Date:** 2026-04-14  

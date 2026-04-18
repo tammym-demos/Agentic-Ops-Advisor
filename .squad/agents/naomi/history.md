@@ -5,7 +5,74 @@
 - **Stack:** Python 3.11, Azure AI Agent Service SDK, GPT-4.1, Bicep, OpenTelemetry
 - **Repo:** tammym-demos/Agentic-Ops-Advisor
 - **User:** Tammy
-- **Status:** All 22 PRs merged. Remaining: tests, Azure deployment, integration test.
+- **Status:** All 22 PRs merged. SRE Agent integration architecture finalized (2 research docs synthesized into 5 decisions). Phase 1 (MCP) ready to implement; Phase 2 (REST tool) scheduled after validation. Remaining: tests, Azure deployment, integration test.
+
+## Holden Architecture Review — SRE Agent Integration Impact on Naomi Work
+
+### 2026-04-18T21:42:00Z: Decisions Affecting Naomi's Implementation Roadmap
+
+**From Holden's architecture review (5 decisions, 7 action items), these directly affect Naomi:**
+
+**Decisions Affirmed (Naomi's research validated):**
+
+1. **MCP connector as primary pattern** ✅ AFFIRMED
+   - Your research correctly identified MCP as documented, lower-risk integration
+   - Holden agrees: "Highest value, lowest risk"
+   - **Action Item 1 (Naomi):** Extend `tools/work_context_mcp.py` with Azure AD token validation for incoming MCP requests (Phase 1)
+   - **Status:** Ready to implement; MCP framework already exists
+
+2. **REST chat tool as secondary pattern** ✅ AFFIRMED (with phasing emphasis)
+   - Your research correctly mapped `/api/v2/chat` endpoint
+   - Holden agrees on secondary priority but emphasizes: phase it, document API fragility risk
+   - **Action Item 2 (Naomi):** Build `tools/sre_agent.py` skeleton with synthetic fallback + `ENABLE_SRE_AGENT` flag (Phase 2)
+   - **Status:** Blocked on Phase 1 validation; skeleton can be drafted now
+   - **Timeline:** After Phase 1 (MCP) is in production
+
+3. **DefaultAzureCredential for auth** ✅ AFFIRMED
+   - Your proposed pattern matches codebase conventions exactly
+   - Holden strongly agrees: "Same credential, right permissions" > "different credential"
+   - **No changes needed** — your auth recommendation was correct
+
+4. **`ENABLE_SRE_AGENT` flag naming** ✅ AFFIRMED
+   - Your proposed orthogonal flag structure (separate from `ENABLE_MCP`) is correct
+   - Holden agrees: prevents semantic entanglement
+   - **Status:** Confirmed for implementation
+
+**Decisions Modified (Holden's modifications to your proposals):**
+
+1. **Sub-agent registration priority** ⚠️ DEPRIORITIZED
+   - Your research presented all three patterns (MCP, REST, sub-agent) at roughly equal priority
+   - Holden explicitly sequences them: Phase 3, not Phase 2
+   - **Rationale:** Adds value only after MCP working; don't build distribution mechanism before product works
+   - **Impact:** Doesn't block your Phase 1/2 work; gives you 1-2 sprints before this becomes relevant
+
+2. **`#remember` via chat API** ❌ DO NOT BUILD
+   - Your research flagged it as "worth testing"
+   - Holden is more definitive: "Quick spike for research only; do NOT build production on it"
+   - **Rationale:** Unverified, undocumented, fire-and-forget, data staleness, architecture smell
+   - **Action Item 6 (Holden):** 30-minute spike to test whether it works (research finding only)
+   - **Impact:** Saves you from building on an undocumented API; pull-model (MCP) is architecturally cleaner
+
+---
+
+**Implementation Roadmap (Naomi's Tasks):**
+
+| Phase | Task | Status | Owner | Blocker |
+|-------|------|--------|-------|---------|
+| 1 | Extend `work_context_mcp.py` with Azure AD token validation | Ready | Naomi (Action 1) | None |
+| 1 | Add `MCP_REQUIRE_AUTH` env var (default: true) | Ready | Naomi | None |
+| 2 | Build `tools/sre_agent.py` skeleton with synthetic fallback | Ready (draft) | Naomi (Action 2) | Phase 1 validation |
+| 2 | Add `ENABLE_SRE_AGENT` feature flag | Ready | Naomi (Action 2) | None |
+| 3 | Custom sub-agent registration (if scheduled) | Future | TBD | Phase 1 + Phase 2 |
+| Spike | Test `#remember` via REST (30 min) | Future | Holden | None |
+
+---
+
+**Key Insight from Holden:**
+
+*"Good architecture is the art of making the right things easy and the wrong things hard. Building on undocumented APIs is neither."*
+
+Your research was thorough. Holden's review confirmed 80% of your recommendations. The 20% modifications (phasing, `#remember` spike) improve long-term maintainability by avoiding fragile APIs and ensuring proven patterns before adding complexity.
 
 ## Learnings
 
@@ -583,3 +650,20 @@
 - Updated `tests/test_config.py`: Removed `AZURE_AI_PROJECT_CONNECTION_STRING` from `REQUIRED_ENV`. Replaced `test_raises_when_project_conn_missing` with `test_succeeds_without_agents_endpoint`. Updated `test_raises_for_both_missing` → `test_raises_when_only_required_missing`.
 - Updated `tests/conftest.py`: Removed `AZURE_AI_PROJECT_CONNECTION_STRING` from `_TEST_ENV` and test fixtures.
 - All 48 config+tracing tests pass.
+
+### 2025-07-27: Azure SRE Agent API Surface Research
+
+**Task:** Research SRE Agent programmatic API for 	ools/sre_agent.py integration design.
+
+**Key Findings:**
+- **Chat API**: REST endpoint at POST /api/v2/chat on {agent}.azuresre.ai domain. Auth uses resource ID 59f0a04a-b322-4310-adc9-39ac41e9631e (NOT management.azure.com).
+- **MCP Connector (best integration)**: SRE Agent natively supports generic MCP servers as connectors. Our existing 	ools/work_context_mcp.py + ENABLE_MCP flag is the foundation — SRE Agent connects to us for change-context enrichment.
+- **Custom Agent API**: REST v2 (PUT /api/v2/extendedAgent/agents/{name}) supports programmatic creation. YAML format available. We can register as a sub-agent.
+- **Skills**: Portal-only creation (no programmatic API). SKILL.md format with tool attachments. Max 5 concurrent.
+- **Memory**: No REST API. #remember/#retrieve are chat-only commands. Workaround: push via chat API (unverified). Better: let SRE Agent pull from us via MCP.
+- **Agent Hooks**: REST v2 supports Stop/PostToolUse hooks programmatically.
+
+**Architecture Recommendation:** Bidirectional — MCP (SRE Agent → us) for change-context enrichment + REST chat (us → SRE Agent) for triage queries.
+
+**Files:** .squad/decisions/inbox/naomi-sre-agent-api-research.md
+**Pattern:** 	ools/sre_agent.py should follow work_context_stub.py feature-flag pattern with ENABLE_SRE_AGENT (default: false).
