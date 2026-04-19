@@ -148,6 +148,17 @@
   - Emphasizes human-in-the-loop governance (AI proposes, humans approve)
 - **Status:** ✅ COMPLETE — Document ready for stakeholder distribution and onboarding
 
+### 2026-04-19: SRE Agent RBAC Documentation Section
+- **Task:** Add RBAC role assignment section to `docs/sre-agent-setup.md`
+- **Context:** Coordinator provided guidance on two-layer RBAC model (agent permissions vs user roles); real infrastructure values from portal
+- **Changes:**
+  - Added RBAC section documenting Reader role for agent managed identity
+  - Added Standard User role guidance for integration users
+  - Included role assignment verification steps
+  - Cross-linked with infrastructure values from `.squad/decisions/inbox/copilot-directive-2026-04-19T1249.md`
+- **Outcome:** Setup documentation now complete with security configuration
+- **Status:** ✅ COMPLETE — Ready for merge and team reference
+
 ### 2025-07-27: SRE Agent Integration Documentation
 - **Task:** Create differentiation doc and setup guide for Azure SRE Agent integration
 - **Documents created:**
@@ -168,3 +179,18 @@
   - Both docs link to architecture decisions for rationale rather than duplicating it
   - Environment variable summary table included in setup guide for quick reference
 - **Decision file:** `.squad/decisions/inbox/drummer-sre-docs.md`
+
+### 2026-04-19: RBAC Role Assignments Section Added to SRE Agent Setup Guide
+- **Task:** Add comprehensive RBAC role assignment section to `docs/sre-agent-setup.md`
+- **Location:** Inserted as new `## RBAC Role Assignments` section after "Required Permissions" subsection and before "SRE Agent Portal Creation"
+- **Content added:**
+  - **Layer 1 — Agent Permissions (Managed Identity)** — Two-row table (Reader for our integration, Privileged for autonomous actions)
+  - **Layer 2 — User Roles** — Three-row table (SRE Agent Reader, Standard User, Administrator with permissions and use cases)
+  - **Our Integration's Role Requirements** — Specific status for Tammy (Administrator ✅), SRE Agent managed identity (Reader ✅), and Agentic Ops Advisor's managed identity (needs Standard User for Phase 2)
+  - **How to Review or Change Roles** — Step-by-step portal instructions + two Azure CLI examples:
+    1. Assigning SRE Agent Standard User to Agentic Ops Advisor's managed identity
+    2. Listing current SRE-related role assignments in the resource group
+- **Additional fix:** Updated Prerequisites table Region from `eastus` to `East US 2` to match actual provisioned instance
+- **Lines modified:** Lines 28 (Region fix) and lines 37–39 expanded to 41–111 (RBAC section insertion)
+- **Deliverable:** `docs/sre-agent-setup.md` updated and tested
+- **Status:** ✅ COMPLETE — Documentation now covers two-layer RBAC model with portal + CLI guidance

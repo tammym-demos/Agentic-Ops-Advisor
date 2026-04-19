@@ -1345,6 +1345,135 @@ Once blockers are resolved, trigger a test deployment to verify the full pipelin
 
 | File | Changes |
 |------|---------|
+
+---
+
+## Merged from Inbox
+
+### 2025-07-15: Use `deployment_name` for AzureOpenAIChatClient
+
+**Date:** 2025-07-15  
+**Author:** Amos (DevOps)  
+**Status:** Implemented  
+
+#### Context
+
+The Foundry container was crashing on startup with `ServiceInitializationError` because `AzureOpenAIChatClient` expects `deployment_name=`, not `model=`.
+
+#### Decision
+
+1. Changed `model=` → `deployment_name=` in `scripts/serve.py`.
+2. Added belt-and-suspenders env var bridge: `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` is set from `AZURE_OPENAI_DEPLOYMENT` early in `main()` so the SDK's env var fallback also works.
+3. Added `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` to `agent.yaml` and `Dockerfile` for consistency.
+
+#### Rationale
+
+The `agent_framework` SDK uses `deployment_name` as the constructor parameter and falls back to `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` env var. Our existing `AZURE_OPENAI_DEPLOYMENT` env var doesn't match the SDK's expected name, so both the parameter fix and env var bridge are needed.
+
+---
+
+### 2026-04-15: Centralize SDK Compatibility Shims as Standalone Python Scripts
+
+**Date:** April 15, 2026  
+**Initiated by:** Drummer (Program Manager)  
+**Status:** IMPLEMENTED  
+
+#### Context
+
+During hosted agent deployment, we encountered an `ImportError` due to a symbol rename mismatch between `agent-framework-azure-ai` (beta, using old symbol names) and `azure-ai-projects>=2.0.0` (which renamed four key classes):
+
+- `PromptAgentDefinitionText` → `PromptAgentDefinitionTextOptions`
+- `ResponseTextFormatConfigurationJsonObject` → `TextResponseFormatJsonObject`
+- `ResponseTextFormatConfigurationJsonSchema` → `TextResponseFormatJsonSchema`
+- `ResponseTextFormatConfigurationText` → `TextResponseFormatText`
+
+#### Decision
+
+**Create a standalone Python module: `scripts/patch_sdk_compat.py`** that patches old symbol names to new ones before any framework imports.
+
+**Import in serve.py at the very top (before any framework imports):**
+
+```python
+from scripts.patch_sdk_compat import apply_compat_shim
+apply_compat_shim()
+```
+
+#### Rationale
+
+Previous inline YAML approach failed due to shell escaping, YAML indentation sensitivity, and lack of local testability. Standalone script is:
+- **Testable:** `python scripts/patch_sdk_compat.py` locally
+- **Readable:** Clean Python with comments
+- **Reusable:** Can be imported by multiple entry points
+- **Maintainable:** Easy to update mapping dictionary
+- **Version-controlled:** Single file, clear history
+
+#### Implementation Details
+
+**Placement in serve.py startup order:**
+1. Set default env vars (DB_MODE, ENABLE_WORK_IQ, ENABLE_MCP)
+2. Apply SDK compat shim ← Must be BEFORE any framework imports
+3. Load .env file
+4. Configure logging
+5. Import and use framework + tools
+
+The import chain is: `from_agent_framework(agent)` → `agent_framework.azure.AzureAIClient` → `agent_framework_azure_ai._client` → `from azure.ai.projects.models import PromptAgentDefinitionText`. If the shim runs after framework import, the patch won't take effect.
+
+#### Team Implication
+
+When adopting new SDKs, never assume parameter names match other Azure packages. Always verify against source code.
+
+---
+
+### 2026-04-19T12:49: SRE Agent Infrastructure Provisioned
+
+**Date:** 2026-04-19T12:49:00Z  
+**By:** Tammy (via Copilot)  
+**Status:** CAPTURED  
+
+#### What
+
+SRE Agent created in Azure portal with these values:
+- Name: `sre-agent-ops-advisor`
+- Region: East US 2
+- Endpoint: `https://sre-agent-ops-advisor-5e136514.a5db6d97.eastus2.azuresre.ai`
+- Resource Group: `rg-agentic-ops-advisor` (same as Agentic Ops Advisor)
+- Managed Identity: `sre-agent-ops-advisor-pfs7rsfuk64c6`
+- App Insights: `sre-agent-ops-advisor-1c7fa523-872c-app-insights`
+- Permissions: Reader, Mode: Review, Early Access: Off
+
+#### Why
+
+Real infrastructure values for SRE Agent integration — replaces placeholder config in docs.
+
+---
+
+### 2025-07-27: SRE Agent Documentation Structure
+
+**Author:** Drummer (Program Manager)  
+**Date:** 2025-07-27  
+**Status:** DECIDED  
+**Scope:** Documentation only (no code changes)  
+
+#### Decision
+
+Created two separate documentation artifacts for SRE Agent integration:
+
+1. **`docs/sre-agent-differentiation.md`** — Stakeholder-facing comparison of what the Agentic Ops Advisor does vs what Azure SRE Agent brings, and how they complement each other.
+
+2. **`docs/sre-agent-setup.md`** — Technical setup and configuration guide for integrating SRE Agent with our advisor (Phase 1: MCP, Phase 2: REST).
+
+#### Rationale
+
+- **Separate audiences:** Differentiation doc serves stakeholders and demo audiences (business value focus). Setup guide serves engineers doing the integration (technical details focus).
+- **Link, don't duplicate:** Both docs reference the architecture decisions document (`.squad/plans/sre-agent-architecture-decisions.md`) for rationale rather than restating it. Single source of truth for decisions.
+- **Phase-aligned structure:** Setup guide mirrors phasing from architecture decisions (Phase 1: MCP, Phase 2: REST) so engineers can follow implementation order.
+- **Feature flag convention documented:** New variables `ENABLE_SRE_AGENT`, `SRE_AGENT_URL`, `SRE_AGENT_RESOURCE_ID`, and `MCP_REQUIRE_AUTH` are documented with defaults and purposes, ready for implementation.
+
+#### Team Impact
+
+- Naomi/Amos can reference setup guide when implementing Phases 1 and 2
+- All new environment variables are pre-documented — add to `.env.example` and `agent/config.py` when implementing
+- Stakeholder demos can reference differentiation doc to explain integration value
 | `.github/workflows/deploy.yml` | Warmup loop + polling, retry count/delay, error code/message logging, full output logging |
 | `scripts/serve.py` | Token audience fix, status: "completed" for all responses |
 | `tools/*.py` | Verified `strict: false` in all FunctionTool definitions |
