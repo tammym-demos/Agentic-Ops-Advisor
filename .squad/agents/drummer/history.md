@@ -120,3 +120,51 @@
 - **Smoke test result:** After both fixes, smoke test PASSED for the first time — agent fully deployed, responded with real LLM output
 - **Document created:** `lessons_learned/sdk-compatibility-and-deployment-name.md` with full issue tables, architecture decisions, debugging techniques, and CI/CD updates
 - **Decision file:** `.squad/decisions/inbox/drummer-sdk-compat-lesson.md` (team-relevant decision on SDK shim location)
+
+### 2026-04-19: Solution Purpose Documentation Created
+- **Task:** Create comprehensive `docs/solution-purpose.md` explaining the PURPOSE of the Agentic Ops Advisor solution
+- **Audience:** Stakeholders, demo audiences, new team members, ops teams, platform engineers, AI builders
+- **Document Structure:**
+  1. Overview — 2 paragraph executive summary (governed AI agent for infrastructure ops, hybrid governance, self-driving operations vision)
+  2. Problem Statement — Information fragmentation (telemetry vs. changes), reactive response, lack of governance
+  3. Solution Approach — Telemetry + intent, hybrid governance (AI proposes, humans approve), evidence-based reasoning
+  4. Key Capabilities — Diagnose anomalies, suggest remediations, search telemetry, surface change context, track decisions, reason under uncertainty
+  5. Architecture Summary — Three tool surfaces (SQL Telemetry, Work Context Stub, Action Stub) with examples
+  6. Deployment Model — Local demo, Agent server, Azure AI Foundry (production)
+  7. Who Is This For — Ops/SRE teams, platform engineers, AI builders, stakeholders, new members
+  8. What This Is NOT — Not production-ready yet, not replacement for observability tools, not real Work IQ, not general chatbot, not auto-remediation
+  9. Related Documentation — Links to README, architecture decisions, setup guides, specs, lessons learned, evaluation framework
+  10. Key Terminology — Agentic ops, self-driving operations, hybrid governance, telemetry + intent, RCA, work context
+  11. Next Steps — Learning path and contribution guidance
+  12. Disclaimers — Synthetic data, Work IQ simulation, no production guarantees
+- **Deliverable:** `docs/solution-purpose.md` (14.4KB, 9 major sections + terminology + disclaimers)
+- **Language Alignment:** Used "agentic ops", "hybrid governance", "telemetry + intent", "self-driving operations" throughout
+- **Key Features:**
+  - Stakeholder-friendly language (explains "why" before "how")
+  - Includes standard disclaimers (synthetic data, Work IQ simulation)
+  - Links to other documentation for deep dives
+  - Architecture summary references architecture decisions doc for details (avoids duplication)
+  - Clarifies scope: reference architecture + demo vehicle, not production-ready
+  - Emphasizes human-in-the-loop governance (AI proposes, humans approve)
+- **Status:** ✅ COMPLETE — Document ready for stakeholder distribution and onboarding
+
+### 2025-07-27: SRE Agent Integration Documentation
+- **Task:** Create differentiation doc and setup guide for Azure SRE Agent integration
+- **Documents created:**
+  - `docs/sre-agent-differentiation.md` — Comparison of Agentic Ops Advisor vs SRE Agent capabilities, complementary value, integration architecture
+  - `docs/sre-agent-setup.md` — Installation, configuration, and verification guide covering Phase 1 (MCP) and Phase 2 (REST)
+- **Key source files referenced:**
+  - `tools/sql_telemetry.py` — SQL telemetry tool (GPU, network, cost, incidents)
+  - `tools/work_context_stub.py` — Work IQ context stub (change events, decisions, ownership, runbooks)
+  - `tools/action_stub.py` — Action stub (risk assessment, approval simulation)
+  - `tools/work_context_mcp.py` — MCP server wrapper
+  - `agent/config.py` — Feature flags and settings
+  - `agent/system_prompt.md` — Agent persona and response format
+  - `.squad/plans/sre-agent-architecture-decisions.md` — Holden's architecture decisions (5 decisions, phasing plan)
+  - `.env.example` — Environment variable template
+- **Documentation decisions:**
+  - Differentiation doc structured as stakeholder-friendly comparison (not technical spec)
+  - Setup guide follows existing docs style with tables, code blocks, and verification checklists
+  - Both docs link to architecture decisions for rationale rather than duplicating it
+  - Environment variable summary table included in setup guide for quick reference
+- **Decision file:** `.squad/decisions/inbox/drummer-sre-docs.md`

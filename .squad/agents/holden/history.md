@@ -9,6 +9,31 @@
 
 ## Learnings
 
+### 2025-07-28: Mermaid Diagram Review — Architecture Visualization
+
+**Session:** Diagram review for `.squad/plans/sre-agent-architecture-decisions.md`  
+**Status:** ✅ APPROVED — All three diagrams are accurate and complete
+
+**Diagrams Reviewed:**
+1. **Architecture Flowchart** — Shows Agentic Ops Advisor, SRE Agent, auth layer, tool surfaces (sql_telemetry, work_context_stub, action_stub, sre_agent), MCP server, and phase connections. Correctly depicts all components from Decisions 1–5.
+2. **Phasing Gantt** — Displays Phase 1/2/3 timeline plus 30-min `#remember` spike. Task sequencing aligns with decision recommendations.
+3. **Data Flow Sequence** — Shows Phase 1 pull model (SRE Agent → MCP) with Azure AD validation, Phase 2 query model (Advisor → SRE REST API), and synthetic fallback. Correctly represents pull-only decision (no `#remember`).
+
+**Verification Against Decisions:**
+- ✅ **Decision 1 (MCP exposure):** "Public HTTPS Endpoint (VNet-restrict later)" shown; internet boundary depicted
+- ✅ **Decision 2 (Bidirectional phased):** Phase 1 (pull), Phase 2 (push/query), Phase 3 (sub-agent, deprioritized)
+- ✅ **Decision 3 (DefaultAzureCredential + RBAC):** Auth layer shows credential pattern, RBAC scoping, resource ID
+- ✅ **Decision 4 (Separate flags):** `ENABLE_MCP=true` and `ENABLE_SRE_AGENT=true` shown independently
+- ✅ **Decision 5 (Pull-only, no #remember):** MCP documented/pull model emphasized; Knowledge Base shown but not prioritized; no `#remember` flow
+
+**Mermaid Syntax:** All three diagrams render correctly. No syntax errors detected. Styling, colors, and node relationships are valid.
+
+**Completeness:** All major architecture components represented. Connection directions correct (SRE Agent initiates outbound to us via MCP, we query REST inbound). Auth validation flows correctly shown. Feature flags orthogonality clear.
+
+**Verdict:** Diagrams ready for documentation and team reference. No fixes required.
+
+---
+
 ### 2025-07-27: SRE Agent Integration — Architecture Decisions
 
 **Session:** Architecture review of Amos's ARM/Bicep research + Naomi's API surface research  
