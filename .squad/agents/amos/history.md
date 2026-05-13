@@ -33,6 +33,20 @@
 
 ## Learnings
 
+### 2026-05-13: SRE Agent RBAC Module for Portal-Created Identity
+
+**Session:** Action item #5 from SRE integration architecture decisions  
+**Status:** ✅ IMPLEMENTED  
+**Scope:** Added reusable Bicep RBAC module + wired both subscription and RG-scoped entrypoints
+
+**What changed:**
+- Added `infra/modules/sre-agent-rbac.bicep` with deterministic role assignments for `Reader`, `Monitoring Reader`, and `Log Analytics Reader`
+- Added `enableSreAgent` and `sreAgentPrincipalId` parameters to `infra/main.bicep`, `infra/main-rg.bicep`, and `infra/parameters.json`
+- Kept the reverse assignment (`Agentic Ops Advisor MI -> SRE Agent Standard User`) as an imperative CLI step because the SRE Agent resource is portal-created and out-of-band from our Bicep graph
+- Preserved deploy fallback parity by updating `main-rg.bicep` alongside `main.bicep`
+
+**Key Learning:** When infra supports both subscription-scoped and RG-scoped deployment entrypoints, RBAC feature flags and modules must be added to both templates or the fallback path drifts from primary deployment behavior.
+
 ### 2026-04-15T15:52Z: AzureOpenAIChatClient deployment_name Parameter Fix
 
 **Session:** Test assertion fix; code already correct

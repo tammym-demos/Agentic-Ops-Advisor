@@ -71,6 +71,18 @@ class Settings:
     enable_mcp: bool = False
     """Enable MCP wrapper for Work IQ (default: False)."""
 
+    enable_sre_agent: bool = False
+    """Enable SRE Agent integration (default: False)."""
+
+    sre_agent_url: Optional[str] = None
+    """SRE Agent endpoint URL for outbound integration."""
+
+    sre_agent_resource_id: str = "59f0a04a-b322-4310-adc9-39ac41e9631e"
+    """Azure resource ID / token audience used when authenticating to the SRE Agent."""
+
+    mcp_require_auth: bool = True
+    """Require MCP callers to present valid auth (default: True)."""
+
     # ------------------------------------------------------------------
     # Observability
     # ------------------------------------------------------------------
@@ -142,6 +154,11 @@ class Settings:
             # Feature flags
             enable_work_iq=_get_bool("ENABLE_WORK_IQ", default=True),
             enable_mcp=_get_bool("ENABLE_MCP", default=False),
+            enable_sre_agent=_get_bool("ENABLE_SRE_AGENT", default=False),
+            sre_agent_url=_optional("SRE_AGENT_URL"),
+            sre_agent_resource_id=_optional("SRE_AGENT_RESOURCE_ID")
+            or "59f0a04a-b322-4310-adc9-39ac41e9631e",
+            mcp_require_auth=_get_bool("MCP_REQUIRE_AUTH", default=True),
             # Observability
             applicationinsights_connection_string=_optional("APPLICATIONINSIGHTS_CONNECTION_STRING"),
             azure_tracing_gen_ai_content_recording_enabled=_get_bool(

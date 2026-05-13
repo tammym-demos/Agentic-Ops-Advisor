@@ -4,14 +4,17 @@ Tests for tools/work_context_stub.py and tools/work_context_mcp.py.
 These tests validate:
 - The Work IQ stub returns the expected synthetic data shapes.
 - The MCP server tool listing and dispatch logic work correctly.
+- MCP auth can be enforced or skipped based on MCP_REQUIRE_AUTH.
 - ENABLE_MCP=false causes the module-level guard to exit.
 """
 
 from __future__ import annotations
 
+import base64
 import importlib
 import json
 import sys
+import time
 import types as python_types
 import unittest
 from unittest.mock import MagicMock
@@ -133,6 +136,7 @@ class TestWorkContextMcpEnabled(unittest.IsolatedAsyncioTestCase):
 
         os.environ["ENABLE_MCP"] = "true"
         os.environ["ENABLE_WORK_IQ"] = "true"
+        os.environ["MCP_REQUIRE_AUTH"] = "false"
 
         # Remove cached module so it reloads with the flag enabled
         for mod in list(sys.modules.keys()):
@@ -153,6 +157,14 @@ class TestWorkContextMcpEnabled(unittest.IsolatedAsyncioTestCase):
                 del sys.modules[mod]
 
         return importlib.import_module("tools.work_context_mcp")
+
+    @staticmethod
+    def _make_token(claims: dict[str, object]) -> str:
+        def _b64url(data: dict[str, object]) -> str:
+            encoded = base64.urlsafe_b64encode(json.dumps(data).encode("utf-8")).decode("utf-8")
+            return encoded.rstrip("=")
+
+        return f"{_b64url({'alg': 'none', 'typ': 'JWT'})}.{_b64url(claims)}."
 
     def _inject_mcp_stub(self):
         """Inject a minimal mcp package stub into sys.modules."""
@@ -277,6 +289,86 @@ class TestWorkContextMcpEnabled(unittest.IsolatedAsyncioTestCase):
         for tool in tools:
             props = tool.inputSchema.get("properties", {})
             self.assertIn("service", props, f"Tool {tool.name} missing 'service' in inputSchema")
+
+
+class TestWorkContextMcpAuth(unittest.IsolatedAsyncioTestCase):
+    """Test Azure AD token validation paths for MCP tool calls."""
+
+    def setUp(self):
+        import os
+
+        os.environ["ENABLE_MCP"] = "true"
+        os.environ["ENABLE_WORK_IQ"] = "true"
+        os.environ["MCP_REQUIRE_AUTH"] = "true"
+        os.environ["AZURE_TENANT_ID"] = "tenant-1234"
+        os.environ["SRE_AGENT_RESOURCE_ID"] = "59f0a04a-b322-4310-adc9-39ac41e9631e"
+
+        for mod in list(sys.modules.keys()):
+            if "work_context_mcp" in mod:
+                del sys.modules[mod]
+
+    def _load_mcp_module(self):
+        try:
+            import mcp  # noqa: F401 — check if available
+        except ImportError:
+            TestWorkContextMcpEnabled()._inject_mcp_stub()
+
+        for mod in list(sys.modules.keys()):
+            if "work_context_mcp" in mod:
+                del sys.modules[mod]
+
+        return importlib.import_module("tools.work_context_mcp")
+
+    @staticmethod
+    def _make_token(claims: dict[str, object]) -> str:
+        def _b64url(data: dict[str, object]) -> str:
+            encoded = base64.urlsafe_b64encode(json.dumps(data).encode("utf-8")).decode("utf-8")
+            return encoded.rstrip("=")
+
+        return f"{_b64url({'alg': 'none', 'typ': 'JWT'})}.{_b64url(claims)}."
+
+    async def test_call_tool_requires_token_when_auth_enabled(self):
+        mod = self._load_mcp_module()
+
+        with self.assertRaises(PermissionError):
+            await mod.handle_call_tool("get_change_events", {"service": "gpu-cluster"})
+
+    async def test_call_tool_accepts_matching_token(self):
+        mod = self._load_mcp_module()
+        token = self._make_token(
+            {
+                "aud": "59f0a04a-b322-4310-adc9-39ac41e9631e",
+                "tid": "tenant-1234",
+                "iss": "https://login.microsoftonline.com/tenant-1234/v2.0",
+                "exp": int(time.time()) + 300,
+            }
+        )
+
+        result = await mod.handle_call_tool(
+            "get_change_events",
+            {"service": "gpu-cluster", "_meta": {"authorization": f"Bearer {token}"}},
+        )
+
+        data = json.loads(result[0].text)
+        self.assertIsInstance(data, list)
+        self.assertGreater(len(data), 0)
+
+    async def test_call_tool_rejects_wrong_audience(self):
+        mod = self._load_mcp_module()
+        token = self._make_token(
+            {
+                "aud": "wrong-audience",
+                "tid": "tenant-1234",
+                "iss": "https://login.microsoftonline.com/tenant-1234/v2.0",
+                "exp": int(time.time()) + 300,
+            }
+        )
+
+        with self.assertRaises(PermissionError):
+            await mod.handle_call_tool(
+                "get_change_events",
+                {"service": "gpu-cluster", "_auth_token": token},
+            )
 
 
 if __name__ == "__main__":

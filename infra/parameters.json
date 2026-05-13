@@ -23,6 +23,12 @@
     "sqlLocation": {
       "value": "eastus2"
     },
+    "enableSreAgent": {
+      "value": false
+    },
+    "sreAgentPrincipalId": {
+      "value": ""
+    },
     "openAiCapacity": {
       "value": 10
     },

@@ -121,3 +121,53 @@ def env_mcp_disabled(monkeypatch: pytest.MonkeyPatch):
     """Set ENABLE_MCP=false for the duration of a test."""
     monkeypatch.setenv("ENABLE_MCP", "false")
     yield
+
+
+# ---------------------------------------------------------------------------
+# SRE Agent / MCP auth environment variable fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def env_sre_agent_enabled(monkeypatch: pytest.MonkeyPatch):
+    """Set ENABLE_SRE_AGENT=true for the duration of a test."""
+    monkeypatch.setenv("ENABLE_SRE_AGENT", "true")
+    yield
+
+
+@pytest.fixture
+def env_sre_agent_disabled(monkeypatch: pytest.MonkeyPatch):
+    """Set ENABLE_SRE_AGENT=false for the duration of a test."""
+    monkeypatch.setenv("ENABLE_SRE_AGENT", "false")
+    yield
+
+
+@pytest.fixture
+def env_mcp_auth_required(monkeypatch: pytest.MonkeyPatch):
+    """Set MCP_REQUIRE_AUTH=true for the duration of a test."""
+    monkeypatch.setenv("MCP_REQUIRE_AUTH", "true")
+    yield
+
+
+@pytest.fixture
+def env_mcp_auth_disabled(monkeypatch: pytest.MonkeyPatch):
+    """Set MCP_REQUIRE_AUTH=false for the duration of a test."""
+    monkeypatch.setenv("MCP_REQUIRE_AUTH", "false")
+    yield
+
+
+@pytest.fixture
+def test_settings_sre_enabled() -> Settings:
+    """Return a Settings instance with SRE Agent enabled."""
+    try:
+        return Settings(
+            azure_openai_endpoint=_TEST_ENV["AZURE_OPENAI_ENDPOINT"],
+            azure_openai_deployment="gpt-4.1",
+            db_mode="sqlite",
+            enable_work_iq=True,
+            enable_mcp=False,
+            enable_sre_agent=True,
+            sre_agent_url="https://test-sre-agent.azuresre.ai",
+        )
+    except TypeError:
+        pytest.skip("Waiting for ENABLE_SRE_AGENT config fields")

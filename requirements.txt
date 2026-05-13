@@ -10,6 +10,7 @@ opentelemetry-instrumentation>=0.50b0
 python-dotenv>=1.0.1
 pyodbc>=5.2.0
 aiosqlite>=0.20.0
+httpx>=0.27.0
 azure-ai-agentserver-agentframework==1.0.0b12
 agent-framework-azure-ai>=1.0.0b251112,<=1.0.0b260107
 agent-framework-core>=1.0.0b251112,<=1.0.0b260107

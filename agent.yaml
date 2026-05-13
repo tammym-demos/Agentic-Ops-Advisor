@@ -118,6 +118,16 @@ container:
       value: "true"
     - name: ENABLE_MCP
       value: "false"
+    - name: ENABLE_SRE_AGENT
+      value: "false"
+
+    # --- SRE Agent Integration ----------------------------------------------
+    - name: SRE_AGENT_URL
+      secret: true
+    - name: SRE_AGENT_RESOURCE_ID
+      value: "59f0a04a-b322-4310-adc9-39ac41e9631e"
+    - name: MCP_REQUIRE_AUTH
+      value: "true"
 
     # --- Observability ------------------------------------------------------
     - name: APPLICATIONINSIGHTS_CONNECTION_STRING

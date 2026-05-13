@@ -685,3 +685,11 @@ Your research was thorough. Holden's review confirmed 80% of your recommendation
 
 **Files:** .squad/decisions/inbox/naomi-sre-agent-api-research.md
 **Pattern:** 	ools/sre_agent.py should follow work_context_stub.py feature-flag pattern with ENABLE_SRE_AGENT (default: false).
+
+### 2026-05-13: Phase 2 SRE REST Chat Tool Implementation
+
+- Added `tools/sre_agent.py` as an async Phase 2 REST chat integration for Azure SRE Agent.
+- The tool resolves `ENABLE_SRE_AGENT`, `SRE_AGENT_URL`, and `SRE_AGENT_RESOURCE_ID` per request, so imports stay safe and credentials are never cached at module scope.
+- Live calls use `DefaultAzureCredential` with the `59f0a04a-b322-4310-adc9-39ac41e9631e/.default` scope and `httpx` async POSTs to `/api/v2/chat`.
+- Synthetic fallback now covers GPU, network, cost, and general diagnostics so the demo remains usable when the SRE Agent is disabled, misconfigured, or unreachable.
+- Added targeted tests in `tests/test_sre_agent.py` for disabled-mode fallback, missing URL fallback, live payload wrapping, and tool alias naming.

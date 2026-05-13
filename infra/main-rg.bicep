@@ -49,6 +49,12 @@ param sqlLocation string = location
 @description('Enable Azure SQL deployment. Set to false when MCAPS policy blocks SQL or for SQLite-only demos.')
 param enableSql bool = false
 
+@description('Enable SRE Agent RBAC assignments for a portal-created SRE Agent managed identity.')
+param enableSreAgent bool = false
+
+@description('Principal ID of the SRE Agent managed identity. Required when enableSreAgent is true.')
+param sreAgentPrincipalId string = ''
+
 @description('Azure OpenAI GPT-4.1 model deployment capacity (1 000 TPM units).')
 param openAiCapacity int = 10
 
@@ -84,6 +90,16 @@ module identity 'modules/identity.bicep' = {
     name: identityName
     location: location
     tags: tags
+  }
+}
+
+// ---- SRE Agent RBAC (conditional) -------------------------------
+
+module sreAgentRbac 'modules/sre-agent-rbac.bicep' = if (enableSreAgent) {
+  name: 'sre-agent-rbac'
+  params: {
+    principalId: sreAgentPrincipalId
+    resourceGroupName: resourceGroupName
   }
 }
 

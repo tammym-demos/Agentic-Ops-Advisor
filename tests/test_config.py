@@ -132,6 +132,26 @@ class TestSettingsDefaults:
         s = _make_settings()
         assert s.enable_mcp is False
 
+    def test_enable_sre_agent_defaults_to_false(self, monkeypatch):
+        monkeypatch.delenv("ENABLE_SRE_AGENT", raising=False)
+        s = _make_settings()
+        assert s.enable_sre_agent is False
+
+    def test_sre_agent_url_defaults_to_none(self, monkeypatch):
+        monkeypatch.delenv("SRE_AGENT_URL", raising=False)
+        s = _make_settings()
+        assert s.sre_agent_url is None
+
+    def test_sre_agent_resource_id_defaults_to_constant(self, monkeypatch):
+        monkeypatch.delenv("SRE_AGENT_RESOURCE_ID", raising=False)
+        s = _make_settings()
+        assert s.sre_agent_resource_id == "59f0a04a-b322-4310-adc9-39ac41e9631e"
+
+    def test_mcp_require_auth_defaults_to_true(self, monkeypatch):
+        monkeypatch.delenv("MCP_REQUIRE_AUTH", raising=False)
+        s = _make_settings()
+        assert s.mcp_require_auth is True
+
     def test_content_recording_defaults_to_false(self, monkeypatch):
         monkeypatch.delenv("AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED", raising=False)
         s = _make_settings()
@@ -159,9 +179,20 @@ class TestSettingsValues:
         assert s.db_connection_string == conn
 
     def test_feature_flags_from_env(self):
-        s = _make_settings(ENABLE_WORK_IQ="false", ENABLE_MCP="true")
+        s = _make_settings(
+            ENABLE_WORK_IQ="false",
+            ENABLE_MCP="true",
+            ENABLE_SRE_AGENT="true",
+            SRE_AGENT_URL="https://demo-sre-agent.azuresre.ai",
+            SRE_AGENT_RESOURCE_ID="custom-resource-id",
+            MCP_REQUIRE_AUTH="false",
+        )
         assert s.enable_work_iq is False
         assert s.enable_mcp is True
+        assert s.enable_sre_agent is True
+        assert s.sre_agent_url == "https://demo-sre-agent.azuresre.ai"
+        assert s.sre_agent_resource_id == "custom-resource-id"
+        assert s.mcp_require_auth is False
 
     def test_content_recording_enabled(self):
         s = _make_settings(AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED="true")
