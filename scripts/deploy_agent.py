@@ -23,6 +23,12 @@ import os
 import sys
 import time
 
+# Load .env from repo root (won't override existing env vars)
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(os.path.join(_REPO_ROOT, ".env"))
+
 
 def main() -> None:
     endpoint = os.environ.get("AZURE_AI_AGENTS_ENDPOINT", "")
