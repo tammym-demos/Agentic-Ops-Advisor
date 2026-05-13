@@ -1,19 +1,22 @@
 ---
-updated_at: 2026-05-13T15:19:00Z
-focus_area: SRE Agent integration Phase 2
+updated_at: 2026-05-13T15:49:29Z
+focus_area: Phase 3 readiness
 active_issues: []
 ---
 
 # What We're Focused On
 
-**Phase 1 Complete** (2026-05-13): Config surfaces + auth foundation ✅
+**SRE Agent Architecture Complete** (2026-05-13): All 7/7 architecture action items are complete ✅
 
-**Phase 2 In Progress:**
-1. Holden — Foundry workbook telemetry module
-2. Naomi — Integration tests (live SRE Agent calls)
-3. Amos — Container image (SRE tooling integration)
-4. Drummer — RBAC Bicep templates + deployment guides
+**Completed:**
+1. Phase 1 — Config surfaces + auth foundation
+2. Phase 2 — REST tool + RBAC implementation
 
-**Remaining Critical Path:**
-- Item 5: Bicep RBAC roles (Layer 1 agent + Layer 2 user)
-- Item 7: Integration tests (config + auth + live SRE calls)
+**Current Status:**
+- Naomi delivered `tools/sre_agent.py` for async REST chat with synthetic fallback coverage.
+- Amos delivered conditional RBAC Bicep wiring for the SRE Agent identity.
+- Validation snapshot: **319 tests passing**.
+
+**Ready Next:**
+- Phase 3 (optional): sub-agent registration
+- Or other prioritized squad work
