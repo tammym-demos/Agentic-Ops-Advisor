@@ -76,6 +76,24 @@ Your research was thorough. Holden's review confirmed 80% of your recommendation
 
 ## Learnings
 
+### 2026-05-13: MCP Azure AD Validation — Phase 1
+
+**Task:** Extend `tools/work_context_mcp.py` with Phase 1 Azure AD validation for SRE Agent MCP connectivity.
+
+**Architecture decisions applied:**
+- Enforce inbound auth behind `MCP_REQUIRE_AUTH` using the standard env-flag pattern: `os.getenv("MCP_REQUIRE_AUTH", "true").lower() in ("true", "1", "yes")`
+- Validate Azure AD token claims at tool-call time for stdio: audience, issuer, tenant, plus basic lifetime checks
+- Use `SRE_AGENT_RESOURCE_ID` (`59f0a04a-b322-4310-adc9-39ac41e9631e`) as the default expected audience unless an MCP-specific override is supplied
+- Keep existing MCP tool handlers intact; auth runs as a thin wrapper before dispatch
+- Add a TODO noting full enforcement should move to HTTP/SSE transport where bearer headers and signature verification can be handled properly
+
+**Key file paths:**
+- `tools/work_context_mcp.py` — auth config + validation wrapper
+- `tests/test_work_context_mcp.py` — auth-on/auth-off coverage
+- `docs/sre-agent-setup.md:207-245` — Phase 1 integration contract
+- `agent/config.py` — reference bool-flag/env parsing pattern
+
+
 ### 2025-07-25: Post-Migration Script Audit — All Clear
 
 **Task:** Audit all scripts for broken imports from the Agent Framework migration (Phases 1-4).

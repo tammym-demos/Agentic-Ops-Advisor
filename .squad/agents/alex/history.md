@@ -188,3 +188,10 @@
   2. TestCompatShim (3 tests): SDK shim patches old names, doesn't overwrite existing names, skips when neither exists
 - **Cross-team validation:** Naomi confirmed no broken script imports; Amos confirmed CI/CD workflows clean
 - **Decision documented:** Agent Framework Test Coverage Pattern pattern now in decisions.md
+
+### 2026-05-13: SRE Agent fixture additions
+- **Files updated:** `tests/conftest.py`, `tests/test_sre_agent_config.py`, `.squad/agents/alex/history.md`
+- **Fixture convention:** `tests/conftest.py` keeps feature-flag env fixtures in enabled/disabled pairs with matching docstrings and section headers. New SRE fixtures follow the same pattern as `ENABLE_WORK_IQ` and `ENABLE_MCP`.
+- **Compatibility pattern:** When config fields are still landing in parallel work, fixtures/tests should skip cleanly instead of failing collection. Use `pytest.skip(...)` in fixtures and module-level `pytest.mark.skipif(...)` in tests.
+- **Key defaults under test:** `ENABLE_SRE_AGENT` default `False`, `SRE_AGENT_URL` default `None`, `SRE_AGENT_RESOURCE_ID` default `59f0a04a-b322-4310-adc9-39ac41e9631e`.
+- **Key file paths:** `tests/conftest.py` for shared env/settings fixtures; `tests/test_sre_agent_config.py` for config-default assertions; `agent/config.py` for `Settings.from_env()` feature-flag wiring.

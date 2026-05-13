@@ -1021,3 +1021,125 @@ Made `AZURE_AI_AGENTS_ENDPOINT` and `AZURE_AI_PROJECT_CONNECTION_STRING` fully o
 ### Tracing Note
 
 `agent/tracing.py` is already clean — no old class references. `serve.py` intentionally does NOT call `setup_tracing()` because the Agent Framework manages its own tracing. The `AGENT_APP_INSIGHTS_ENABLED=false` workaround in `deploy.yml` was left in place.
+
+---
+
+## Decision: RBAC Role Assignments Section in SRE Agent Setup Guide
+
+**Date:** 2026-04-19  
+**Author:** Drummer (Program Manager)  
+**Status:** COMPLETE  
+**Related issues:** None (documentation update)
+
+### Summary
+
+Added a comprehensive **RBAC Role Assignments** section to `docs/sre-agent-setup.md` to document the two-layer RBAC model for SRE Agent integration and provide clear operational guidance for team members managing access.
+
+### What Was Added
+
+#### Section: `## RBAC Role Assignments`
+
+The new section covers:
+
+##### Layer 1 — Agent Permissions (Managed Identity)
+- **Reader** (our integration): Read-only diagnostics — agent diagnoses but never modifies. All actions require approval.
+- **Privileged**: Contributor role for autonomous remediation (overkill for observability-focused integrations).
+- **Verification step**: How to check the SRE Agent managed identity has Reader + Monitoring Reader + Log Analytics Reader
+
+##### Layer 2 — User Roles (Who Can Interact)
+- **SRE Agent Reader**: View-only access for auditors and stakeholders
+- **SRE Agent Standard User**: Chat, diagnostics, thread creation (assigned to Agentic Ops Advisor's managed identity for Phase 2)
+- **SRE Agent Administrator**: Full management (auto-assigned to creator — Tammy ✅)
+
+##### Our Integration's Current Status
+1. Tammy (creator) → has **Administrator** ✅
+2. SRE Agent managed identity → has **Reader + Monitoring Reader + Log Analytics Reader** ✅
+3. Agentic Ops Advisor's managed identity → **needs Standard User** for Phase 2 REST API calls
+
+#### How to Review or Change Roles
+- **Portal instructions**: 8-step walk-through (Navigate → IAM → Role assignments → + Add → Search → Select → Scope → Review)
+- **CLI example 1**: Assign SRE Agent Standard User to Agentic Ops Advisor's managed identity
+  ```bash
+  az role assignment create \
+    --assignee <agentic-ops-advisor-principal-id> \
+    --role "SRE Agent Standard User" \
+    --scope /subscriptions/e0b48569-71a2-40fe-9b7a-2fb859f31288/resourceGroups/rg-agentic-ops-advisor
+  ```
+- **CLI example 2**: List current SRE-related role assignments (filters by role name)
+
+#### Additional Fix
+- Updated Prerequisites table: **Region** changed from `eastus` to `East US 2` to match actual provisioned instance
+
+### Why This Decision
+
+1. **Governance transparency** — Team needs to understand what each RBAC layer controls and why Reader is correct for our use case
+2. **Operational clarity** — Clear instructions (portal + CLI) for whoever manages role assignments (currently Tammy, future SRE ops team)
+3. **Phase 2 readiness** — Agentic Ops Advisor needs Standard User role to call `/api/v2/chat` REST endpoint. Documentation makes this explicit.
+4. **Audit trail** — RBAC section serves as reference for compliance reviews and access management audits
+
+### Implementation Notes
+
+- Documentation positioned after "Required Permissions" subsection and before "SRE Agent Portal Creation"
+- Used existing documentation style: tables for comparison, code blocks for CLI, numbered steps for portal
+- Included role definitions directly in section rather than linking elsewhere (single source of truth)
+- CLI examples reference actual subscription ID and resource group (from provisioned instance)
+
+### Team Relevance
+
+**Applies to:**
+- Tammy (creator) — reference for delegating role assignments to ops team
+- SRE ops team (future) — operational guidance for managing access
+- Agentic Ops Advisor team (Phase 2) — explains why Standard User role is required
+
+### Success Criteria
+
+✅ Comprehensive RBAC section added to setup guide  
+✅ Two-layer model (agent permissions + user roles) clearly documented  
+✅ Portal + CLI instructions included  
+✅ Current status of our three key identities documented (2 ✅, 1 pending)  
+✅ Region field corrected to East US 2  
+
+### Follow-ups
+
+- Once Agentic Ops Advisor's managed identity is provisioned, assign **SRE Agent Standard User** role (use CLI example in documentation)
+- Update status line 3 from "**needs Standard User** for Phase 2" to "**already has Standard User** ✅" once assignment is complete
+
+---
+
+## Decision: MCP Azure AD Token Validation
+
+**Date:** 2026-05-13  
+**Author:** Naomi (Backend Dev)  
+**Status:** COMPLETE  
+**Related:** Phase 1 SRE Agent Integration (config + auth foundation)
+
+### Context
+
+Phase 1 required adding Azure AD validation to `tools/work_context_mcp.py` without changing the synthetic Work IQ tool handlers.
+
+### Decision
+
+Implemented claim-level validation at the MCP tool-call boundary using:
+- `MCP_REQUIRE_AUTH` as the gate (default `true`)
+- `SRE_AGENT_RESOURCE_ID` as the default expected audience
+- `AZURE_TENANT_ID` (or `MCP_AUTH_TENANT_ID` override) to validate tenant + issuer
+- Reserved MCP tool metadata/arguments (`_meta.authorization`, `_auth_token`, etc.) as the temporary token handoff path for stdio
+
+### Why
+
+The current stdio transport has no HTTP headers, so auth must be injected into the tool call until the server moves to HTTP/SSE. This keeps Phase 1 aligned with Holden's requirement to validate audience, issuer, and tenant now, while documenting that full transport-level enforcement and signature verification belong in the HTTP/SSE phase.
+
+### Implementation
+
+- Token extraction from `_meta.authorization` / `_auth_token` in MCP call arguments
+- Claim validation: `aud` (audience), `iss` (issuer), `tid` (tenant)
+- Audience defaults to `SRE_AGENT_RESOURCE_ID`
+- Auth test fixtures added to `tests/conftest.py` (valid + invalid tokens)
+
+### Test Results
+
+✅ 315 tests passing (Naomi's additions + Amos config + Alex fixtures)
+
+### Follow-up
+
+When HTTP/SSE transport is added, move token extraction to the transport layer and add JWKS-backed signature validation before honoring external requests.

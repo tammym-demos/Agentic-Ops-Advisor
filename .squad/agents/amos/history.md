@@ -877,3 +877,23 @@
 - Azure SRE Agent uses Microsoft.App provider (same as Container Apps), not its own namespace
 - API spec exists but official Bicep/ARM examples not yet published by Microsoft
 - For preview services, treat creation as manual prerequisite and automate RBAC separately
+
+### 2026-05-13: SRE Agent Config Surface Wiring
+
+**Session:** Tammy requested action item #3 from Holden's SRE Agent architecture decisions
+**Status:** ✅ COMPLETED
+**Scope:** 5 files modified (`.env.example`, `agent/config.py`, `agent.yaml`, `tests/test_config.py`, `.squad/agents/amos/history.md`)
+**Details:**
+- Added `ENABLE_SRE_AGENT=false` as a new feature flag, separate from `ENABLE_MCP`
+- Added SRE integration settings for `SRE_AGENT_URL`, `SRE_AGENT_RESOURCE_ID`, and `MCP_REQUIRE_AUTH`
+- Preserved the existing config pattern: `.env.example` → `Settings` dataclass → `agent.yaml` environment list
+- Added config tests covering default values and explicit env overrides for all new settings
+**Key paths:**
+- .env.example — source-of-truth sample env values for local/dev deploy setup
+- agent/config.py — runtime `Settings` wiring via `_get_bool()` and `_optional()` helpers
+- agent.yaml — hosted agent manifest environment variables and feature flags
+- tests/test_config.py — regression coverage for new config surfaces
+**Learnings:**
+- Keep new infra flags orthogonal when architecture decisions explicitly separate runtime concerns
+- Follow existing env/config/manifest patterns exactly to avoid drift across deployment surfaces
+- Treat auth behavior toggles like `MCP_REQUIRE_AUTH` as explicit config, defaulting secure for no-surprise rollouts
